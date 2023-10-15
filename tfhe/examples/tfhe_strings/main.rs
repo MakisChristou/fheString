@@ -1,17 +1,15 @@
-use fheasciichar::FheAsciiChar;
-use fhesplit::FheSplit;
+use ciphertext::fheasciichar::FheAsciiChar;
 use tfhe::prelude::*;
 use tfhe::{generate_keys, set_server_key, ClientKey, ConfigBuilder};
 
-use crate::fhestring::FheString;
+use crate::ciphertext::fhesplit::FheSplit;
+use crate::ciphertext::fhestring::FheString;
 
 const STRING_PADDING: usize = 3;
 const MAX_REPETITIONS: usize = 4;
 const MAX_FIND_LENGTH: usize = 255;
 
-mod fheasciichar;
-mod fhesplit;
-mod fhestring;
+mod ciphertext;
 
 fn abs_difference(a: usize, b: usize) -> usize {
     a.checked_sub(b).unwrap_or_else(|| b - a)

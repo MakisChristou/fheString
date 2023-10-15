@@ -1,7 +1,7 @@
 use tfhe::ClientKey;
 
-use crate::fheasciichar::FheAsciiChar;
-use crate::fhestring::FheString;
+use crate::FheAsciiChar;
+use crate::FheString;
 
 pub struct FheSplit {
     pub buffers: Vec<FheString>,

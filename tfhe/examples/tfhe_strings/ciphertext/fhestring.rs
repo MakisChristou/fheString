@@ -1,8 +1,7 @@
 use tfhe::{prelude::FheDecrypt, ClientKey};
 
 use crate::{
-    abs_difference, bubble_zeroes_left, fheasciichar::FheAsciiChar, fhesplit::FheSplit,
-    MAX_FIND_LENGTH, MAX_REPETITIONS,
+    abs_difference, bubble_zeroes_left, FheAsciiChar, FheSplit, MAX_FIND_LENGTH, MAX_REPETITIONS,
 };
 
 pub struct FheString {
