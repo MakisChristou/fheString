@@ -71,7 +71,7 @@ impl FheAsciiChar {
         let vertical_tab = FheAsciiChar::encrypt_trivial(0x0Bu8); // Vertical Tab
         let form_feed = FheAsciiChar::encrypt_trivial(0x0Cu8); // Form Feed
         let carriage_return = FheAsciiChar::encrypt_trivial(0x0Du8); // Carriage Return
-    
+
         self.eq(&space)
             | self.eq(&tab)
             | self.eq(&newline)
@@ -79,48 +79,47 @@ impl FheAsciiChar {
             | self.eq(&form_feed)
             | self.eq(&carriage_return)
     }
-    
+
     pub fn is_uppercase(&self) -> FheAsciiChar {
         let uppercase_a = FheAsciiChar::encrypt_trivial(0x41u8); // 'A'
         let uppercase_z = FheAsciiChar::encrypt_trivial(0x5Au8); // 'Z'
-    
+
         self.ge(&uppercase_a) & self.le(&uppercase_z)
     }
-    
+
     pub fn is_lowercase(&self) -> FheAsciiChar {
         let lowercase_a = FheAsciiChar::encrypt_trivial(0x61u8); // 'a'
         let lowercase_z = FheAsciiChar::encrypt_trivial(0x7Au8); // 'z'
-    
+
         self.ge(&lowercase_a) & self.le(&lowercase_z)
     }
-    
+
     pub fn is_alphabetic(&self) -> FheAsciiChar {
         let is_uppercase = self.is_uppercase();
         let is_lowercase = self.is_lowercase();
-    
+
         is_uppercase | is_lowercase
     }
-    
+
     pub fn is_number(&self) -> FheAsciiChar {
         let digit_0 = FheAsciiChar::encrypt_trivial(0x30u8); // '0'
         let digit_9 = FheAsciiChar::encrypt_trivial(0x39u8); // '9'
-    
+
         self.ge(&digit_0) & self.le(&digit_9)
     }
-    
+
     pub fn is_alphanumeric(&self) -> FheAsciiChar {
         let is_alphabetic = self.is_alphabetic();
         let is_number = self.is_number();
-    
+
         is_alphabetic | is_number
     }
-    
+
     // Input must be either 0 or 1
     pub fn flip(&self) -> FheAsciiChar {
         let one = FheAsciiChar::encrypt_trivial(1u8);
         &one - self
     }
-
 }
 
 // Implementing Add
