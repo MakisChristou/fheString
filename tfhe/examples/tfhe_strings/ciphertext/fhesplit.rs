@@ -1,5 +1,6 @@
 use tfhe::ClientKey;
 
+use crate::client_key::MyClientKey;
 use crate::FheAsciiChar;
 use crate::FheString;
 
@@ -20,11 +21,15 @@ impl FheSplit {
     }
 
     // Equivalent to running collect() on the iterator
-    pub fn decrypt(fhe_split: FheSplit, client_key: &ClientKey, padding: usize) -> Vec<String> {
+    pub fn decrypt(
+        fhe_split: FheSplit,
+        my_client_key: &MyClientKey,
+        padding: usize,
+    ) -> Vec<String> {
         let mut plain_split = Vec::new();
 
         for some_fhe_string in fhe_split.buffers {
-            let dec_string = FheString::decrypt(&some_fhe_string, &client_key, padding);
+            let dec_string = my_client_key.decrypt(some_fhe_string, padding);
             plain_split.push(dec_string);
         }
 
