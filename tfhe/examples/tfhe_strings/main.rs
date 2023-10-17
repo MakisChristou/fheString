@@ -151,17 +151,19 @@ mod test {
         assert_eq!(dec, 1u8);
     }
 
-    // #[test]
-    // fn uppercase() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn uppercase() {
+        let (client_key, server_key) = setup_test();
 
-    //     let my_string = FheString::encrypt("zama IS awesome", &client_key, STRING_PADDING);
-    //     let my_string_upper = my_string.to_upper();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let verif_string = my_string_upper.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "ZAMA IS AWESOME");
-    // }
+        let my_string = my_client_key.encrypt("zama IS awesome", STRING_PADDING);
+        let my_string_upper = MyServerKey::to_upper(&my_string);
+
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "ZAMA IS AWESOME");
+    }
 
     // #[test]
     // fn repeat() {
@@ -240,17 +242,19 @@ mod test {
     //     assert_eq!(verif_string, "hello world abc test\0\0\0\0\0\0\0\0\0\0\0\0");
     // }
 
-    // #[test]
-    // fn lowercase() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn lowercase() {
+        let (client_key, server_key) = setup_test();
 
-    //     let my_string = FheString::encrypt("ZAMA is AWESOME 1234", &client_key, STRING_PADDING);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string_upper = my_string.to_lower();
-    //     let verif_string = my_string_upper.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "zama is awesome 1234");
-    // }
+        let my_string = my_client_key.encrypt("zama IS awesome", STRING_PADDING);
+        let my_string_upper = MyServerKey::to_lower(&my_string);
+
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "zama is awesome");
+    }
 
     // #[test]
     // fn trim_end() {
