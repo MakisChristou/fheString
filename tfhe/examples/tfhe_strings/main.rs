@@ -103,59 +103,53 @@ mod test {
         assert_eq!(dec, 1u8);
     }
 
-    // #[test]
-    // fn invalid_contains() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn invalid_contains() {
+        let (client_key, server_key) = setup_test();
 
-    //     let heistack = FheString::encrypt("hello world", &client_key, 3);
-    //     let needle: Vec<FheAsciiChar> = "zama"
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let res = FheString::contains(heistack, needle);
-    //     let dec: u8 = FheAsciiChar::decrypt(&res, &client_key);
+        let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding("zama");
 
-    //     assert_eq!(dec, 0u8);
-    // }
+        let res = MyServerKey::contains(&heistack, needle);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    // #[test]
-    // fn invalid_ends_with() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        assert_eq!(dec, 0u8);
+    }
 
-    //     let heistack = FheString::encrypt("hello world", &client_key, STRING_PADDING);
-    //     let pattern: Vec<FheAsciiChar> = "worl"
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
+    #[test]
+    fn invalid_ends_with() {
+        let (client_key, server_key) = setup_test();
 
-    //     let res = heistack.ends_with(pattern, STRING_PADDING);
-    //     let dec: u8 = FheAsciiChar::decrypt(&res, &client_key);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     assert_eq!(dec, 0u8);
-    // }
+        let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding("zama");
 
-    // #[test]
-    // fn valid_ends_with() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let res = MyServerKey::ends_with(&heistack, needle, STRING_PADDING);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //     let heistack = FheString::encrypt("hello world", &client_key, STRING_PADDING);
-    //     let pattern: Vec<FheAsciiChar> = "world"
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
+        assert_eq!(dec, 0u8);
+    }
 
-    //     let res = heistack.ends_with(pattern, STRING_PADDING);
-    //     let dec: u8 = FheAsciiChar::decrypt(&res, &client_key);
+    #[test]
+    fn valid_ends_with() {
+        let (client_key, server_key) = setup_test();
 
-    //     assert_eq!(dec, 1u8);
-    // }
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding("world");
+
+        let res = MyServerKey::ends_with(&heistack, needle, STRING_PADDING);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+
+        assert_eq!(dec, 1u8);
+    }
 
     // #[test]
     // fn uppercase() {
