@@ -47,6 +47,10 @@ impl MyClientKey {
         FheAsciiChar::decrypt(cipher_char, &self.client_key)
     }
 
+    pub fn encrypt_char(&self, plain_char: u8) -> FheAsciiChar {
+        FheAsciiChar::encrypt(plain_char, &self.client_key)
+    }
+
     pub fn decrypt(&self, cipher_string: FheString, padding: usize) -> String {
         let new_len = cipher_string.bytes.len().saturating_sub(padding);
         let trimed_bytes: Vec<FheAsciiChar> = cipher_string.bytes.clone()[..new_len].to_vec();

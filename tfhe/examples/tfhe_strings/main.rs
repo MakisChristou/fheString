@@ -165,82 +165,72 @@ mod test {
         assert_eq!(verif_string, "ZAMA IS AWESOME");
     }
 
-    // #[test]
-    // fn repeat() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn repeat() {
+        let (client_key, server_key) = setup_test();
 
-    //     let my_string = FheString::encrypt("abc", &client_key, STRING_PADDING);
-    //     let encrypted_repetitions = FheAsciiChar::encrypt(3u8, &client_key);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string_upper = my_string.repeat(encrypted_repetitions);
-    //     let verif_string = my_string_upper.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "abcabcabc\0\0\0\0\0\0\0\0\0\0\0\0");
-    // }
+        let my_string = my_client_key.encrypt("abc", STRING_PADDING);
+        let encrypted_repetitions = my_client_key.encrypt_char(3u8);
 
-    // #[test]
-    // fn replace1() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let my_string_upper = MyServerKey::repeat(&my_string, encrypted_repetitions);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "abcabcabc\0\0\0\0\0\0\0\0\0\0\0\0");
+    }
 
-    //     let my_string = FheString::encrypt("hello world world test", &client_key, STRING_PADDING);
-    //     let from = "world"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+    #[test]
+    fn replace1() {
+        let (client_key, server_key) = setup_test();
 
-    //     let to = "abc"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string_upper = my_string.replace(from, to);
-    //     let verif_string = my_string_upper.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "hello abc abc test\0\0\0\0");
-    // }
+        let my_string = my_client_key.encrypt("hello world world test", STRING_PADDING);
+        let from = my_client_key.encrypt_no_padding("world");
+        let to = my_client_key.encrypt_no_padding("abc");
 
-    // #[test]
-    // fn replace2() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let my_new_string = MyServerKey::replace(&my_string, from, to);
 
-    //     let my_string = FheString::encrypt("hello abc abc test", &client_key, STRING_PADDING);
-    //     let from = "abc"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        assert_eq!(verif_string, "hello abc abc test\0\0\0\0");
+    }
 
-    //     let to = "world"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+    #[test]
+    fn replace2() {
+        let (client_key, server_key) = setup_test();
 
-    //     let my_string_upper = my_string.replace(from, to);
-    //     let verif_string = my_string_upper.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "hello world world test\0\0\0\0\0\0\0\0\0\0");
-    // }
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    // #[test]
-    // fn replacen() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let my_string = my_client_key.encrypt("hello abc abc test", STRING_PADDING);
+        let from = my_client_key.encrypt_no_padding("abc");
+        let to = my_client_key.encrypt_no_padding("world");
 
-    //     let my_string = FheString::encrypt("hello abc abc test", &client_key, STRING_PADDING);
-    //     let n = FheAsciiChar::encrypt(1u8, &client_key);
-    //     let from = "abc"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+        let my_new_string = MyServerKey::replace(&my_string, from, to);
 
-    //     let to = "world"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        assert_eq!(verif_string, "hello world world test\0\0\0\0\0\0\0\0\0\0");
+    }
 
-    //     let my_string_upper = my_string.replacen(from, to, n);
-    //     let verif_string = my_string_upper.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "hello world abc test\0\0\0\0\0\0\0\0\0\0\0\0");
-    // }
+    #[test]
+    fn replacen() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string = my_client_key.encrypt("hello abc abc test", STRING_PADDING);
+        let from = my_client_key.encrypt_no_padding("abc");
+        let to = my_client_key.encrypt_no_padding("world");
+        let n = my_client_key.encrypt_char(1u8);
+
+        let my_new_string = MyServerKey::replacen(&my_string, from, to, n);
+
+        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        assert_eq!(verif_string, "hello world abc test\0\0\0\0\0\0\0\0\0\0\0\0");
+    }
 
     #[test]
     fn lowercase() {
@@ -256,152 +246,164 @@ mod test {
         assert_eq!(verif_string, "zama is awesome");
     }
 
-    // #[test]
-    // fn trim_end() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn trim_end() {
+        let (client_key, server_key) = setup_test();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string = FheString::encrypt("ZA MA\n\t \r\x0C", &client_key, STRING_PADDING);
+        let my_string = my_client_key.encrypt("ZA MA\n\t \r\x0C", STRING_PADDING);
+        let my_string_upper = MyServerKey::trim_end(&my_string);
 
-    //     let res_string = my_string.trim_end();
-    //     let verif_string = res_string.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "ZA MA\0\0\0\0\0");
-    // }
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "ZA MA\0\0\0\0\0");
+    }
 
-    // #[test]
-    // fn do_not_trim_end() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn do_not_trim_end() {
+        let (client_key, server_key) = setup_test();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string = FheString::encrypt("\nZA MA", &client_key, STRING_PADDING);
+        let my_string = my_client_key.encrypt("\nZA MA", STRING_PADDING);
+        let my_string_upper = MyServerKey::trim_end(&my_string);
 
-    //     let result_string = my_string.trim_end();
-    //     let verif_string = result_string.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "\nZA MA");
-    // }
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "\nZA MA");
+    }
 
-    // #[test]
-    // fn trim_start() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn trim_start() {
+        let (client_key, server_key) = setup_test();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string = FheString::encrypt("\n\nZA MA", &client_key, STRING_PADDING);
+        let my_string = my_client_key.encrypt("\nZA MA", STRING_PADDING);
+        let my_string_upper = MyServerKey::trim_start(&my_string);
 
-    //     let res_string = my_string.trim_start();
-    //     let verif_string = res_string.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "ZA MA\0\0");
-    // }
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "ZA MA\0");
+    }
 
-    // #[test]
-    // fn trim() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn trim() {
+        let (client_key, server_key) = setup_test();
 
-    //     let my_string = FheString::encrypt("\n\nhello world!   ", &client_key, STRING_PADDING);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let res_string = my_string.trim();
-    //     let verif_string = res_string.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "hello world!\0\0\0\0\0");
-    // }
+        let my_string = my_client_key.encrypt("\n\nhello world!   ", STRING_PADDING);
+        let my_string_upper = MyServerKey::trim(&my_string);
 
-    // #[test]
-    // fn is_empty() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "hello world!\0\0\0\0\0");
+    }
 
-    //     let my_string = FheString::encrypt("", &client_key, STRING_PADDING);
+    #[test]
+    fn is_empty() {
+        let (client_key, server_key) = setup_test();
 
-    //     let res = my_string.is_empty();
-    //     let dec: u8 = FheAsciiChar::decrypt(&res, &client_key);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     assert_eq!(dec, 1u8);
-    // }
+        let heistack = my_client_key.encrypt("", STRING_PADDING);
 
-    // #[test]
-    // fn is_not_empty() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let res = MyServerKey::is_empty(&heistack);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //     let my_string = FheString::encrypt("a", &client_key, STRING_PADDING);
+        assert_eq!(dec, 1u8);
+    }
 
-    //     let res = my_string.is_empty();
-    //     let dec: u8 = FheAsciiChar::decrypt(&res, &client_key);
+    #[test]
+    fn is_not_empty() {
+        let (client_key, server_key) = setup_test();
 
-    //     assert_eq!(dec, 0u8);
-    // }
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    // #[test]
-    // fn valid_length1() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let heistack = my_client_key.encrypt("a", STRING_PADDING);
 
-    //     let my_string = FheString::encrypt("a", &client_key, STRING_PADDING);
+        let res = MyServerKey::is_empty(&heistack);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //     let res = my_string.len();
-    //     let dec: u8 = FheAsciiChar::decrypt(&res, &client_key);
+        assert_eq!(dec, 0u8);
+    }
 
-    //     assert_eq!(dec, 1u8);
-    // }
+    #[test]
+    fn valid_length1() {
+        let (client_key, server_key) = setup_test();
 
-    // #[test]
-    // fn valid_length2() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string = FheString::encrypt("some arbitrary string", &client_key, STRING_PADDING);
+        let heistack = my_client_key.encrypt("a", STRING_PADDING);
 
-    //     let res = my_string.len();
-    //     let dec: u8 = FheAsciiChar::decrypt(&res, &client_key);
+        let res = MyServerKey::len(&heistack);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //     assert_eq!(dec, 21u8);
-    // }
+        assert_eq!(dec, 1u8);
+    }
 
-    // #[test]
-    // fn rfind() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn valid_length2() {
+        let (client_key, server_key) = setup_test();
 
-    //     let my_string = FheString::encrypt("hello abc abc test", &client_key, STRING_PADDING);
-    //     let pattern = "abc"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let enc_pattern_position = my_string.rfind(pattern);
-    //     let pattern_positioon: u8 = FheAsciiChar::decrypt(&enc_pattern_position, &client_key);
-    //     assert_eq!(pattern_positioon, 10u8);
-    // }
+        let heistack = my_client_key.encrypt("some arbitrary string", STRING_PADDING);
 
-    // #[test]
-    // fn invalid_rfind() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let res = MyServerKey::len(&heistack);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //     let my_string = FheString::encrypt("hello test", &client_key, STRING_PADDING);
-    //     let pattern = "abc"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+        assert_eq!(dec, 21u8);
+    }
 
-    //     let enc_pattern_position = my_string.rfind(pattern);
-    //     let pattern_positioon: u8 = FheAsciiChar::decrypt(&enc_pattern_position, &client_key);
-    //     assert_eq!(pattern_positioon, 255u8);
-    // }
+    #[test]
+    fn rfind() {
+        let (client_key, server_key) = setup_test();
 
-    // #[test]
-    // #[should_panic(expected = "Maximum supported size for find reached")]
-    // fn unsupported_size_rfind() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string = FheString::encrypt(&"hello test".repeat(100), &client_key, STRING_PADDING);
-    //     let pattern = "abc"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
+        let heistack = my_client_key.encrypt("hello abc abc test", STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding("abc");
 
-    //     let _ = my_string.rfind(pattern);
-    // }
+        let res = MyServerKey::rfind(&heistack, needle);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+
+        assert_eq!(dec, 10u8);
+    }
+
+    #[test]
+    fn invalid_rfind() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let heistack = my_client_key.encrypt("hello test", STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding("abc");
+
+        let res = MyServerKey::rfind(&heistack, needle);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+
+        assert_eq!(dec, 255u8);
+    }
+
+    #[test]
+    #[should_panic(expected = "Maximum supported size for find reached")]
+    fn unsupported_size_rfind() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let heistack = my_client_key.encrypt(&"hello test".repeat(100), STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding("abc");
+
+        let res = MyServerKey::rfind(&heistack, needle);
+    }
 
     // #[test]
     // fn find() {
