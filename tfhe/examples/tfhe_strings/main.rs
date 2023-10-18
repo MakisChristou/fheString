@@ -405,516 +405,506 @@ mod test {
         let res = MyServerKey::rfind(&heistack, needle);
     }
 
-    // #[test]
-    // fn find() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string = FheString::encrypt(&"hello test test hello", &client_key, STRING_PADDING);
-    //     let pattern = "test"
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt(b, &client_key))
-    //         .collect::<Vec<FheAsciiChar>>();
-
-    //     let enc_pattern_position = my_string.find(pattern);
-    //     let pattern_positioon: u8 = FheAsciiChar::decrypt(&enc_pattern_position, &client_key);
-    //     assert_eq!(pattern_positioon, 6u8);
-    // }
-
-    // #[test]
-    // fn eq() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string1 = FheString::encrypt(&"hello test test hello", &client_key, STRING_PADDING);
-    //     let my_string2 =
-    //         FheString::encrypt(&"hello test test hello", &client_key, STRING_PADDING + 20);
-
-    //     let enc_pattern_position = my_string1.eq(my_string2);
-    //     let pattern_positioon: u8 = FheAsciiChar::decrypt(&enc_pattern_position, &client_key);
-    //     assert_eq!(pattern_positioon, 1u8);
-    // }
-
-    // #[test]
-    // fn eq_ignore_case() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string1 = FheString::encrypt(&"HELLO test test HELLO", &client_key, STRING_PADDING);
-    //     let my_string2 =
-    //         FheString::encrypt(&"hello test test hello", &client_key, STRING_PADDING + 20);
-
-    //     let enc_pattern_position = my_string1.eq_ignore_case(my_string2);
-    //     let pattern_positioon: u8 = FheAsciiChar::decrypt(&enc_pattern_position, &client_key);
-    //     assert_eq!(pattern_positioon, 1u8);
-    // }
-
-    // #[test]
-    // fn strip_prefix() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string = FheString::encrypt(&"HELLO test test HELLO", &client_key, STRING_PADDING);
-    //     let pattern: Vec<FheAsciiChar> = "HELLO"
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string_processed = my_string.strip_prefix(pattern);
-    //     let verif_string = my_string_processed.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, " test test HELLO\0\0\0\0\0");
-    // }
-
-    // #[test]
-    // fn strip_suffix() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string = FheString::encrypt(&"HELLO test test HELLO", &client_key, STRING_PADDING);
-
-    //     // Since the client knows the original string padding he can add it to the pattern without revealing the original length of pattern or my_string
-    //     let pattern: Vec<FheAsciiChar> = format!("HELLO{}", "\0".repeat(STRING_PADDING))
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string_processed = my_string.strip_suffix(pattern);
-    //     let verif_string = my_string_processed.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "HELLO test test \0\0\0\0\0");
-    // }
-
-    // #[test]
-    // fn dont_strip_suffix() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string = FheString::encrypt(&"HELLO test test HELLO", &client_key, STRING_PADDING);
-    //     let pattern: Vec<FheAsciiChar> = "WORLD"
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string_processed = my_string.strip_suffix(pattern);
-    //     let verif_string = my_string_processed.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "HELLO test test HELLO");
-    // }
-
-    // #[test]
-    // fn dont_strip_prefix() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+    #[test]
+    fn find() {
+        let (client_key, server_key) = setup_test();
 
-    //     let my_string = FheString::encrypt(&"HELLO test test HELLO", &client_key, STRING_PADDING);
-    //     let pattern: Vec<FheAsciiChar> = "WORLD"
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string_processed = my_string.strip_prefix(pattern);
-    //     let verif_string = my_string_processed.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(verif_string, "HELLO test test HELLO");
-    // }
+        let heistack = my_client_key.encrypt("hello test", STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding("test");
 
-    // #[test]
-    // fn concatenate() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let res = MyServerKey::rfind(&heistack, needle);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //     let my_string1 = FheString::encrypt(&"Hello", &client_key, STRING_PADDING);
-    //     let my_string2 = FheString::encrypt(&", World!", &client_key, STRING_PADDING);
+        assert_eq!(dec, 6u8);
+    }
 
-    //     let my_string_concatenated = my_string1 + my_string2;
-    //     let verif_string = my_string_concatenated.decrypt(&client_key, STRING_PADDING);
-    //     assert_eq!(
-    //         verif_string,
-    //         format!("Hello, World!{}", "\0".repeat(STRING_PADDING))
-    //     );
-    // }
+    #[test]
+    fn eq() {
+        let (client_key, server_key) = setup_test();
 
-    // #[test]
-    // fn less_than() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
 
-    //     let my_string_plain1 = "aaa";
-    //     let my_string_plain2 = "aaaa";
-
-    //     let my_string1 = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let my_string2 = FheString::encrypt(&my_string_plain2, &client_key, STRING_PADDING);
-
-    //     let actual = my_string1.lt(my_string2);
-    //     let deccrypted_actual: u8 = FheAsciiChar::decrypt(&actual, &client_key);
-
-    //     let expected = (my_string_plain1 < my_string_plain2) as u8;
-
-    //     assert_eq!(expected, deccrypted_actual);
-    // }
-
-    // #[test]
-    // fn less_equal() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = "aaa";
-    //     let my_string_plain2 = "aaaa";
-
-    //     let my_string1 = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let my_string2 = FheString::encrypt(&my_string_plain2, &client_key, STRING_PADDING);
-
-    //     let actual = my_string1.le(my_string2);
-    //     let deccrypted_actual: u8 = FheAsciiChar::decrypt(&actual, &client_key);
-
-    //     let expected = (my_string_plain1 <= my_string_plain2) as u8;
-
-    //     assert_eq!(expected, deccrypted_actual);
-    // }
-
-    // #[test]
-    // fn greater_than() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = "aaa";
-    //     let my_string_plain2 = "aaaa";
-
-    //     let my_string1 = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let my_string2 = FheString::encrypt(&my_string_plain2, &client_key, STRING_PADDING);
-
-    //     let actual = my_string1.gt(my_string2);
-    //     let deccrypted_actual: u8 = FheAsciiChar::decrypt(&actual, &client_key);
-
-    //     let expected = (my_string_plain1 > my_string_plain2) as u8;
-
-    //     assert_eq!(expected, deccrypted_actual);
-    // }
-
-    // #[test]
-    // fn greater_equal() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = "aaa";
-    //     let my_string_plain2 = "aaaa";
-
-    //     let my_string1 = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let my_string2 = FheString::encrypt(&my_string_plain2, &client_key, STRING_PADDING);
-
-    //     let actual = my_string1.ge(my_string2);
-    //     let deccrypted_actual: u8 = FheAsciiChar::decrypt(&actual, &client_key);
-
-    //     let expected = (my_string_plain1 >= my_string_plain2) as u8;
-
-    //     assert_eq!(expected, deccrypted_actual);
-    // }
-
-    // #[test]
-    // fn split() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = "Mary had a";
-    //     let pattern_plain = " ";
-
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.split(pattern);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "Mary\0\0\0\0\0\0",
-    //             "had\0\0\0\0\0\0\0",
-    //             "a\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn split_inclusive() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = "Mary had a";
-    //     let pattern_plain = " ";
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.split_inclusive(pattern);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "Mary \0\0\0\0\0",
-    //             "had \0\0\0\0\0\0",
-    //             "a\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn split_terminator() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = ".A.B.";
-    //     let pattern_plain = ".";
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.split_terminator(pattern);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "\0\0\0\0\0",
-    //             "A\0\0\0\0",
-    //             "B\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn split_ascii_whitespace() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = " A\nB\t";
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.split_ascii_whitespace();
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "\0\0\0\0\0",
-    //             "A\0\0\0\0",
-    //             "B\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0",
-    //             "\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn splitn() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = ".A.B.C.";
-    //     let pattern_plain = ".";
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let n = FheAsciiChar::encrypt_trivial(2u8);
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.splitn(pattern, n);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "\0\0\0\0\0\0\0",
-    //             "A.B.C.\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn rplit() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = ".A.B.C.";
-    //     let pattern_plain = ".";
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.rsplit(pattern);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "\0\0\0\0\0\0\0",
-    //             "C\0\0\0\0\0\0",
-    //             "B\0\0\0\0\0\0",
-    //             "A\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn rplit_once() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = ".A.B.C.";
-    //     let pattern_plain = ".";
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.rsplit_once(pattern);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "\0\0\0\0\0\0\0",
-    //             ".A.B.C\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn rplitn() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = ".A.B.C.";
-    //     let pattern_plain = ".";
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let n = FheAsciiChar::encrypt_trivial(3u8);
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.rsplitn(pattern, n);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "\0\0\0\0\0\0\0",
-    //             "C\0\0\0\0\0\0",
-    //             ".A.B\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn rplitn_terminator() {
-    //     let (client_key, server_key) = setup_test();
-    //     set_server_key(server_key);
-
-    //     let my_string_plain1 = ".A.B.C.";
-    //     let pattern_plain = ".";
-    //     let pattern: Vec<FheAsciiChar> = pattern_plain
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt(*b, &client_key))
-    //         .collect();
-
-    //     let my_string = FheString::encrypt(&my_string_plain1, &client_key, STRING_PADDING);
-    //     let fhe_split = my_string.rsplit_terminator(pattern);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &client_key, STRING_PADDING);
-
-    //     assert_eq!(
-    //         plain_split,
-    //         vec![
-    //             "\0\0\0\0\0\0\0",
-    //             "C\0\0\0\0\0\0",
-    //             "B\0\0\0\0\0\0",
-    //             "A\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0",
-    //             "\0\0\0\0\0\0\0"
-    //         ]
-    //     );
-    // }
+        let heistack1 = my_client_key.encrypt("hello test", STRING_PADDING);
+        let heistack2 = my_client_key.encrypt("hello test", STRING_PADDING + 20);
+
+        let res = MyServerKey::eq(&heistack1, &heistack2);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+
+        assert_eq!(dec, 1u8);
+    }
+
+    #[test]
+    fn eq_ignore_case() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let heistack1 = my_client_key.encrypt("hello TEST", STRING_PADDING);
+        let heistack2 = my_client_key.encrypt("hello test", STRING_PADDING + 20);
+
+        let res = MyServerKey::eq_ignore_case(&heistack1, &heistack2);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+
+        assert_eq!(dec, 1u8);
+    }
+
+    #[test]
+    fn strip_prefix() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding("HELLO");
+        let my_string_upper = MyServerKey::strip_prefix(&my_string, pattern);
+
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, " test test HELLO\0\0\0\0\0");
+    }
+
+    #[test]
+    fn strip_suffix() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
+        let pattern = my_client_key.encrypt("HELLO", STRING_PADDING);
+        let my_string_upper = MyServerKey::strip_suffix(&my_string, pattern.bytes);
+
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "HELLO test test \0\0\0\0\0");
+    }
+
+    #[test]
+    fn dont_strip_suffix() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
+        let pattern = my_client_key.encrypt("WORLD", 0);
+        let my_string_upper = MyServerKey::strip_suffix(&my_string, pattern.bytes);
+
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "HELLO test test HELLO");
+    }
+
+    #[test]
+    fn dont_strip_prefix() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
+        let pattern = my_client_key.encrypt("WORLD", 0);
+        let my_string_upper = MyServerKey::strip_prefix(&my_string, pattern.bytes);
+
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "HELLO test test HELLO");
+    }
+
+    #[test]
+    fn concatenate() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string1 = my_client_key.encrypt("Hello, ", STRING_PADDING);
+        let my_string2 = my_client_key.encrypt("World!", STRING_PADDING);
+        let my_string_upper = MyServerKey::concatenate(&my_string1, &my_string2);
+
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        assert_eq!(verif_string, "Hello, World!\0\0\0");
+    }
+
+    #[test]
+    fn less_than() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = "aaa";
+        let my_string_plain2 = "aaaa";
+
+        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
+        let actual = MyServerKey::lt(&heistack1, heistack2);
+
+        let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+
+        let expected = (my_string_plain1 < my_string_plain2) as u8;
+
+        assert_eq!(expected, deccrypted_actual);
+    }
+
+    #[test]
+    fn less_equal() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = "aaa";
+        let my_string_plain2 = "aaaa";
+
+        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
+        let actual = MyServerKey::le(&heistack1, heistack2);
+
+        let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+
+        let expected = (my_string_plain1 <= my_string_plain2) as u8;
+
+        assert_eq!(expected, deccrypted_actual);
+    }
+
+    #[test]
+    fn greater_than() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = "aaa";
+        let my_string_plain2 = "aaaa";
+
+        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
+        let actual = MyServerKey::gt(&heistack1, heistack2);
+
+        let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+
+        let expected = (my_string_plain1 > my_string_plain2) as u8;
+
+        assert_eq!(expected, deccrypted_actual);
+    }
+
+    #[test]
+    fn greater_equal() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = "aaa";
+        let my_string_plain2 = "aaaa";
+
+        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
+        let actual = MyServerKey::ge(&heistack1, heistack2);
+
+        let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+
+        let expected = (my_string_plain1 >= my_string_plain2) as u8;
+
+        assert_eq!(expected, deccrypted_actual);
+    }
+
+    #[test]
+    fn split() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = "Mary had a";
+        let pattern_plain = " ";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_split = MyServerKey::split(&my_string, pattern);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+        assert_eq!(
+            plain_split,
+            vec![
+                "Mary\0\0\0\0\0\0",
+                "had\0\0\0\0\0\0\0",
+                "a\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn split_inclusive() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = "Mary had a";
+        let pattern_plain = " ";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_split = MyServerKey::split_inclusive(&my_string, pattern);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+        assert_eq!(
+            plain_split,
+            vec![
+                "Mary \0\0\0\0\0",
+                "had \0\0\0\0\0\0",
+                "a\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn split_terminator() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = ".A.B.";
+        let pattern_plain = ".";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_split = MyServerKey::split_terminator(&my_string, pattern);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+        assert_eq!(
+            plain_split,
+            vec![
+                "\0\0\0\0\0",
+                "A\0\0\0\0",
+                "B\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn split_ascii_whitespace() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = " A\nB\t";
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+
+        let fhe_split = MyServerKey::split_ascii_whitespace(&my_string);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+        assert_eq!(
+            plain_split,
+            vec![
+                "\0\0\0\0\0",
+                "A\0\0\0\0",
+                "B\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0",
+                "\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn splitn() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = ".A.B.C.";
+        let pattern_plain = ".";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+        let n = FheAsciiChar::encrypt_trivial(2u8);
+
+        let fhe_split = MyServerKey::splitn(&my_string, pattern, n);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+        assert_eq!(
+            plain_split,
+            vec![
+                "\0\0\0\0\0\0\0",
+                "A.B.C.\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn rsplit() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = ".A.B.C.";
+        let pattern_plain = ".";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_split = MyServerKey::rsplit(&my_string, pattern);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+        assert_eq!(
+            plain_split,
+            vec![
+                "\0\0\0\0\0\0\0",
+                "C\0\0\0\0\0\0",
+                "B\0\0\0\0\0\0",
+                "A\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn rsplit_once() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = ".A.B.C.";
+        let pattern_plain = ".";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_split = MyServerKey::rsplit_once(&my_string, pattern);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+        assert_eq!(
+            plain_split,
+            vec![
+                "\0\0\0\0\0\0\0",
+                ".A.B.C\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn rsplitn() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = ".A.B.C.";
+        let pattern_plain = ".";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+        let n = FheAsciiChar::encrypt_trivial(3u8);
+
+        let fhe_split = MyServerKey::rsplitn(&my_string, pattern, n);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+        assert_eq!(
+            plain_split,
+            vec![
+                "\0\0\0\0\0\0\0",
+                "C\0\0\0\0\0\0",
+                ".A.B\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0"
+            ]
+        );
+    }
+
+    #[test]
+    fn rplitn_terminator() {
+        let (client_key, server_key) = setup_test();
+
+        let my_client_key = MyClientKey::new(client_key);
+        let _ = MyServerKey::new(server_key);
+
+        let my_string_plain1 = ".A.B.C.";
+        let pattern_plain = ".";
+
+        let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_split = MyServerKey::rsplit_terminator(&my_string, pattern);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+        assert_eq!(
+            plain_split,
+            vec![
+                "\0\0\0\0\0\0\0",
+                "C\0\0\0\0\0\0",
+                "B\0\0\0\0\0\0",
+                "A\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0",
+                "\0\0\0\0\0\0\0"
+            ]
+        );
+    }
 }
