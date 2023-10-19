@@ -1,6 +1,5 @@
 use ciphertext::fheasciichar::FheAsciiChar;
-use tfhe::prelude::*;
-use tfhe::{generate_keys, set_server_key, ClientKey, ConfigBuilder};
+use tfhe::{generate_keys, ConfigBuilder};
 
 use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestring::FheString;
