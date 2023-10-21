@@ -51,7 +51,7 @@ fn main() {
 
     let my_string = my_client_key.encrypt(&my_string_plain1, STRING_PADDING);
 
-    let fhe_split = MyServerKey::rsplit_terminator(&my_string, pattern);
+    let fhe_split = MyServerKey::rsplit_terminator(&my_string, &pattern);
 
     let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
@@ -96,7 +96,7 @@ mod test {
         let heistack = my_client_key.encrypt("awesomezamaisawesome", 3);
         let needle = my_client_key.encrypt_no_padding("zama");
 
-        let res = MyServerKey::contains(&heistack, needle);
+        let res = MyServerKey::contains(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         assert_eq!(dec, 1u8);
@@ -112,7 +112,7 @@ mod test {
         let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
         let needle = my_client_key.encrypt_no_padding("zama");
 
-        let res = MyServerKey::contains(&heistack, needle);
+        let res = MyServerKey::contains(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         assert_eq!(dec, 0u8);
@@ -128,7 +128,7 @@ mod test {
         let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
         let needle = my_client_key.encrypt_no_padding("zama");
 
-        let res = MyServerKey::ends_with(&heistack, needle, STRING_PADDING);
+        let res = MyServerKey::ends_with(&heistack, &needle, STRING_PADDING);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         assert_eq!(dec, 0u8);
@@ -144,7 +144,7 @@ mod test {
         let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
         let needle = my_client_key.encrypt_no_padding("world");
 
-        let res = MyServerKey::ends_with(&heistack, needle, STRING_PADDING);
+        let res = MyServerKey::ends_with(&heistack, &needle, STRING_PADDING);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         assert_eq!(dec, 1u8);
@@ -190,7 +190,7 @@ mod test {
         let from = my_client_key.encrypt_no_padding("world");
         let to = my_client_key.encrypt_no_padding("abc");
 
-        let my_new_string = MyServerKey::replace(&my_string, from, to);
+        let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
         assert_eq!(verif_string, "hello abc abc test\0\0\0\0");
@@ -207,7 +207,7 @@ mod test {
         let from = my_client_key.encrypt_no_padding("abc");
         let to = my_client_key.encrypt_no_padding("world");
 
-        let my_new_string = MyServerKey::replace(&my_string, from, to);
+        let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
         assert_eq!(verif_string, "hello world world test\0\0\0\0\0\0\0\0\0\0");
@@ -225,7 +225,7 @@ mod test {
         let to = my_client_key.encrypt_no_padding("world");
         let n = my_client_key.encrypt_char(1u8);
 
-        let my_new_string = MyServerKey::replacen(&my_string, from, to, n);
+        let my_new_string = MyServerKey::replacen(&my_string, &from, &to, n);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
         assert_eq!(verif_string, "hello world abc test\0\0\0\0\0\0\0\0\0\0\0\0");
@@ -368,7 +368,7 @@ mod test {
         let heistack = my_client_key.encrypt("hello abc abc test", STRING_PADDING);
         let needle = my_client_key.encrypt_no_padding("abc");
 
-        let res = MyServerKey::rfind(&heistack, needle);
+        let res = MyServerKey::rfind(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         assert_eq!(dec, 10u8);
@@ -384,7 +384,7 @@ mod test {
         let heistack = my_client_key.encrypt("hello test", STRING_PADDING);
         let needle = my_client_key.encrypt_no_padding("abc");
 
-        let res = MyServerKey::rfind(&heistack, needle);
+        let res = MyServerKey::rfind(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         assert_eq!(dec, 255u8);
@@ -401,7 +401,7 @@ mod test {
         let heistack = my_client_key.encrypt(&"hello test".repeat(100), STRING_PADDING);
         let needle = my_client_key.encrypt_no_padding("abc");
 
-        let res = MyServerKey::rfind(&heistack, needle);
+        let res = MyServerKey::rfind(&heistack, &needle);
     }
 
     #[test]
@@ -414,7 +414,7 @@ mod test {
         let heistack = my_client_key.encrypt("hello test", STRING_PADDING);
         let needle = my_client_key.encrypt_no_padding("test");
 
-        let res = MyServerKey::rfind(&heistack, needle);
+        let res = MyServerKey::rfind(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         assert_eq!(dec, 6u8);
@@ -461,7 +461,7 @@ mod test {
 
         let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
         let pattern = my_client_key.encrypt_no_padding("HELLO");
-        let my_string_upper = MyServerKey::strip_prefix(&my_string, pattern);
+        let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
         assert_eq!(verif_string, " test test HELLO\0\0\0\0\0");
@@ -476,7 +476,7 @@ mod test {
 
         let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
         let pattern = my_client_key.encrypt("HELLO", STRING_PADDING);
-        let my_string_upper = MyServerKey::strip_suffix(&my_string, pattern.bytes);
+        let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
         assert_eq!(verif_string, "HELLO test test \0\0\0\0\0");
@@ -491,7 +491,7 @@ mod test {
 
         let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
         let pattern = my_client_key.encrypt("WORLD", 0);
-        let my_string_upper = MyServerKey::strip_suffix(&my_string, pattern.bytes);
+        let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
         assert_eq!(verif_string, "HELLO test test HELLO");
@@ -506,7 +506,7 @@ mod test {
 
         let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
         let pattern = my_client_key.encrypt("WORLD", 0);
-        let my_string_upper = MyServerKey::strip_prefix(&my_string, pattern.bytes);
+        let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern.bytes);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
         assert_eq!(verif_string, "HELLO test test HELLO");
@@ -539,7 +539,7 @@ mod test {
 
         let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
-        let actual = MyServerKey::lt(&heistack1, heistack2);
+        let actual = MyServerKey::lt(&heistack1, &heistack2);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
 
@@ -560,7 +560,7 @@ mod test {
 
         let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
-        let actual = MyServerKey::le(&heistack1, heistack2);
+        let actual = MyServerKey::le(&heistack1, &heistack2);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
 
@@ -581,7 +581,7 @@ mod test {
 
         let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
-        let actual = MyServerKey::gt(&heistack1, heistack2);
+        let actual = MyServerKey::gt(&heistack1, &heistack2);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
 
@@ -602,7 +602,7 @@ mod test {
 
         let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING);
-        let actual = MyServerKey::ge(&heistack1, heistack2);
+        let actual = MyServerKey::ge(&heistack1, &heistack2);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
 
@@ -624,7 +624,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_split = MyServerKey::split(&my_string, pattern);
+        let fhe_split = MyServerKey::split(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
         assert_eq!(
@@ -660,7 +660,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_split = MyServerKey::split_inclusive(&my_string, pattern);
+        let fhe_split = MyServerKey::split_inclusive(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
         assert_eq!(
@@ -696,7 +696,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_split = MyServerKey::split_terminator(&my_string, pattern);
+        let fhe_split = MyServerKey::split_terminator(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
         assert_eq!(
@@ -756,7 +756,7 @@ mod test {
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
         let n = FheAsciiChar::encrypt_trivial(2u8);
 
-        let fhe_split = MyServerKey::splitn(&my_string, pattern, n);
+        let fhe_split = MyServerKey::splitn(&my_string, &pattern, n);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
         assert_eq!(
             plain_split,
@@ -788,7 +788,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_split = MyServerKey::rsplit(&my_string, pattern);
+        let fhe_split = MyServerKey::rsplit(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
         assert_eq!(
             plain_split,
@@ -820,7 +820,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_split = MyServerKey::rsplit_once(&my_string, pattern);
+        let fhe_split = MyServerKey::rsplit_once(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
         assert_eq!(
@@ -854,7 +854,7 @@ mod test {
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
         let n = FheAsciiChar::encrypt_trivial(3u8);
 
-        let fhe_split = MyServerKey::rsplitn(&my_string, pattern, n);
+        let fhe_split = MyServerKey::rsplitn(&my_string, &pattern, n);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
         assert_eq!(
@@ -887,7 +887,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain1, STRING_PADDING);
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_split = MyServerKey::rsplit_terminator(&my_string, pattern);
+        let fhe_split = MyServerKey::rsplit_terminator(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
         assert_eq!(
