@@ -1,7 +1,9 @@
-use tfhe::{boolean::client_key, generate_keys, prelude::FheDecrypt, ClientKey, ConfigBuilder};
+use serde::{Deserialize, Serialize};
+use tfhe::{prelude::FheDecrypt, ClientKey};
 
 use crate::ciphertext::{fheasciichar::FheAsciiChar, fhestring::FheString};
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MyClientKey {
     client_key: ClientKey,
 }
