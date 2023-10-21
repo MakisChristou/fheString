@@ -1,4 +1,5 @@
-use tfhe::{set_server_key, ClientKey, ServerKey};
+use serde::{Deserialize, Serialize};
+use tfhe::{set_server_key, ServerKey};
 
 use crate::{
     abs_difference, bubble_zeroes_left,
@@ -10,7 +11,7 @@ use crate::{
     MAX_FIND_LENGTH, MAX_REPETITIONS,
 };
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MyServerKey {
     key: ServerKey,
 }
