@@ -57,18 +57,7 @@ fn main() {
 
     assert_eq!(
         plain_split,
-        vec![
-            "\0\0\0\0\0\0\0",
-            "C\0\0\0\0\0\0",
-            "B\0\0\0\0\0\0",
-            "A\0\0\0\0\0\0",
-            "\0\0\0\0\0\0\0",
-            "\0\0\0\0\0\0\0",
-            "\0\0\0\0\0\0\0",
-            "\0\0\0\0\0\0\0",
-            "\0\0\0\0\0\0\0",
-            "\0\0\0\0\0\0\0"
-        ]
+        vec!["", "C\0", "B\0", "A\0", "", "", "", "", "", ""]
     );
 }
 
@@ -176,7 +165,7 @@ mod test {
 
         let my_string_upper = MyServerKey::repeat(&my_string, encrypted_repetitions);
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "abcabcabc\0\0\0\0\0\0\0\0\0\0\0\0");
+        assert_eq!(verif_string, "abcabcabc");
     }
 
     #[test]
@@ -193,7 +182,7 @@ mod test {
         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-        assert_eq!(verif_string, "hello abc abc test\0\0\0\0");
+        assert_eq!(verif_string, "hello abc abc test");
     }
 
     #[test]
@@ -210,7 +199,7 @@ mod test {
         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-        assert_eq!(verif_string, "hello world world test\0\0\0\0\0\0\0\0\0\0");
+        assert_eq!(verif_string, "hello world world test");
     }
 
     #[test]
@@ -228,7 +217,7 @@ mod test {
         let my_new_string = MyServerKey::replacen(&my_string, &from, &to, n);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-        assert_eq!(verif_string, "hello world abc test\0\0\0\0\0\0\0\0\0\0\0\0");
+        assert_eq!(verif_string, "hello world abc test");
     }
 
     #[test]
@@ -255,7 +244,7 @@ mod test {
         let my_string_upper = MyServerKey::trim_end(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "ZA MA\0\0\0\0\0");
+        assert_eq!(verif_string, "ZA MA");
     }
 
     #[test]
@@ -281,7 +270,7 @@ mod test {
         let my_string_upper = MyServerKey::trim_start(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "ZA MA\0");
+        assert_eq!(verif_string, "ZA MA");
     }
 
     #[test]
@@ -295,7 +284,7 @@ mod test {
         let my_string_upper = MyServerKey::trim(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "hello world!\0\0\0\0\0");
+        assert_eq!(verif_string, "hello world!");
     }
 
     #[test]
@@ -464,7 +453,7 @@ mod test {
         let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, " test test HELLO\0\0\0\0\0");
+        assert_eq!(verif_string, " test test HELLO");
     }
 
     #[test]
@@ -479,7 +468,7 @@ mod test {
         let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "HELLO test test \0\0\0\0\0");
+        assert_eq!(verif_string, "HELLO test test ");
     }
 
     #[test]
@@ -524,7 +513,7 @@ mod test {
         let my_string_upper = MyServerKey::concatenate(&my_string1, &my_string2);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "Hello, World!\0\0\0");
+        assert_eq!(verif_string, "Hello, World!");
     }
 
     #[test]
@@ -629,21 +618,7 @@ mod test {
 
         assert_eq!(
             plain_split,
-            vec![
-                "Mary\0\0\0\0\0\0",
-                "had\0\0\0\0\0\0\0",
-                "a\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0"
-            ]
+            vec!["Mary", "had", "a", "", "", "", "", "", "", "", "", "", ""]
         );
     }
 
@@ -665,21 +640,7 @@ mod test {
 
         assert_eq!(
             plain_split,
-            vec![
-                "Mary \0\0\0\0\0",
-                "had \0\0\0\0\0\0",
-                "a\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0\0\0\0"
-            ]
+            vec!["Mary ", "had ", "a", "", "", "", "", "", "", "", "", "", ""]
         );
     }
 
@@ -699,19 +660,7 @@ mod test {
         let fhe_split = MyServerKey::split_terminator(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-        assert_eq!(
-            plain_split,
-            vec![
-                "\0\0\0\0\0",
-                "A\0\0\0\0",
-                "B\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0"
-            ]
-        );
+        assert_eq!(plain_split, vec!["", "A", "B", "", "", "", "", ""]);
     }
 
     #[test]
@@ -727,19 +676,7 @@ mod test {
         let fhe_split = MyServerKey::split_ascii_whitespace(&my_string);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-        assert_eq!(
-            plain_split,
-            vec![
-                "\0\0\0\0\0",
-                "A\0\0\0\0",
-                "B\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0",
-                "\0\0\0\0\0"
-            ]
-        );
+        assert_eq!(plain_split, vec!["", "A", "B", "", "", "", "", ""]);
     }
 
     #[test]
@@ -760,18 +697,7 @@ mod test {
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
         assert_eq!(
             plain_split,
-            vec![
-                "\0\0\0\0\0\0\0",
-                "A.B.C.\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0"
-            ]
+            vec!["", "A.B.C.", "", "", "", "", "", "", "", ""]
         );
     }
 
@@ -790,21 +716,7 @@ mod test {
 
         let fhe_split = MyServerKey::rsplit(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
-        assert_eq!(
-            plain_split,
-            vec![
-                "\0\0\0\0\0\0\0",
-                "C\0\0\0\0\0\0",
-                "B\0\0\0\0\0\0",
-                "A\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0"
-            ]
-        );
+        assert_eq!(plain_split, vec!["", "C", "B", "A", "", "", "", "", "", ""]);
     }
 
     #[test]
@@ -825,18 +737,7 @@ mod test {
 
         assert_eq!(
             plain_split,
-            vec![
-                "\0\0\0\0\0\0\0",
-                ".A.B.C\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0"
-            ]
+            vec!["", ".A.B.C", "", "", "", "", "", "", "", ""]
         );
     }
 
@@ -859,18 +760,7 @@ mod test {
 
         assert_eq!(
             plain_split,
-            vec![
-                "\0\0\0\0\0\0\0",
-                "C\0\0\0\0\0\0",
-                ".A.B\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0"
-            ]
+            vec!["", "C", ".A.B", "", "", "", "", "", "", ""]
         );
     }
 
@@ -890,20 +780,6 @@ mod test {
         let fhe_split = MyServerKey::rsplit_terminator(&my_string, &pattern);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-        assert_eq!(
-            plain_split,
-            vec![
-                "\0\0\0\0\0\0\0",
-                "C\0\0\0\0\0\0",
-                "B\0\0\0\0\0\0",
-                "A\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0",
-                "\0\0\0\0\0\0\0"
-            ]
-        );
+        assert_eq!(plain_split, vec!["", "C", "B", "A", "", "", "", "", "", ""]);
     }
 }

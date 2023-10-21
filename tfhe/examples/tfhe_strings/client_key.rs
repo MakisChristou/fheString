@@ -53,6 +53,13 @@ impl MyClientKey {
         FheAsciiChar::encrypt(plain_char, &self.client_key)
     }
 
+    fn truncate_at_null_byte(vec: Vec<u8>) -> Vec<u8> {
+        match vec.iter().position(|&byte| byte == 0) {
+            Some(pos) => vec.into_iter().take(pos).collect(),
+            None => vec,
+        }
+    }
+
     pub fn decrypt(&self, cipher_string: FheString, padding: usize) -> String {
         let new_len = cipher_string.bytes.len().saturating_sub(padding);
         let trimed_bytes: Vec<FheAsciiChar> = cipher_string.bytes.clone()[..new_len].to_vec();
@@ -61,6 +68,10 @@ impl MyClientKey {
             .iter()
             .map(|fhe_b| fhe_b.inner.decrypt(&self.client_key))
             .collect::<Vec<u8>>();
+
+        // Truncate zeroes
+        let ascii_bytes = Self::truncate_at_null_byte(ascii_bytes);
+
         String::from_utf8(ascii_bytes).unwrap()
     }
 }
