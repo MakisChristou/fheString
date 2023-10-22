@@ -12,28 +12,9 @@ const MAX_FIND_LENGTH: usize = 255;
 mod ciphertext;
 mod client_key;
 mod server_key;
+mod utils;
 
 use client_key::MyClientKey;
-
-fn abs_difference(a: usize, b: usize) -> usize {
-    a.checked_sub(b).unwrap_or_else(|| b - a)
-}
-
-fn bubble_zeroes_left(mut result: Vec<FheAsciiChar>) -> Vec<FheAsciiChar> {
-    let zero = FheAsciiChar::encrypt_trivial(0u8);
-
-    // Bring non \0 characters in front O(n^2), essentially bubble sort
-    for _ in 0..result.len() {
-        for i in 0..result.len() - 1 {
-            let should_swap = result[i].eq(&zero);
-
-            result[i] = should_swap.if_then_else(&result[i + 1], &result[i]);
-            result[i + 1] = should_swap.if_then_else(&zero, &result[i + 1]);
-        }
-    }
-
-    result
-}
 
 fn main() {
     let config = ConfigBuilder::all_disabled()
@@ -700,7 +681,9 @@ mod test {
         let fhe_split = MyServerKey::splitn(&my_string, &pattern, n);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-        let expected: Vec<&str> = my_string_plain.splitn(n_plain.into(), pattern_plain).collect();
+        let expected: Vec<&str> = my_string_plain
+            .splitn(n_plain.into(), pattern_plain)
+            .collect();
 
         assert_eq!(plain_split[..expected.len()], expected);
     }

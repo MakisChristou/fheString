@@ -2,12 +2,13 @@ use serde::{Deserialize, Serialize};
 use tfhe::{set_server_key, ServerKey};
 
 use crate::{
-    abs_difference, bubble_zeroes_left,
     ciphertext::{
         fheasciichar::FheAsciiChar,
         fhesplit::FheSplit,
         fhestring::{Comparison, FheString},
     },
+    utils::abs_difference,
+    utils::bubble_zeroes_left,
     MAX_FIND_LENGTH, MAX_REPETITIONS,
 };
 
