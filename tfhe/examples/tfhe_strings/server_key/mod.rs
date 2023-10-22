@@ -729,20 +729,26 @@ impl MyServerKey {
         let one = FheAsciiChar::encrypt_trivial(1u8);
         let mut current_copy_buffer = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
+        let mut previous_was_whitespace = FheAsciiChar::encrypt_trivial(1u8);
 
         for i in 0..(string.bytes.len()) {
+            let pattern_found = string.bytes[i].is_whitespace();
+            let should_increment_buffer = pattern_found.clone() & previous_was_whitespace.flip();
+
+            // Here we know if the pattern is found for position i
+            // If its found we need to switch from copying to old buffer and start copying to new one
+            current_copy_buffer = should_increment_buffer
+                .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+
             // Copy ith character to the appropriate buffer
             for j in 0..max_no_buffers {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8);
-                let copy_flag = enc_j.eq(&current_copy_buffer);
+                let mut copy_flag = enc_j.eq(&current_copy_buffer);
+                copy_flag = copy_flag & string.bytes[i].is_whitespace().flip(); // copy if its not whitespace
                 result[j][i] = copy_flag.if_then_else(&string.bytes[i], &result[j][i]);
             }
 
-            let pattern_found = string.bytes[i].is_whitespace();
-            // Here we know if the pattern is found for position i
-            // If its found we need to switch from copying to old buffer and start copying to new one
-            current_copy_buffer =
-                pattern_found.if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+            previous_was_whitespace = pattern_found;
         }
 
         // Replace whitespace with \0
