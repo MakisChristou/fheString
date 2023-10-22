@@ -26,21 +26,17 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let _ = MyServerKey::new(server_key);
 
-    let my_string_plain = "....A.B.C.";
-    let pattern_plain = ".";
+    let my_string_plain = "HELLO test test HELLO";
+    let pattern_plain = "HELLO";
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING);
+    let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
-    let fhe_split = MyServerKey::rsplit_terminator(&my_string, &pattern);
-    let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+    let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+    let expected = my_string_plain.strip_suffix(pattern_plain).unwrap();
 
-    // In this case plain_split always has a leading empty string, so the client can safely ignore it
-    plain_split.remove(0);
-
-    let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
-
-    assert_eq!(plain_split[..expected.len()], expected);
+    assert_eq!(verif_string, expected);
 }
 
 #[cfg(test)]
@@ -64,13 +60,18 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("awesomezamaisawesome", 3);
-        let needle = my_client_key.encrypt_no_padding("zama");
+        let heistack_plain = "awesomezamaisawesome";
+        let needle_plain = "zama";
+
+        let heistack = my_client_key.encrypt(heistack_plain, 3);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = MyServerKey::contains(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
-        assert_eq!(dec, 1u8);
+        let expected = heistack_plain.contains(needle_plain);
+
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -80,13 +81,18 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
-        let needle = my_client_key.encrypt_no_padding("zama");
+        let heistack_plain = "hello world";
+        let needle_plain = "zama";
+
+        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = MyServerKey::contains(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
-        assert_eq!(dec, 0u8);
+        let expected = heistack_plain.contains(needle_plain);
+
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -96,13 +102,18 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
-        let needle = my_client_key.encrypt_no_padding("zama");
+        let heistack_plain = "hello world";
+        let needle_plain = "zama";
+
+        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = MyServerKey::ends_with(&heistack, &needle, STRING_PADDING);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
-        assert_eq!(dec, 0u8);
+        let expected = heistack_plain.ends_with(needle_plain);
+
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -112,13 +123,18 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("hello world", STRING_PADDING);
-        let needle = my_client_key.encrypt_no_padding("world");
+        let heistack_plain = "hello world";
+        let needle_plain = "world";
+
+        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = MyServerKey::ends_with(&heistack, &needle, STRING_PADDING);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
-        assert_eq!(dec, 1u8);
+        let expected = heistack_plain.ends_with(needle_plain);
+
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -128,11 +144,15 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("zama IS awesome", STRING_PADDING);
+        let my_string_plain = "zama IS awesome";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::to_upper(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "ZAMA IS AWESOME");
+        let expected = my_string_plain.to_uppercase();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -142,12 +162,17 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("abc", STRING_PADDING);
-        let encrypted_repetitions = my_client_key.encrypt_char(3u8);
+        let my_string_plain = "abc";
+        let n_plain = 3u8;
 
-        let my_string_upper = MyServerKey::repeat(&my_string, encrypted_repetitions);
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let n = my_client_key.encrypt_char(n_plain);
+
+        let my_string_upper = MyServerKey::repeat(&my_string, n);
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "abcabcabc");
+        let expected = my_string_plain.repeat(n_plain.into());
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -157,14 +182,20 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("hello world world test", STRING_PADDING);
-        let from = my_client_key.encrypt_no_padding("world");
-        let to = my_client_key.encrypt_no_padding("abc");
+        let my_string_plain = "hello world world test";
+        let from_plain = "world";
+        let to_plain = "abc";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let from = my_client_key.encrypt_no_padding(from_plain);
+        let to = my_client_key.encrypt_no_padding(to_plain);
 
         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-        assert_eq!(verif_string, "hello abc abc test");
+        let expected = my_string_plain.replace(from_plain, to_plain);
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -174,14 +205,20 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("hello abc abc test", STRING_PADDING);
-        let from = my_client_key.encrypt_no_padding("abc");
-        let to = my_client_key.encrypt_no_padding("world");
+        let my_string_plain = "hello abc abc test";
+        let from_plain = "abc";
+        let to_plain = "world";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let from = my_client_key.encrypt_no_padding(from_plain);
+        let to = my_client_key.encrypt_no_padding(to_plain);
 
         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-        assert_eq!(verif_string, "hello world world test");
+        let expected = my_string_plain.replace(from_plain, to_plain);
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -191,15 +228,22 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("hello abc abc test", STRING_PADDING);
-        let from = my_client_key.encrypt_no_padding("abc");
-        let to = my_client_key.encrypt_no_padding("world");
-        let n = my_client_key.encrypt_char(1u8);
+        let my_string_plain = "hello abc abc test";
+        let from_plain = "abc";
+        let to_plain = "world";
+        let n_plain = 1u8;
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let from = my_client_key.encrypt_no_padding(from_plain);
+        let to = my_client_key.encrypt_no_padding(to_plain);
+        let n = my_client_key.encrypt_char(n_plain);
 
         let my_new_string = MyServerKey::replacen(&my_string, &from, &to, n);
 
         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-        assert_eq!(verif_string, "hello world abc test");
+        let expected = my_string_plain.replacen(from_plain, to_plain, n_plain.into());
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -209,11 +253,15 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("zama IS awesome", STRING_PADDING);
+        let my_string_plain = "zama IS awesome";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::to_lower(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "zama is awesome");
+        let expected = my_string_plain.to_lowercase();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -222,11 +270,15 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("ZA MA\n\t \r\x0C", STRING_PADDING);
+        let my_string_plain = "ZA MA\n\t \r\x0C";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim_end(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "ZA MA");
+        let expected = my_string_plain.trim_end();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -235,11 +287,15 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("\nZA MA", STRING_PADDING);
+        let my_string_plain = "\nZA MA";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim_end(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "\nZA MA");
+        let expected = my_string_plain.trim_end();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -248,11 +304,15 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("\nZA MA", STRING_PADDING);
+        let my_string_plain = "\nZA MA";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim_start(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "ZA MA");
+        let expected = my_string_plain.trim_start();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -262,11 +322,15 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("\n\nhello world!   ", STRING_PADDING);
+        let my_string_plain = "\n\nhello world!   ";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim(&my_string);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "hello world!");
+        let expected = my_string_plain.trim();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -276,12 +340,14 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("", STRING_PADDING);
+        let my_string_plain = "";
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
 
-        let res = MyServerKey::is_empty(&heistack);
+        let res = MyServerKey::is_empty(&my_string);
         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = my_string_plain.is_empty();
 
-        assert_eq!(dec, 1u8);
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -291,12 +357,14 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("a", STRING_PADDING);
+        let my_string_plain = "a";
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
 
-        let res = MyServerKey::is_empty(&heistack);
+        let res = MyServerKey::is_empty(&my_string);
         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = my_string_plain.is_empty();
 
-        assert_eq!(dec, 0u8);
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -306,12 +374,14 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("a", STRING_PADDING);
+        let my_string_plain = "a";
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
 
-        let res = MyServerKey::len(&heistack);
+        let res = MyServerKey::len(&my_string);
         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = my_string_plain.len();
 
-        assert_eq!(dec, 1u8);
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -321,12 +391,14 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("some arbitrary string", STRING_PADDING);
+        let my_string_plain = "some arbitrary string";
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
 
-        let res = MyServerKey::len(&heistack);
+        let res = MyServerKey::len(&my_string);
         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = my_string_plain.len();
 
-        assert_eq!(dec, 21u8);
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -336,13 +408,18 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("hello abc abc test", STRING_PADDING);
-        let needle = my_client_key.encrypt_no_padding("abc");
+        let heistack_plain = "hello abc abc test";
+        let needle_plain = "abc";
+
+        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = MyServerKey::rfind(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
-        assert_eq!(dec, 10u8);
+        let expected = heistack_plain.rfind(needle_plain).unwrap();
+
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -352,11 +429,17 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("hello test", STRING_PADDING);
-        let needle = my_client_key.encrypt_no_padding("abc");
+        let heistack_plain = "hello test";
+        let needle_plain = "abc";
+
+        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = MyServerKey::rfind(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
+
+        // The original algoritm returns None but since we don't have this luxury we will use a placeholder value
+        let _ = heistack_plain.rfind(needle_plain);
 
         assert_eq!(dec, 255u8);
     }
@@ -369,8 +452,11 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt(&"hello test".repeat(100), STRING_PADDING);
-        let needle = my_client_key.encrypt_no_padding("abc");
+        let heistack_plain = "hello test".repeat(100);
+        let needle_plain = "abc";
+
+        let heistack = my_client_key.encrypt(&heistack_plain, STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = MyServerKey::rfind(&heistack, &needle);
     }
@@ -382,13 +468,18 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack = my_client_key.encrypt("hello test", STRING_PADDING);
-        let needle = my_client_key.encrypt_no_padding("test");
+        let heistack_plain = "hello test";
+        let needle_plain = "test";
 
-        let res = MyServerKey::rfind(&heistack, &needle);
+        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
+
+        let res = MyServerKey::find(&heistack, &needle);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
-        assert_eq!(dec, 6u8);
+        let expected = heistack_plain.find(needle_plain).unwrap();
+
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -398,13 +489,17 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack1 = my_client_key.encrypt("hello test", STRING_PADDING);
-        let heistack2 = my_client_key.encrypt("hello test", STRING_PADDING + 20);
+        let heistack1_plain = "hello test";
+        let heistack2_plain = "hello test";
+
+        let heistack1 = my_client_key.encrypt(heistack1_plain, STRING_PADDING);
+        let heistack2 = my_client_key.encrypt(heistack2_plain, STRING_PADDING + 20);
 
         let res = MyServerKey::eq(&heistack1, &heistack2);
         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = heistack1_plain.eq(heistack2_plain);
 
-        assert_eq!(dec, 1u8);
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -414,13 +509,17 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let heistack1 = my_client_key.encrypt("hello TEST", STRING_PADDING);
-        let heistack2 = my_client_key.encrypt("hello test", STRING_PADDING + 20);
+        let heistack1_plain = "hello TEST";
+        let heistack2_plain = "hello test";
+
+        let heistack1 = my_client_key.encrypt(heistack1_plain, STRING_PADDING);
+        let heistack2 = my_client_key.encrypt(heistack2_plain, STRING_PADDING + 20);
 
         let res = MyServerKey::eq_ignore_case(&heistack1, &heistack2);
         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = heistack1_plain.eq_ignore_ascii_case(heistack2_plain);
 
-        assert_eq!(dec, 1u8);
+        assert_eq!(dec, expected as u8);
     }
 
     #[test]
@@ -430,12 +529,19 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
-        let pattern = my_client_key.encrypt_no_padding("HELLO");
+        let my_string_plain = "HELLO test test HELLO";
+        let pattern_plain = "HELLO";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
         let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, " test test HELLO");
+        let expected = my_string_plain.strip_prefix(pattern_plain);
+
+        let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -445,12 +551,17 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
-        let pattern = my_client_key.encrypt("HELLO", STRING_PADDING);
+        let my_string_plain = "HELLO test test HELLO";
+        let pattern_plain = "HELLO";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "HELLO test test ");
+        let expected = my_string_plain.strip_suffix(pattern_plain).unwrap();
+
+        assert_eq!(verif_string, expected);
     }
 
     #[test]
@@ -460,12 +571,19 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
-        let pattern = my_client_key.encrypt("WORLD", 0);
+        let my_string_plain = "HELLO test test HELLO";
+        let pattern_plain = "WORLD";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let pattern = my_client_key.encrypt(pattern_plain, 0);
         let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "HELLO test test HELLO");
+
+        // This is None but in our case the string is not modified
+        let _ = my_string_plain.strip_suffix(pattern_plain);
+
+        assert_eq!(verif_string, my_string_plain);
     }
 
     #[test]
@@ -475,12 +593,19 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string = my_client_key.encrypt("HELLO test test HELLO", STRING_PADDING);
-        let pattern = my_client_key.encrypt("WORLD", 0);
+        let my_string_plain = "HELLO test test HELLO";
+        let pattern_plain = "WORLD";
+
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let pattern = my_client_key.encrypt(pattern_plain, 0);
         let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern.bytes);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "HELLO test test HELLO");
+
+        // This is None but in our case the string is not modified
+        let _ = my_string_plain.strip_prefix(pattern_plain);
+
+        assert_eq!(verif_string, my_string_plain);
     }
 
     #[test]
@@ -490,12 +615,18 @@ mod test {
         let my_client_key = MyClientKey::new(client_key);
         let _ = MyServerKey::new(server_key);
 
-        let my_string1 = my_client_key.encrypt("Hello, ", STRING_PADDING);
-        let my_string2 = my_client_key.encrypt("World!", STRING_PADDING);
+        let my_string1_plain = "Hello, ";
+        let my_string2_plain = "World!";
+
+        let my_string1 = my_client_key.encrypt(my_string1_plain, STRING_PADDING);
+        let my_string2 = my_client_key.encrypt(my_string2_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::concatenate(&my_string1, &my_string2);
 
         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-        assert_eq!(verif_string, "Hello, World!");
+        assert_eq!(
+            verif_string,
+            format!("{}{}", my_string1_plain, my_string2_plain)
+        );
     }
 
     #[test]
