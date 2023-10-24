@@ -31,6 +31,7 @@ fn main() {
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
     let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING);
+    
     let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
     let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
