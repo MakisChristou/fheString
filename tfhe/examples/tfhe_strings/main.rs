@@ -1,8 +1,6 @@
 use ciphertext::fheasciichar::FheAsciiChar;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
-use tfhe::{generate_keys, ConfigBuilder};
 
-use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestring::FheString;
 use crate::server_key::MyServerKey;
 
@@ -44,16 +42,24 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-    use crate::{FheAsciiChar, FheSplit, FheString, STRING_PADDING};
+    use crate::{FheAsciiChar, FheString, STRING_PADDING};
     use crate::{MyClientKey, MyServerKey};
-    use tfhe::{generate_keys, set_server_key, ClientKey, ConfigBuilder, ServerKey};
+    use tfhe::integer::gen_keys_radix;
+    use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    use tfhe::{generate_keys, set_server_key, PublicKey};
 
-    fn setup_test() -> (ClientKey, ServerKey) {
-        let config = ConfigBuilder::all_disabled()
-            .enable_default_integers()
-            .build();
+    fn setup_test() -> (MyClientKey, MyServerKey, tfhe::integer::PublicKey, usize) {
+        // We generate a set of client/server keys, using the default parameters:
+        let num_blocks = 4;
+        let (client_key, server_key) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
 
-        generate_keys(config)
+        //We generate the public key from the secret client key:
+        let public_key = tfhe::integer::PublicKey::new(&client_key);
+
+        let my_client_key = MyClientKey::new(client_key);
+        let my_server_key = MyServerKey::new(server_key);
+
+        (my_client_key, my_server_key, public_key, num_blocks)
     }
 
     //     #[test]
@@ -140,23 +146,21 @@ mod test {
     //         assert_eq!(dec, expected as u8);
     //     }
 
-    //     #[test]
-    //     fn uppercase() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn uppercase() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "zama IS awesome";
 
-    //         let my_string_plain = "zama IS awesome";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let my_string_upper = my_server_key.to_upper(&my_string, &public_key, num_blocks);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let my_string_upper = MyServerKey::to_upper(&my_string);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let expected = my_string_plain.to_uppercase();
 
-    //         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-    //         let expected = my_string_plain.to_uppercase();
-
-    //         assert_eq!(verif_string, expected);
-    //     }
+        assert_eq!(verif_string, expected);
+    }
 
     //     #[test]
     //     fn repeat() {
