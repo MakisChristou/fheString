@@ -1,19 +1,25 @@
 use serde::{Deserialize, Serialize};
-use tfhe::{prelude::FheDecrypt, ClientKey};
+use tfhe::integer::RadixClientKey;
 
 use crate::ciphertext::{fheasciichar::FheAsciiChar, fhestring::FheString};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MyClientKey {
-    client_key: ClientKey,
+    client_key: RadixClientKey,
 }
 
 impl MyClientKey {
-    pub fn new(client_key: ClientKey) -> Self {
+    pub fn new(client_key: RadixClientKey) -> Self {
         MyClientKey { client_key }
     }
 
-    pub fn encrypt(&self, string: &str, padding: usize) -> FheString {
+    pub fn encrypt(
+        &self,
+        string: &str,
+        padding: usize,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
         assert!(
             string.chars().all(|char| char.is_ascii() && char != '\0'),
             "The input string must only contain ascii letters and not include null characters"
@@ -27,7 +33,7 @@ impl MyClientKey {
             .collect::<Vec<FheAsciiChar>>();
         let cst = FheAsciiChar::encrypt(32u8, &self.client_key);
 
-        FheString::from_vec(fhe_bytes)
+        FheString::from_vec(fhe_bytes, public_key, num_blocks)
     }
 
     pub fn encrypt_no_padding(&self, string: &str) -> Vec<FheAsciiChar> {
@@ -46,7 +52,7 @@ impl MyClientKey {
     }
 
     pub fn decrypt_char(&self, cipher_char: &FheAsciiChar) -> u8 {
-        FheAsciiChar::decrypt(cipher_char, &self.client_key)
+        FheAsciiChar::decrypt(&cipher_char.inner, &self.client_key)
     }
 
     pub fn encrypt_char(&self, plain_char: u8) -> FheAsciiChar {
@@ -66,7 +72,7 @@ impl MyClientKey {
 
         let ascii_bytes = trimed_bytes
             .iter()
-            .map(|fhe_b| fhe_b.inner.decrypt(&self.client_key))
+            .map(|fhe_b| self.client_key.decrypt::<u8>(&fhe_b.inner))
             .collect::<Vec<u8>>();
 
         // Truncate zeroes
