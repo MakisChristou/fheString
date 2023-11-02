@@ -55,21 +55,32 @@ impl MyServerKey {
         }
     }
 
-    // pub fn to_lower(string: &FheString) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     FheString {
-    //         bytes: string
-    //             .bytes
-    //             .iter()
-    //             .map(|b| {
-    //                 let should_not_convert = b.eq(&zero);
-    //                 let should_not_convert = should_not_convert | b.is_uppercase().flip();
-    //                 b + &should_not_convert.if_then_else(&zero, &string.cst)
-    //             })
-    //             .collect::<Vec<FheAsciiChar>>(),
-    //         cst: string.cst.clone(),
-    //     }
-    // }
+    pub fn to_lower(
+        &self,
+        string: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        FheString {
+            bytes: string
+                .bytes
+                .iter()
+                .map(|b| {
+                    let is_zero = b.eq(&self.key, &zero);
+                    let is_not_uppercase = b
+                        .is_uppercase(&self.key, public_key, num_blocks)
+                        .flip(&self.key, public_key, num_blocks);
+                    let should_not_convert = is_zero.bitor(&self.key, &is_not_uppercase);
+                    b.add(
+                        &self.key,
+                        &should_not_convert.if_then_else(&self.key, &zero, &string.cst),
+                    )
+                })
+                .collect::<Vec<FheAsciiChar>>(),
+            cst: string.cst.clone(),
+        }
+    }
 
     // pub fn contains(string: &FheString, needle: &Vec<FheAsciiChar>) -> FheAsciiChar {
     //     let mut result = FheAsciiChar::encrypt_trivial(0u8);

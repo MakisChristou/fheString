@@ -148,12 +148,20 @@ impl FheAsciiChar {
     //         | self.eq(&carriage_return)
     // }
 
-    // pub fn is_uppercase(&self) -> FheAsciiChar {
-    //     let uppercase_a = FheAsciiChar::encrypt_trivial(0x41u8); // 'A'
-    //     let uppercase_z = FheAsciiChar::encrypt_trivial(0x5Au8); // 'Z'
+    pub fn is_uppercase(
+        &self,
+        server_key: &tfhe::integer::ServerKey,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let uppercase_a = FheAsciiChar::encrypt_trivial(0x41u8, public_key, num_blocks); // 'A'
+        let uppercase_z = FheAsciiChar::encrypt_trivial(0x5Au8, public_key, num_blocks); // 'Z'
 
-    //     self.ge(&uppercase_a) & self.le(&uppercase_z)
-    // }
+        let res1 = self.ge(server_key, &uppercase_a);
+        let res2 = self.le(server_key, &uppercase_z);
+
+        res1.bitand(server_key, &res2)
+    }
 
     pub fn is_lowercase(
         &self,

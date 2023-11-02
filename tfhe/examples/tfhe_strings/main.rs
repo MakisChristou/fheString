@@ -253,23 +253,21 @@ mod test {
     //         assert_eq!(verif_string, expected);
     //     }
 
-    //     #[test]
-    //     fn lowercase() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn lowercase() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "zama IS awesome";
 
-    //         let my_string_plain = "zama IS awesome";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let my_string_upper = my_server_key.to_lower(&my_string, &public_key, num_blocks);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let my_string_upper = MyServerKey::to_lower(&my_string);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let expected = my_string_plain.to_lowercase();
 
-    //         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-    //         let expected = my_string_plain.to_lowercase();
-
-    //         assert_eq!(verif_string, expected);
-    //     }
+        assert_eq!(verif_string, expected);
+    }
 
     //     #[test]
     //     fn trim_end() {
