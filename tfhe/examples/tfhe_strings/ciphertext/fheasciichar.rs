@@ -1,11 +1,6 @@
-use std::ops::{
-    Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXorAssign, Not, Sub, SubAssign,
-};
-
 use tfhe::{
     integer::{ciphertext::BaseRadixCiphertext, RadixClientKey},
-    prelude::*,
-    shortint::{server_key, Ciphertext, ServerKey},
+    shortint::Ciphertext,
 };
 
 #[derive(Clone)]
@@ -132,21 +127,32 @@ impl FheAsciiChar {
         FheAsciiChar::new(res)
     }
 
-    // pub fn is_whitespace(&self) -> FheAsciiChar {
-    //     let space = FheAsciiChar::encrypt_trivial(0x20u8); // Space
-    //     let tab = FheAsciiChar::encrypt_trivial(0x09u8); // Horizontal Tab
-    //     let newline = FheAsciiChar::encrypt_trivial(0x0Au8); // Newline
-    //     let vertical_tab = FheAsciiChar::encrypt_trivial(0x0Bu8); // Vertical Tab
-    //     let form_feed = FheAsciiChar::encrypt_trivial(0x0Cu8); // Form Feed
-    //     let carriage_return = FheAsciiChar::encrypt_trivial(0x0Du8); // Carriage Return
+    pub fn is_whitespace(
+        &self,
+        server_key: &tfhe::integer::ServerKey,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let space = FheAsciiChar::encrypt_trivial(0x20u8, public_key, num_blocks); // Space
+        let tab = FheAsciiChar::encrypt_trivial(0x09u8, public_key, num_blocks); // Horizontal Tab
+        let newline = FheAsciiChar::encrypt_trivial(0x0Au8, public_key, num_blocks); // Newline
+        let vertical_tab = FheAsciiChar::encrypt_trivial(0x0Bu8, public_key, num_blocks); // Vertical Tab
+        let form_feed = FheAsciiChar::encrypt_trivial(0x0Cu8, public_key, num_blocks); // Form Feed
+        let carriage_return = FheAsciiChar::encrypt_trivial(0x0Du8, public_key, num_blocks); // Carriage Return
 
-    //     self.eq(&space)
-    //         | self.eq(&tab)
-    //         | self.eq(&newline)
-    //         | self.eq(&vertical_tab)
-    //         | self.eq(&form_feed)
-    //         | self.eq(&carriage_return)
-    // }
+        let res1 = self.eq(server_key, &space);
+        let res2 = self.eq(server_key, &tab);
+        let res3 = self.eq(server_key, &newline);
+        let res4 = self.eq(server_key, &vertical_tab);
+        let res5 = self.eq(server_key, &form_feed);
+        let res6 = self.eq(server_key, &carriage_return);
+
+        res1.bitor(server_key, &res2)
+            .bitor(server_key, &res3)
+            .bitor(server_key, &res4)
+            .bitor(server_key, &res5)
+            .bitor(server_key, &res6)
+    }
 
     pub fn is_uppercase(
         &self,
@@ -178,28 +184,46 @@ impl FheAsciiChar {
         res1.bitand(server_key, &res2)
     }
 
-    // pub fn is_alphabetic(&self) -> FheAsciiChar {
-    //     let is_uppercase = self.is_uppercase();
-    //     let is_lowercase = self.is_lowercase();
+    pub fn is_alphabetic(
+        &self,
+        server_key: &tfhe::integer::ServerKey,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let is_uppercase = self.is_uppercase(server_key, public_key, num_blocks);
+        let is_lowercase = self.is_lowercase(server_key, public_key, num_blocks);
 
-    //     is_uppercase | is_lowercase
-    // }
+        is_uppercase.bitor(server_key, &is_lowercase)
+    }
 
-    // pub fn is_number(&self) -> FheAsciiChar {
-    //     let digit_0 = FheAsciiChar::encrypt_trivial(0x30u8); // '0'
-    //     let digit_9 = FheAsciiChar::encrypt_trivial(0x39u8); // '9'
+    pub fn is_number(
+        &self,
+        server_key: &tfhe::integer::ServerKey,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let digit_0 = FheAsciiChar::encrypt_trivial(0x30u8, public_key, num_blocks); // '0'
+        let digit_9 = FheAsciiChar::encrypt_trivial(0x39u8, public_key, num_blocks); // '9'
 
-    //     self.ge(&digit_0) & self.le(&digit_9)
-    // }
+        let res1 = self.ge(server_key, &digit_0);
+        let res2 = self.le(server_key, &digit_9);
 
-    // pub fn is_alphanumeric(&self) -> FheAsciiChar {
-    //     let is_alphabetic = self.is_alphabetic();
-    //     let is_number = self.is_number();
+        res1.bitand(server_key, &res2)
+    }
 
-    //     is_alphabetic | is_number
-    // }
+    pub fn is_alphanumeric(
+        &self,
+        server_key: &tfhe::integer::ServerKey,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let is_alphabetic = self.is_alphabetic(server_key, public_key, num_blocks);
+        let is_number = self.is_number(server_key, public_key, num_blocks);
 
-    // // Input must be either 0 or 1
+        is_alphabetic.bitor(server_key, &is_number)
+    }
+
+    // Input must be either 0 or 1
     pub fn flip(
         &self,
         server_key: &tfhe::integer::ServerKey,
@@ -210,101 +234,3 @@ impl FheAsciiChar {
         one.sub(server_key, self)
     }
 }
-
-// // Implementing Add
-// impl Add for FheAsciiChar {
-//     type Output = Self;
-
-//     fn add(self, other: Self) -> Self {
-//         Self::new(self.inner + other.inner)
-//     }
-// }
-
-// // Implementing Add for references
-// impl<'a, 'b> Add<&'b FheAsciiChar> for &'a FheAsciiChar {
-//     type Output = FheAsciiChar;
-
-//     fn add(self, other: &'b FheAsciiChar) -> FheAsciiChar {
-//         FheAsciiChar::new(&self.inner + &other.inner)
-//     }
-// }
-
-// // Implementing Sub
-// impl Sub for FheAsciiChar {
-//     type Output = Self;
-
-//     fn sub(self, other: Self) -> Self {
-//         Self::new(self.inner - other.inner)
-//     }
-// }
-
-// // Implementing Sub for references
-// impl<'a, 'b> Sub<&'b FheAsciiChar> for &'a FheAsciiChar {
-//     type Output = FheAsciiChar;
-
-//     fn sub(self, other: &'b FheAsciiChar) -> FheAsciiChar {
-//         FheAsciiChar::new(&self.inner - &other.inner)
-//     }
-// }
-
-// // Implementing Bitwise OR (|) for logical OR
-// impl BitOr for FheAsciiChar {
-//     type Output = Self;
-
-//     fn bitor(self, other: Self) -> Self {
-//         Self::new(self.inner | other.inner)
-//     }
-// }
-
-// // Implementing Bitwise AND (&) for logical AND
-// impl BitAnd for FheAsciiChar {
-//     type Output = Self;
-
-//     fn bitand(self, other: Self) -> Self {
-//         Self::new(self.inner & other.inner)
-//     }
-// }
-
-// // Implementing Bitwise NOT (!) for logical NOT
-// impl Not for FheAsciiChar {
-//     type Output = Self;
-
-//     fn not(self) -> Self {
-//         Self::new(!self.inner)
-//     }
-// }
-
-// // Implementing Bitwise OR Assign (|=)
-// impl BitOrAssign for FheAsciiChar {
-//     fn bitor_assign(&mut self, other: Self) {
-//         self.inner |= other.inner;
-//     }
-// }
-
-// // Implementing Bitwise AND Assign (&=)
-// impl BitAndAssign for FheAsciiChar {
-//     fn bitand_assign(&mut self, other: Self) {
-//         self.inner &= other.inner;
-//     }
-// }
-
-// // Implementing Bitwise XOR Assign (^=)
-// impl BitXorAssign for FheAsciiChar {
-//     fn bitxor_assign(&mut self, other: Self) {
-//         self.inner ^= other.inner;
-//     }
-// }
-
-// // Implementing Add Assign (+=)
-// impl AddAssign for FheAsciiChar {
-//     fn add_assign(&mut self, other: Self) {
-//         self.inner += other.inner;
-//     }
-// }
-
-// // Implementing Subtract Assign (-=)
-// impl SubAssign for FheAsciiChar {
-//     fn sub_assign(&mut self, other: Self) {
-//         self.inner -= other.inner;
-//     }
-// }
