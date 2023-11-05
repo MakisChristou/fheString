@@ -82,20 +82,26 @@ impl MyServerKey {
         }
     }
 
-    // pub fn contains(string: &FheString, needle: &Vec<FheAsciiChar>) -> FheAsciiChar {
-    //     let mut result = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
+    pub fn contains(
+        &self,
+        string: &FheString,
+        needle: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let mut result = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
 
-    //     for i in 0..string.bytes.len() - needle.len() {
-    //         let mut current_result = one.clone();
-    //         for j in 0..needle.len() {
-    //             let eql = string.bytes[i + j].eq(&needle[j]);
-    //             current_result &= eql;
-    //         }
-    //         result |= current_result;
-    //     }
-    //     result
-    // }
+        for i in 0..string.bytes.len() - needle.len() {
+            let mut current_result = one.clone();
+            for j in 0..needle.len() {
+                let eql = string.bytes[i + j].eq(&self.key, &needle[j]);
+                current_result = current_result.bitand(&self.key, &eql);
+            }
+            result = result.bitor(&self.key, &current_result);
+        }
+        result
+    }
 
     // pub fn contains_clear(string: &FheString, clear_needle: &str) -> FheAsciiChar {
     //     let needle = clear_needle
