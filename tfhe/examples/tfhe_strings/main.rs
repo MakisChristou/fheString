@@ -30,15 +30,15 @@ fn main() {
     let my_server_key = MyServerKey::new(server_key);
 
     let heistack_plain = "hello world";
-    let needle_plain = "zama";
+    let needle_plain = "hello";
 
     let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
     let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    let res = my_server_key.ends_with(&heistack, &needle, STRING_PADDING, &public_key, num_blocks);
+    let res = my_server_key.starts_with(&heistack, &needle, &public_key, num_blocks);
     let dec: u8 = my_client_key.decrypt_char(&res);
 
-    let expected = heistack_plain.ends_with(needle_plain);
+    let expected = heistack_plain.starts_with(needle_plain);
 
     assert_eq!(dec, expected as u8);
 }
@@ -117,6 +117,44 @@ mod test {
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         let expected = heistack_plain.ends_with(needle_plain);
+
+        assert_eq!(dec, expected as u8);
+    }
+
+    #[test]
+    fn valid_starts_with() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+
+        let heistack_plain = "hello world";
+        let needle_plain = "hello";
+
+        let heistack =
+            my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
+
+        let res = my_server_key.starts_with(&heistack, &needle, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+
+        let expected = heistack_plain.starts_with(needle_plain);
+
+        assert_eq!(dec, expected as u8);
+    }
+
+    #[test]
+    fn invalid_starts_with() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+
+        let heistack_plain = "hello world";
+        let needle_plain = "zama";
+
+        let heistack =
+            my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
+
+        let res = my_server_key.starts_with(&heistack, &needle, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+
+        let expected = heistack_plain.starts_with(needle_plain);
 
         assert_eq!(dec, expected as u8);
     }

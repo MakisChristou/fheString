@@ -153,14 +153,20 @@ impl MyServerKey {
         self.ends_with(string, &pattern, padding, public_key, num_blocks)
     }
 
-    // pub fn starts_with(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheAsciiChar {
-    //     let mut result = FheAsciiChar::encrypt_trivial(1u8);
-    //     for i in 0..pattern.len() {
-    //         let eql = string.bytes[i].eq(&pattern[i]);
-    //         result &= eql;
-    //     }
-    //     result
-    // }
+    pub fn starts_with(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let mut result = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        for i in 0..pattern.len() {
+            let eql = string.bytes[i].eq(&self.key, &pattern[i]);
+            result = result.bitand(&self.key, &eql);
+        }
+        result
+    }
 
     // pub fn starts_with_clear(string: &FheString, clear_pattern: &str) -> FheAsciiChar {
     //     let pattern = clear_pattern
