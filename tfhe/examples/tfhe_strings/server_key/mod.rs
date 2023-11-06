@@ -119,20 +119,23 @@ impl MyServerKey {
         self.contains(string, &needle, public_key, num_blocks)
     }
 
-    // pub fn ends_with(
-    //     string: &FheString,
-    //     pattern: &Vec<FheAsciiChar>,
-    //     padding: usize,
-    // ) -> FheAsciiChar {
-    //     let mut result = FheAsciiChar::encrypt_trivial(1u8);
-    //     let mut j = pattern.len() - 1;
-    //     for i in (string.bytes.len() - pattern.len()..string.bytes.len() - padding).rev() {
-    //         let eql = string.bytes[i].eq(&pattern[j]);
-    //         result &= eql;
-    //         j -= 1;
-    //     }
-    //     result
-    // }
+    pub fn ends_with(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        padding: usize,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let mut result = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let mut j = pattern.len() - 1;
+        for i in (string.bytes.len() - pattern.len()..string.bytes.len() - padding).rev() {
+            let eql = string.bytes[i].eq(&self.key, &pattern[j]);
+            result = result.bitand(&self.key, &eql);
+            j -= 1;
+        }
+        result
+    }
 
     // pub fn ends_with_clear(
     //     string: &FheString,
