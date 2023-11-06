@@ -137,18 +137,21 @@ impl MyServerKey {
         result
     }
 
-    // pub fn ends_with_clear(
-    //     string: &FheString,
-    //     clear_pattern: &str,
-    //     padding: usize,
-    // ) -> FheAsciiChar {
-    //     let pattern = clear_pattern
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(*b))
-    //         .collect::<Vec<FheAsciiChar>>();
-    //     MyServerKey::ends_with(string, &pattern, padding)
-    // }
+    pub fn ends_with_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        padding: usize,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let pattern = clear_pattern
+            .as_bytes()
+            .iter()
+            .map(|b| FheAsciiChar::encrypt_trivial(*b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
+        self.ends_with(string, &pattern, padding, public_key, num_blocks)
+    }
 
     // pub fn starts_with(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheAsciiChar {
     //     let mut result = FheAsciiChar::encrypt_trivial(1u8);
