@@ -83,26 +83,23 @@ mod test {
         assert_eq!(dec, expected as u8);
     }
 
-    //     #[test]
-    //     fn invalid_contains() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn invalid_contains() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let heistack_plain = "hello world";
+        let needle_plain = "zama";
 
-    //         let heistack_plain = "hello world";
-    //         let needle_plain = "zama";
+        let heistack = my_client_key.encrypt(heistack_plain, 3, &public_key, num_blocks);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    //         let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
-    //         let needle = my_client_key.encrypt_no_padding(needle_plain);
+        let res = my_server_key.contains(&heistack, &needle, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //         let res = MyServerKey::contains(&heistack, &needle);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = heistack_plain.contains(needle_plain);
 
-    //         let expected = heistack_plain.contains(needle_plain);
-
-    //         assert_eq!(dec, expected as u8);
-    //     }
+        assert_eq!(dec, expected as u8);
+    }
 
     //     #[test]
     //     fn invalid_ends_with() {
