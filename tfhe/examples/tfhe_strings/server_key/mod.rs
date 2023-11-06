@@ -103,15 +103,21 @@ impl MyServerKey {
         result
     }
 
-    // pub fn contains_clear(string: &FheString, clear_needle: &str) -> FheAsciiChar {
-    //     let needle = clear_needle
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(*b))
-    //         .collect::<Vec<FheAsciiChar>>();
+    pub fn contains_clear(
+        &self,
+        string: &FheString,
+        clear_needle: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let needle = clear_needle
+            .as_bytes()
+            .iter()
+            .map(|b| FheAsciiChar::encrypt_trivial(*b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
 
-    //     MyServerKey::contains(string, &needle)
-    // }
+        self.contains(string, &needle, public_key, num_blocks)
+    }
 
     // pub fn ends_with(
     //     string: &FheString,
