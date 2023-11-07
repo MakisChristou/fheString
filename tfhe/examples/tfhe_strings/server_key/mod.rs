@@ -12,7 +12,7 @@ use crate::{
         fhesplit::FheSplit,
         fhestring::{Comparison, FheString},
     },
-    utils::abs_difference,
+    utils::{self, abs_difference},
     // utils::bubble_zeroes_left,
     MAX_FIND_LENGTH,
     MAX_REPETITIONS,
@@ -248,37 +248,43 @@ impl MyServerKey {
                 &self.key,
                 &is_not_whitespace.bitand(&self.key, &is_not_zero),
             );
-            // stop_trim_flag |= is_not_whitespace & is_not_zero;
-            // let mask = !stop_trim_flag.clone() + one.clone();
             let mask = stop_trim_flag.bitnot(&self.key).add(&self.key, &one);
-
             result[i] = string.bytes[i].bitand(&self.key, &zero.bitor(&self.key, &mask));
-            // result[i] = string.bytes[i].clone() & (zero.clone() | mask)
         }
 
         FheString::from_vec(result, public_key, num_blocks)
     }
 
-    // pub fn trim_start(string: &FheString) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
+    pub fn trim_start(
+        &self,
+        string: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
 
-    //     let mut stop_trim_flag = zero.clone();
-    //     let mut result = vec![zero.clone(); string.bytes.len()];
+        let mut stop_trim_flag = zero.clone();
+        let mut result = vec![zero.clone(); string.bytes.len()];
 
-    //     // Replace whitespace with \0 starting from the start
-    //     for i in 0..string.bytes.len() {
-    //         let is_not_zero = string.bytes[i].ne(&zero);
-    //         let is_not_whitespace = string.bytes[i].is_whitespace().flip();
+        // Replace whitespace with \0 starting from the start
+        for i in 0..string.bytes.len() {
+            let is_not_zero = string.bytes[i].ne(&self.key, &zero);
+            let is_not_whitespace = string.bytes[i]
+                .is_whitespace(&self.key, public_key, num_blocks)
+                .flip(&self.key, public_key, num_blocks);
 
-    //         stop_trim_flag |= is_not_whitespace & is_not_zero;
-    //         let mask = !stop_trim_flag.clone() + one.clone();
+            stop_trim_flag = stop_trim_flag.bitor(&self.key, &is_not_whitespace.bitand(&self.key, &is_not_zero));
+            let mask = stop_trim_flag.bitnot(&self.key).add(&self.key, &one);
+            result[i] = string.bytes[i].bitand(&self.key, &zero.bitor(&self.key, &mask));
+        }
 
-    //         result[i] = string.bytes[i].clone() & (zero.clone() | mask)
-    //     }
-
-    //     FheString::from_vec(bubble_zeroes_left(result))
-    // }
+        FheString::from_vec(
+            utils::bubble_zeroes_left(result, &self.key, public_key, num_blocks),
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn trim(string: &FheString) -> FheString {
     //     let result = MyServerKey::trim_end(string);

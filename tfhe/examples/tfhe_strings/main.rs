@@ -318,39 +318,37 @@ mod test {
         assert_eq!(verif_string, expected);
     }
 
-    //     #[test]
-    //     fn do_not_trim_end() {
-    //         let (client_key, server_key) = setup_test();
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+    #[test]
+    fn do_not_trim_end() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_string_plain = "\nZA MA";
+        let my_string_plain = "\nZA MA";
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let my_string_upper = MyServerKey::trim_end(&my_string);
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let my_string_upper = my_server_key.trim_end(&my_string, &public_key, num_blocks);
 
-    //         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-    //         let expected = my_string_plain.trim_end();
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let expected = my_string_plain.trim_end();
 
-    //         assert_eq!(verif_string, expected);
-    //     }
+        assert_eq!(verif_string, expected);
+    }
 
-    //     #[test]
-    //     fn trim_start() {
-    //         let (client_key, server_key) = setup_test();
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+    #[test]
+    fn trim_start() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_string_plain = "\nZA MA";
+        let my_string_plain = "\nZA MA";
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let my_string_upper = MyServerKey::trim_start(&my_string);
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let my_string_upper = my_server_key.trim_start(&my_string, &public_key, num_blocks);
 
-    //         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-    //         let expected = my_string_plain.trim_start();
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let expected = my_string_plain.trim_start();
 
-    //         assert_eq!(verif_string, expected);
-    //     }
+        assert_eq!(verif_string, expected);
+    }
 
     //     #[test]
     //     fn trim() {
