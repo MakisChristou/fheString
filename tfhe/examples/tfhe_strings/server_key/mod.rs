@@ -1,19 +1,12 @@
 use serde::{Deserialize, Serialize};
-use tfhe::{
-    boolean::server_key,
-    set_server_key,
-    shortint::{public_key, PublicKey},
-    ServerKey,
-};
 
 use crate::{
     ciphertext::{
         fheasciichar::FheAsciiChar,
         fhesplit::FheSplit,
-        fhestring::{Comparison, FheString},
+        fhestring::FheString,
     },
     utils::{self, abs_difference},
-    // utils::bubble_zeroes_left,
     MAX_FIND_LENGTH,
     MAX_REPETITIONS,
 };
@@ -25,7 +18,6 @@ pub struct MyServerKey {
 
 impl MyServerKey {
     pub fn new(server_key: tfhe::integer::ServerKey) -> Self {
-        // set_server_key(server_key.clone());
         MyServerKey { key: server_key }
     }
 
