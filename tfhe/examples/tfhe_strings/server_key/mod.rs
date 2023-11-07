@@ -40,14 +40,12 @@ impl MyServerKey {
                 .bytes
                 .iter()
                 .map(|b| {
-                    let is_zero = b.eq(&self.key, &zero);
                     let is_not_lowercase = b
                         .is_lowercase(&self.key, public_key, num_blocks)
                         .flip(&self.key, public_key, num_blocks);
-                    let should_not_convert = is_zero.bitor(&self.key, &is_not_lowercase);
                     b.sub(
                         &self.key,
-                        &should_not_convert.if_then_else(&self.key, &zero, &string.cst),
+                        &is_not_lowercase.if_then_else(&self.key, &zero, &string.cst),
                     )
                 })
                 .collect::<Vec<FheAsciiChar>>(),
@@ -67,14 +65,12 @@ impl MyServerKey {
                 .bytes
                 .iter()
                 .map(|b| {
-                    let is_zero = b.eq(&self.key, &zero);
                     let is_not_uppercase = b
                         .is_uppercase(&self.key, public_key, num_blocks)
                         .flip(&self.key, public_key, num_blocks);
-                    let should_not_convert = is_zero.bitor(&self.key, &is_not_uppercase);
                     b.add(
                         &self.key,
-                        &should_not_convert.if_then_else(&self.key, &zero, &string.cst),
+                        &is_not_uppercase.if_then_else(&self.key, &zero, &string.cst),
                     )
                 })
                 .collect::<Vec<FheAsciiChar>>(),
