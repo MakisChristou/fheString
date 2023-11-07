@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tfhe::{
+    boolean::server_key,
     set_server_key,
     shortint::{public_key, PublicKey},
     ServerKey,
@@ -202,22 +203,27 @@ impl MyServerKey {
         result
     }
 
-    // pub fn len(string: &FheString) -> FheAsciiChar {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
+    pub fn len(
+        &self,
+        string: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
 
-    //     if string.bytes.is_empty() {
-    //         return zero;
-    //     }
+        if string.bytes.is_empty() {
+            return zero;
+        }
 
-    //     let mut result = FheAsciiChar::encrypt_trivial(0u8);
+        let mut result = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
 
-    //     for i in 0..string.bytes.len() {
-    //         let is_not_zero = string.bytes[i].ne(&zero);
-    //         result += is_not_zero;
-    //     }
+        for i in 0..string.bytes.len() {
+            let is_not_zero = string.bytes[i].ne(&self.key, &zero);
+            result = result.add(&self.key, &is_not_zero);
+        }
 
-    //     result
-    // }
+        result
+    }
 
     // pub fn trim_end(string: &FheString) -> FheString {
     //     let zero = FheAsciiChar::encrypt_trivial(0u8);

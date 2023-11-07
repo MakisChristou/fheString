@@ -401,39 +401,21 @@ mod test {
         assert_eq!(dec, expected as u8);
     }
 
-    //     #[test]
-    //     fn valid_length1() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn len() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
-
-    //         let my_string_plain = "a";
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-
-    //         let res = MyServerKey::len(&my_string);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
-    //         let expected = my_string_plain.len();
-
-    //         assert_eq!(dec, expected as u8);
-    //     }
-
-    //     #[test]
-    //     fn valid_length2() {
-    //         let (client_key, server_key) = setup_test();
-
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
-
-    //         let my_string_plain = "some arbitrary string";
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-
-    //         let res = MyServerKey::len(&my_string);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
-    //         let expected = my_string_plain.len();
-
-    //         assert_eq!(dec, expected as u8);
-    //     }
+        let my_string_plain = "hello world";
+    
+        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+    
+        let res = my_server_key.len(&my_string, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+    
+        let expected = my_string_plain.len();
+    
+        assert_eq!(dec, expected as u8);
+    }
 
     //     #[test]
     //     fn rfind() {
