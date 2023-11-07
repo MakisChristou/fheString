@@ -168,14 +168,20 @@ impl MyServerKey {
         result
     }
 
-    // pub fn starts_with_clear(string: &FheString, clear_pattern: &str) -> FheAsciiChar {
-    //     let pattern = clear_pattern
-    //         .as_bytes()
-    //         .iter()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(*b))
-    //         .collect::<Vec<FheAsciiChar>>();
-    //     MyServerKey::starts_with(string, &pattern)
-    // }
+    pub fn starts_with_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let pattern = clear_pattern
+            .as_bytes()
+            .iter()
+            .map(|b| FheAsciiChar::encrypt_trivial(*b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
+        self.starts_with(string, &pattern, public_key, num_blocks)
+    }
 
     // pub fn is_empty(string: &FheString) -> FheAsciiChar {
     //     let zero = FheAsciiChar::encrypt_trivial(0u8);
