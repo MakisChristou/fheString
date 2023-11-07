@@ -371,39 +371,35 @@ mod test {
     //         assert_eq!(verif_string, expected);
     //     }
 
-    //     #[test]
-    //     fn is_empty() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn is_empty() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
 
-    //         let my_string_plain = "";
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
+        let res = my_server_key.is_empty(&my_string, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = my_string_plain.is_empty();
 
-    //         let res = MyServerKey::is_empty(&my_string);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
-    //         let expected = my_string_plain.is_empty();
+        assert_eq!(dec, expected as u8);
+    }
 
-    //         assert_eq!(dec, expected as u8);
-    //     }
+    #[test]
+    fn is_not_empty() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //     #[test]
-    //     fn is_not_empty() {
-    //         let (client_key, server_key) = setup_test();
+        let my_string_plain = "hello";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let res = my_server_key.is_empty(&my_string, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = my_string_plain.is_empty();
 
-    //         let my_string_plain = "a";
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-
-    //         let res = MyServerKey::is_empty(&my_string);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
-    //         let expected = my_string_plain.is_empty();
-
-    //         assert_eq!(dec, expected as u8);
-    //     }
+        assert_eq!(dec, expected as u8);
+    }
 
     //     #[test]
     //     fn valid_length1() {

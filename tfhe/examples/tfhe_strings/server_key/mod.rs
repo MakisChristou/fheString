@@ -183,23 +183,28 @@ impl MyServerKey {
         self.starts_with(string, &pattern, public_key, num_blocks)
     }
 
-    // pub fn is_empty(string: &FheString) -> FheAsciiChar {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
+    pub fn is_empty(
+        &self,
+        string: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
 
-    //     if string.bytes.is_empty() {
-    //         return one;
-    //     }
+        if string.bytes.is_empty() {
+            return one;
+        }
 
-    //     let mut result = FheAsciiChar::encrypt_trivial(1u8);
+        let mut result = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
 
-    //     for i in 0..string.bytes.len() {
-    //         let eql = string.bytes[i].eq(&zero);
-    //         result &= eql;
-    //     }
+        for i in 0..string.bytes.len() {
+            let eql = string.bytes[i].eq(&self.key, &zero);
+            result = result.bitand(&self.key, &eql);
+        }
 
-    //     result
-    // }
+        result
+    }
 
     // pub fn len(string: &FheString) -> FheAsciiChar {
     //     let zero = FheAsciiChar::encrypt_trivial(0u8);
