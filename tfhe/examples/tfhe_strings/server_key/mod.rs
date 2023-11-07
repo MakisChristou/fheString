@@ -225,27 +225,39 @@ impl MyServerKey {
         result
     }
 
-    // pub fn trim_end(string: &FheString) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
+    pub fn trim_end(
+        &self,
+        string: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
 
-    //     let mut stop_trim_flag = zero.clone();
-    //     let mut result = vec![zero.clone(); string.bytes.len()];
+        let mut stop_trim_flag = zero.clone();
+        let mut result = vec![zero.clone(); string.bytes.len()];
 
-    //     // Replace whitespace with \0 starting from the end
-    //     for i in (0..string.bytes.len()).rev() {
-    //         let is_not_zero = string.bytes[i].ne(&zero);
+        // Replace whitespace with \0 starting from the end
+        for i in (0..string.bytes.len()).rev() {
+            let is_not_zero = string.bytes[i].ne(&self.key, &zero);
 
-    //         let is_not_whitespace = string.bytes[i].is_whitespace().flip();
+            let is_not_whitespace = string.bytes[i]
+                .is_whitespace(&self.key, public_key, num_blocks)
+                .flip(&self.key, public_key, num_blocks);
+            stop_trim_flag = stop_trim_flag.bitor(
+                &self.key,
+                &is_not_whitespace.bitand(&self.key, &is_not_zero),
+            );
+            // stop_trim_flag |= is_not_whitespace & is_not_zero;
+            // let mask = !stop_trim_flag.clone() + one.clone();
+            let mask = stop_trim_flag.bitnot(&self.key).add(&self.key, &one);
 
-    //         stop_trim_flag |= is_not_whitespace & is_not_zero;
-    //         let mask = !stop_trim_flag.clone() + one.clone();
+            result[i] = string.bytes[i].bitand(&self.key, &zero.bitor(&self.key, &mask));
+            // result[i] = string.bytes[i].clone() & (zero.clone() | mask)
+        }
 
-    //         result[i] = string.bytes[i].clone() & (zero.clone() | mask)
-    //     }
-
-    //     FheString::from_vec(result)
-    // }
+        FheString::from_vec(result, public_key, num_blocks)
+    }
 
     // pub fn trim_start(string: &FheString) -> FheString {
     //     let zero = FheAsciiChar::encrypt_trivial(0u8);
