@@ -290,15 +290,25 @@ impl MyServerKey {
         self.trim_start(&result, public_key, num_blocks)
     }
 
-    // pub fn repeat_clear(string: &FheString, repetitions: usize) -> FheString {
-    //     let mut result = string.bytes.clone();
+    pub fn repeat_clear(
+        &self,
+        string: &FheString,
+        repetitions: usize,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let mut result = string.bytes.clone();
 
-    //     for _ in 0..repetitions - 1 {
-    //         result.append(&mut string.bytes.clone());
-    //     }
+        for _ in 0..repetitions - 1 {
+            result.append(&mut string.bytes.clone());
+        }
 
-    //     FheString::from_vec(bubble_zeroes_left(result))
-    // }
+        FheString::from_vec(
+            utils::bubble_zeroes_left(result, &self.key, public_key, num_blocks),
+            public_key,
+            num_blocks,
+        )
+    }
 
     pub fn repeat(
         &self,
