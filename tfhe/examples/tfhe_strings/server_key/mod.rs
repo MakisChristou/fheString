@@ -296,22 +296,33 @@ impl MyServerKey {
     //     FheString::from_vec(bubble_zeroes_left(result))
     // }
 
-    // pub fn repeat(string: &FheString, repetitions: FheAsciiChar) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let mut result = vec![zero.clone(); MAX_REPETITIONS * string.bytes.len()];
-    //     let str_len = string.bytes.len();
+    pub fn repeat(
+        &self,
+        string: &FheString,
+        repetitions: FheAsciiChar,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let mut result = vec![zero.clone(); MAX_REPETITIONS * string.bytes.len()];
+        let str_len = string.bytes.len();
 
-    //     for i in 0..MAX_REPETITIONS {
-    //         let enc_i = FheAsciiChar::encrypt_trivial(i as u8);
-    //         let copy_flag = enc_i.lt(&repetitions);
+        for i in 0..MAX_REPETITIONS {
+            let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_key, num_blocks);
+            let copy_flag = enc_i.lt(&self.key, &repetitions);
 
-    //         for j in 0..str_len {
-    //             result[i * str_len + j] = copy_flag.if_then_else(&string.bytes[j], &zero);
-    //         }
-    //     }
+            for j in 0..str_len {
+                result[i * str_len + j] =
+                    copy_flag.if_then_else(&self.key, &string.bytes[j], &zero);
+            }
+        }
 
-    //     FheString::from_vec(bubble_zeroes_left(result))
-    // }
+        FheString::from_vec(
+            utils::bubble_zeroes_left(result, &self.key, public_key, num_blocks),
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn replace(
     //     string: &FheString,
