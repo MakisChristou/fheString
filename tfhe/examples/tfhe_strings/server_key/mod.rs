@@ -550,14 +550,20 @@ impl MyServerKey {
         pattern_position
     }
 
-    // pub fn find_clear(string: &FheString, clear_pattern: &str) -> FheAsciiChar {
-    //     let pattern = clear_pattern
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
+    pub fn find_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
 
-    //     MyServerKey::find(string, &pattern)
-    // }
+        self.find(string, &pattern, public_key, num_blocks)
+    }
 
     // pub fn eq(string: &FheString, other: &FheString) -> FheAsciiChar {
     //     let zero = FheAsciiChar::encrypt_trivial(0u8);
