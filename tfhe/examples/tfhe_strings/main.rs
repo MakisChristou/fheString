@@ -29,20 +29,18 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let my_string_plain = "hello world world test";
-    let from_plain = "world";
-    let to_plain = "abc";
+    let heistack_plain = "hello test";
+    let needle_plain = "test";
 
-    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
-    let from = my_client_key.encrypt_no_padding(from_plain);
-    let to = my_client_key.encrypt_no_padding(to_plain);
+    let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
+    let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    let my_new_string = my_server_key.replace(&my_string, &from, &to, &public_key, num_blocks);
+    let res = my_server_key.find(&heistack, &needle, &public_key, num_blocks);
+    let dec: u8 = my_client_key.decrypt_char(&res);
 
-    let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-    let expected = my_string_plain.replace(from_plain, to_plain);
+    let expected = heistack_plain.find(needle_plain).unwrap();
 
-    assert_eq!(verif_string, expected);
+    assert_eq!(dec, expected as u8);
 }
 
 #[cfg(test)]
@@ -469,26 +467,24 @@ mod test {
     //         let res = MyServerKey::rfind(&heistack, &needle);
     //     }
 
-    //     #[test]
-    //     fn find() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn find() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let heistack_plain = "hello test";
+        let needle_plain = "test";
 
-    //         let heistack_plain = "hello test";
-    //         let needle_plain = "test";
+        let heistack =
+            my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    //         let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
-    //         let needle = my_client_key.encrypt_no_padding(needle_plain);
+        let res = my_server_key.find(&heistack, &needle, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //         let res = MyServerKey::find(&heistack, &needle);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = heistack_plain.find(needle_plain).unwrap();
 
-    //         let expected = heistack_plain.find(needle_plain).unwrap();
-
-    //         assert_eq!(dec, expected as u8);
-    //     }
+        assert_eq!(dec, expected as u8);
+    }
 
     //     #[test]
     //     fn eq() {
