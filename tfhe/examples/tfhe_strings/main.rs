@@ -29,18 +29,20 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let heistack_plain = "hello world";
-    let needle_plain = "hello";
+    let my_string_plain = "hello world world test";
+    let from_plain = "world";
+    let to_plain = "abc";
 
-    let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
-    let needle = my_client_key.encrypt_no_padding(needle_plain);
+    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+    let from = my_client_key.encrypt_no_padding(from_plain);
+    let to = my_client_key.encrypt_no_padding(to_plain);
 
-    let res = my_server_key.starts_with(&heistack, &needle, &public_key, num_blocks);
-    let dec: u8 = my_client_key.decrypt_char(&res);
+    let my_new_string = my_server_key.replace(&my_string, &from, &to, &public_key, num_blocks);
 
-    let expected = heistack_plain.starts_with(needle_plain);
+    let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+    let expected = my_string_plain.replace(from_plain, to_plain);
 
-    assert_eq!(dec, expected as u8);
+    assert_eq!(verif_string, expected);
 }
 
 #[cfg(test)]
@@ -195,68 +197,65 @@ mod test {
         assert_eq!(verif_string, expected);
     }
 
-        #[test]
-        fn repeat() {
-            let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+    #[test]
+    fn repeat() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-            let my_string_plain = "abc";
-            let n_plain = 3u8;
+        let my_string_plain = "abc";
+        let n_plain = 3u8;
 
-            let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
-            let n = my_client_key.encrypt_char(n_plain);
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let n = my_client_key.encrypt_char(n_plain);
 
-            let my_string_upper = my_server_key.repeat(&my_string, n, &public_key, num_blocks);
-            let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-            let expected = my_string_plain.repeat(n_plain.into());
+        let my_string_upper = my_server_key.repeat(&my_string, n, &public_key, num_blocks);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let expected = my_string_plain.repeat(n_plain.into());
 
-            assert_eq!(verif_string, expected);
-        }
+        assert_eq!(verif_string, expected);
+    }
 
-    //     #[test]
-    //     fn replace1() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn replace1() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "hello world world test";
+        let from_plain = "world";
+        let to_plain = "abc";
 
-    //         let my_string_plain = "hello world world test";
-    //         let from_plain = "world";
-    //         let to_plain = "abc";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let from = my_client_key.encrypt_no_padding(from_plain);
+        let to = my_client_key.encrypt_no_padding(to_plain);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let from = my_client_key.encrypt_no_padding(from_plain);
-    //         let to = my_client_key.encrypt_no_padding(to_plain);
+        let my_new_string = my_server_key.replace(&my_string, &from, &to, &public_key, num_blocks);
 
-    //         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
+        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        let expected = my_string_plain.replace(from_plain, to_plain);
 
-    //         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-    //         let expected = my_string_plain.replace(from_plain, to_plain);
+        assert_eq!(verif_string, expected);
+    }
 
-    //         assert_eq!(verif_string, expected);
-    //     }
+    #[test]
+    fn replace2() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //     #[test]
-    //     fn replace2() {
-    //         let (client_key, server_key) = setup_test();
+        let my_string_plain = "hello abc abc test";
+        let from_plain = "abc";
+        let to_plain = "world";
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let from = my_client_key.encrypt_no_padding(from_plain);
+        let to = my_client_key.encrypt_no_padding(to_plain);
 
-    //         let my_string_plain = "hello abc abc test";
-    //         let from_plain = "abc";
-    //         let to_plain = "world";
+        let my_new_string = my_server_key.replace(&my_string, &from, &to, &public_key, num_blocks);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let from = my_client_key.encrypt_no_padding(from_plain);
-    //         let to = my_client_key.encrypt_no_padding(to_plain);
+        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        let expected = my_string_plain.replace(from_plain, to_plain);
 
-    //         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
-
-    //         let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
-    //         let expected = my_string_plain.replace(from_plain, to_plain);
-
-    //         assert_eq!(verif_string, expected);
-    //     }
+        assert_eq!(verif_string, expected);
+    }
 
     //     #[test]
     //     fn replacen() {

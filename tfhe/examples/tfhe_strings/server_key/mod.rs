@@ -324,18 +324,39 @@ impl MyServerKey {
         )
     }
 
-    // pub fn replace(
-    //     string: &FheString,
-    //     from: &Vec<FheAsciiChar>,
-    //     to: &Vec<FheAsciiChar>,
-    // ) -> FheString {
-    //     let n = FheAsciiChar::encrypt_trivial(0u8);
-    //     if from.len() >= to.len() {
-    //         Self::handle_longer_from(string.bytes.clone(), from.clone(), to.clone(), n, false)
-    //     } else {
-    //         Self::handle_shorter_from(string.bytes.clone(), from.clone(), to.clone(), n, false)
-    //     }
-    // }
+    pub fn replace(
+        &self,
+        string: &FheString,
+        from: &Vec<FheAsciiChar>,
+        to: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let n = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        if from.len() >= to.len() {
+            Self::handle_longer_from(
+                string.bytes.clone(),
+                from.clone(),
+                to.clone(),
+                n,
+                false,
+                &self.key,
+                public_key,
+                num_blocks,
+            )
+        } else {
+            Self::handle_shorter_from(
+                string.bytes.clone(),
+                from.clone(),
+                to.clone(),
+                n,
+                false,
+                &self.key,
+                public_key,
+                num_blocks,
+            )
+        }
+    }
 
     // pub fn replace_clear(string: &FheString, clear_from: &str, clear_to: &str) -> FheString {
     //     let from = clear_from
@@ -383,104 +404,119 @@ impl MyServerKey {
     //     MyServerKey::rfind(string, &pattern)
     // }
 
-    // // The "easy" case
-    // fn handle_longer_from(
-    //     bytes: Vec<FheAsciiChar>,
-    //     from: Vec<FheAsciiChar>,
-    //     mut to: Vec<FheAsciiChar>,
-    //     n: FheAsciiChar,
-    //     use_counter: bool,
-    // ) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
-    //     let size_difference = abs_difference(from.len(), to.len());
-    //     let mut counter = FheAsciiChar::encrypt_trivial(0u8);
+    // The "easy" case
+    fn handle_longer_from(
+        bytes: Vec<FheAsciiChar>,
+        from: Vec<FheAsciiChar>,
+        mut to: Vec<FheAsciiChar>,
+        n: FheAsciiChar,
+        use_counter: bool,
+        server_key: &tfhe::integer::ServerKey,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let size_difference = abs_difference(from.len(), to.len());
+        let mut counter = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
 
-    //     // Pad to with zeroes
-    //     for _ in 0..size_difference {
-    //         to.push(zero.clone());
-    //     }
+        // Pad to with zeroes
+        for _ in 0..size_difference {
+            to.push(zero.clone());
+        }
 
-    //     let mut result = bytes.clone();
+        let mut result = bytes.clone();
 
-    //     // Replace from wih to
-    //     for i in 0..result.len() - from.len() {
-    //         let mut pattern_found_flag = one.clone();
+        // Replace from wih to
+        for i in 0..result.len() - from.len() {
+            let mut pattern_found_flag = one.clone();
 
-    //         for j in 0..from.len() {
-    //             pattern_found_flag &= from[j].clone().eq(&bytes[i + j]);
-    //         }
+            for j in 0..from.len() {
+                pattern_found_flag =
+                    pattern_found_flag.bitand(server_key, &from[j].eq(server_key, &bytes[i + j]));
+            }
 
-    //         // Stop replacing after n encounters of from
-    //         if use_counter {
-    //             counter += pattern_found_flag.clone();
-    //             let keep_replacing = n.ge(&counter);
-    //             pattern_found_flag &= keep_replacing;
-    //         }
+            // Stop replacing after n encounters of from
+            if use_counter {
+                counter = counter.add(server_key, &pattern_found_flag);
+                let keep_replacing = n.ge(server_key, &counter);
+                pattern_found_flag = pattern_found_flag.bitand(server_key, &keep_replacing);
+            }
 
-    //         for k in 0..to.len() {
-    //             result[i + k] = pattern_found_flag.if_then_else(&to[k], &result[i + k]);
-    //         }
-    //     }
-    //     return FheString::from_vec(bubble_zeroes_left(result));
-    // }
+            for k in 0..to.len() {
+                result[i + k] = pattern_found_flag.if_then_else(server_key, &to[k], &result[i + k]);
+            }
+        }
+        return FheString::from_vec(
+            utils::bubble_zeroes_left(result, server_key, public_key, num_blocks),
+            public_key,
+            num_blocks,
+        );
+    }
 
-    // // The "hard" case
-    // fn handle_shorter_from(
-    //     bytes: Vec<FheAsciiChar>,
-    //     from: Vec<FheAsciiChar>,
-    //     to: Vec<FheAsciiChar>,
-    //     n: FheAsciiChar,
-    //     use_counter: bool,
-    // ) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
-    //     let size_difference = abs_difference(from.len(), to.len());
-    //     let mut counter = FheAsciiChar::encrypt_trivial(0u8);
+    // The "hard" case
+    fn handle_shorter_from(
+        bytes: Vec<FheAsciiChar>,
+        from: Vec<FheAsciiChar>,
+        to: Vec<FheAsciiChar>,
+        n: FheAsciiChar,
+        use_counter: bool,
+        server_key: &tfhe::integer::ServerKey,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let size_difference = abs_difference(from.len(), to.len());
+        let mut counter = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
 
-    //     let max_possible_output_len = (bytes.len() / from.len()) * (size_difference) + bytes.len();
+        let max_possible_output_len = (bytes.len() / from.len()) * (size_difference) + bytes.len();
 
-    //     let mut result = bytes.clone();
+        let mut result = bytes.clone();
 
-    //     for _ in 0..max_possible_output_len - bytes.len() {
-    //         result.push(zero.clone());
-    //     }
+        for _ in 0..max_possible_output_len - bytes.len() {
+            result.push(zero.clone());
+        }
 
-    //     let mut copy_buffer = vec![zero.clone(); max_possible_output_len];
+        let mut copy_buffer = vec![zero.clone(); max_possible_output_len];
 
-    //     // Replace from wih to
-    //     for i in 0..result.len() - to.len() {
-    //         let mut pattern_found_flag = one.clone();
+        // Replace from wih to
+        for i in 0..result.len() - to.len() {
+            let mut pattern_found_flag = one.clone();
 
-    //         for j in 0..from.len() {
-    //             pattern_found_flag &= from[j].clone().eq(&result[i + j]);
-    //         }
+            for j in 0..from.len() {
+                pattern_found_flag =
+                    pattern_found_flag.bitand(server_key, &from[j].eq(server_key, &result[i + j]));
+            }
 
-    //         // Stop replacing after n encounters of from
-    //         if use_counter {
-    //             counter += pattern_found_flag.clone();
-    //             let keep_replacing = n.ge(&counter);
-    //             pattern_found_flag &= keep_replacing;
-    //         }
+            // Stop replacing after n encounters of from
+            if use_counter {
+                counter = counter.add(server_key, &pattern_found_flag);
+                let keep_replacing = n.ge(server_key, &counter);
+                pattern_found_flag = pattern_found_flag.bitand(server_key, &keep_replacing);
+            }
 
-    //         // Copy original string to buffer
-    //         for k in 0..max_possible_output_len {
-    //             copy_buffer[k] = pattern_found_flag.if_then_else(&result[k], &zero);
-    //         }
+            // Copy original string to buffer
+            for k in 0..max_possible_output_len {
+                copy_buffer[k] = pattern_found_flag.if_then_else(server_key, &result[k], &zero);
+            }
 
-    //         // Replace from with to
-    //         for k in 0..to.len() {
-    //             result[i + k] = pattern_found_flag.if_then_else(&to[k], &result[i + k]);
-    //         }
+            // Replace from with to
+            for k in 0..to.len() {
+                result[i + k] = pattern_found_flag.if_then_else(server_key, &to[k], &result[i + k]);
+            }
 
-    //         // Fix the result buffer by copying back the rest of the string
-    //         for k in i + to.len()..max_possible_output_len {
-    //             result[k] =
-    //                 pattern_found_flag.if_then_else(&copy_buffer[k - size_difference], &result[k]);
-    //         }
-    //     }
-    //     return FheString::from_vec(result);
-    // }
+            // Fix the result buffer by copying back the rest of the string
+            for k in i + to.len()..max_possible_output_len {
+                result[k] = pattern_found_flag.if_then_else(
+                    server_key,
+                    &copy_buffer[k - size_difference],
+                    &result[k],
+                );
+            }
+        }
+        return FheString::from_vec(result, public_key, num_blocks);
+    }
 
     // pub fn find(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheAsciiChar {
     //     let one = FheAsciiChar::encrypt_trivial(1u8);
