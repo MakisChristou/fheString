@@ -661,13 +661,19 @@ impl MyServerKey {
         FheString::from_vec(result, public_key, num_blocks)
     }
 
-    // pub fn strip_prefix_clear(string: &FheString, clear_pattern: &str) -> FheString {
-    //     let pattern = clear_pattern
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
-    //     MyServerKey::strip_prefix(string, &pattern)
-    // }
+    pub fn strip_prefix_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
+        self.strip_prefix(string, &pattern, public_key, num_blocks)
+    }
 
     // pub fn strip_suffix_clear(string: &FheString, clear_pattern: &str) -> FheString {
     //     let pattern = clear_pattern
