@@ -33,12 +33,12 @@ fn main() {
     let pattern_plain = "HELLO";
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
-    let pattern = my_client_key.encrypt_no_padding(pattern_plain);
-    let my_string_upper = my_server_key.strip_prefix(&my_string, &pattern, &public_key, num_blocks);
+    let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING, &public_key, num_blocks);
+    let my_string_upper =
+        my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_key, num_blocks);
 
     let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-
-    let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
+    let expected = my_string_plain.strip_suffix(pattern_plain).unwrap();
 
     assert_eq!(verif_string, expected);
 }
@@ -552,25 +552,24 @@ mod test {
         assert_eq!(verif_string, expected);
     }
 
-    //     #[test]
-    //     fn strip_suffix() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn strip_suffix() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "HELLO test test HELLO";
+        let pattern_plain = "HELLO";
 
-    //         let my_string_plain = "HELLO test test HELLO";
-    //         let pattern_plain = "HELLO";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING, &public_key, num_blocks);
+        let my_string_upper =
+            my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_key, num_blocks);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING);
-    //         let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let expected = my_string_plain.strip_suffix(pattern_plain).unwrap();
 
-    //         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-    //         let expected = my_string_plain.strip_suffix(pattern_plain).unwrap();
-
-    //         assert_eq!(verif_string, expected);
-    //     }
+        assert_eq!(verif_string, expected);
+    }
 
     //     #[test]
     //     fn dont_strip_suffix() {

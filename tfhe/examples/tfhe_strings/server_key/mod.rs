@@ -632,27 +632,34 @@ impl MyServerKey {
         )
     }
 
-    // pub fn strip_suffix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
-    //     let mut result = string.bytes.clone();
-    //     let mut pattern_found_flag = one.clone();
+    pub fn strip_suffix(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let mut result = string.bytes.clone();
+        let mut pattern_found_flag = one.clone();
 
-    //     let start_of_pattern = result.len() - pattern.len();
-    //     let end_of_pattern = result.len();
-    //     let mut k = pattern.len() - 1;
+        let start_of_pattern = result.len() - pattern.len();
+        let end_of_pattern = result.len();
+        let mut k = pattern.len() - 1;
 
-    //     for j in (start_of_pattern..end_of_pattern).rev() {
-    //         pattern_found_flag &= pattern[k].eq(&result[j]);
-    //         k -= 1;
-    //     }
+        for j in (start_of_pattern..end_of_pattern).rev() {
+            pattern_found_flag =
+                pattern_found_flag.bitand(&self.key, &pattern[k].eq(&self.key, &result[j]));
+            k -= 1;
+        }
 
-    //     for j in (start_of_pattern..end_of_pattern).rev() {
-    //         result[j] = pattern_found_flag.if_then_else(&zero, &result[j]);
-    //     }
+        for j in (start_of_pattern..end_of_pattern).rev() {
+            result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
+        }
 
-    //     FheString::from_vec(result)
-    // }
+        FheString::from_vec(result, public_key, num_blocks)
+    }
 
     // pub fn strip_prefix_clear(string: &FheString, clear_pattern: &str) -> FheString {
     //     let pattern = clear_pattern
