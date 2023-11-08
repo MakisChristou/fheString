@@ -578,7 +578,6 @@ impl MyServerKey {
         let min_length = usize::min(string.bytes.len(), other.bytes.len());
 
         for i in 0..min_length {
-
             let are_equal = string.bytes[i].eq(&self.key, &other.bytes[i]);
             let is_first_eq_zero = string.bytes[i].eq(&self.key, &zero);
             let is_second_eq_zero = other.bytes[i].eq(&self.key, &zero);
@@ -592,12 +591,18 @@ impl MyServerKey {
         is_eq
     }
 
-    // pub fn eq_ignore_case(string: &FheString, other: &FheString) -> FheAsciiChar {
-    //     let self_lowercase = MyServerKey::to_lower(string);
-    //     let other_lowercase = MyServerKey::to_lower(&self_lowercase);
+    pub fn eq_ignore_case(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let self_lowercase = self.to_lower(string, public_key, num_blocks);
+        let other_lowercase = self.to_lower(&other, public_key, num_blocks);
 
-    //     MyServerKey::eq(&self_lowercase, &other_lowercase)
-    // }
+        self.eq(&self_lowercase, &other_lowercase, public_key, num_blocks)
+    }
 
     // pub fn strip_prefix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheString {
     //     let zero = FheAsciiChar::encrypt_trivial(0u8);
