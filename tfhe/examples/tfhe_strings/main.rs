@@ -486,25 +486,22 @@ mod test {
         assert_eq!(dec, expected as u8);
     }
 
-    //     #[test]
-    //     fn eq() {
-    //         let (client_key, server_key) = setup_test();
+        #[test]
+        fn eq() {
+            let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+            let heistack1_plain = "hello test";
+            let heistack2_plain = "hello test";
 
-    //         let heistack1_plain = "hello test";
-    //         let heistack2_plain = "hello test";
+            let heistack1 = my_client_key.encrypt(heistack1_plain, STRING_PADDING, &public_key, num_blocks);
+            let heistack2 = my_client_key.encrypt(heistack2_plain, STRING_PADDING + 20, &public_key, num_blocks);
 
-    //         let heistack1 = my_client_key.encrypt(heistack1_plain, STRING_PADDING);
-    //         let heistack2 = my_client_key.encrypt(heistack2_plain, STRING_PADDING + 20);
+            let res = my_server_key.eq(&heistack1, &heistack2, &public_key, num_blocks);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = heistack1_plain.eq(heistack2_plain);
 
-    //         let res = MyServerKey::eq(&heistack1, &heistack2);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
-    //         let expected = heistack1_plain.eq(heistack2_plain);
-
-    //         assert_eq!(dec, expected as u8);
-    //     }
+            assert_eq!(dec, expected as u8);
+        }
 
     //     #[test]
     //     fn eq_ignore_case() {

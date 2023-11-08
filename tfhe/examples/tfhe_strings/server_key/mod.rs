@@ -565,19 +565,32 @@ impl MyServerKey {
         self.find(string, &pattern, public_key, num_blocks)
     }
 
-    // pub fn eq(string: &FheString, other: &FheString) -> FheAsciiChar {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
-    //     let mut is_eq = one.clone();
-    //     let min_length = usize::min(string.bytes.len(), other.bytes.len());
+    pub fn eq(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let mut is_eq = one.clone();
+        let min_length = usize::min(string.bytes.len(), other.bytes.len());
 
-    //     for i in 0..min_length {
-    //         is_eq &= string.bytes[i].eq(&other.bytes[i])
-    //             | (string.bytes[i].eq(&zero) & other.bytes[i].eq(&zero))
-    //     }
+        for i in 0..min_length {
 
-    //     is_eq
-    // }
+            let are_equal = string.bytes[i].eq(&self.key, &other.bytes[i]);
+            let is_first_eq_zero = string.bytes[i].eq(&self.key, &zero);
+            let is_second_eq_zero = other.bytes[i].eq(&self.key, &zero);
+
+            let res = is_first_eq_zero.bitand(&self.key, &is_second_eq_zero);
+            let res = res.bitor(&self.key, &are_equal);
+
+            is_eq = is_eq.bitand(&self.key, &res);
+        }
+
+        is_eq
+    }
 
     // pub fn eq_ignore_case(string: &FheString, other: &FheString) -> FheAsciiChar {
     //     let self_lowercase = MyServerKey::to_lower(string);
