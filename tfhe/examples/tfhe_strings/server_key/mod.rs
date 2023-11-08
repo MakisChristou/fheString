@@ -362,19 +362,26 @@ impl MyServerKey {
         }
     }
 
-    // pub fn replace_clear(string: &FheString, clear_from: &str, clear_to: &str) -> FheString {
-    //     let from = clear_from
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
+    pub fn replace_clear(
+        &self,
+        string: &FheString,
+        clear_from: &str,
+        clear_to: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let from = clear_from
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
 
-    //     let to = clear_to
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
+        let to = clear_to
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
 
-    //     MyServerKey::replace(string, &from, &to)
-    // }
+        self.replace(string, &from, &to, public_key, num_blocks)
+    }
 
     // pub fn rfind(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheAsciiChar {
     //     let one = FheAsciiChar::encrypt_trivial(1u8);

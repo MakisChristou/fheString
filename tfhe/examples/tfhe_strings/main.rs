@@ -644,79 +644,79 @@ mod test {
 
         let my_string_plain1 = "aaa";
         let my_string_plain2 = "aaaa";
-    
+
         let heistack1 =
             my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
         let heistack2 =
             my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
         let actual = my_server_key.lt(&heistack1, &heistack2, &public_key, num_blocks);
-    
+
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
-    
+
         let expected = (my_string_plain1 < my_string_plain2) as u8;
-    
+
         assert_eq!(expected, deccrypted_actual);
     }
 
-        #[test]
-        fn less_equal() {
-            let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+    #[test]
+    fn less_equal() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-            let my_string_plain1 = "aaa";
-            let my_string_plain2 = "aaaa";
-        
-            let heistack1 =
-                my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
-            let heistack2 =
-                my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
-            let actual = my_server_key.le(&heistack1, &heistack2, &public_key, num_blocks);
-        
-            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
-        
-            let expected = (my_string_plain1 <= my_string_plain2) as u8;
-        
-            assert_eq!(expected, deccrypted_actual);
-        }
+        let my_string_plain1 = "aaa";
+        let my_string_plain2 = "aaaa";
 
-        #[test]
-        fn greater_than() {
-            let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+        let heistack1 =
+            my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
+        let heistack2 =
+            my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
+        let actual = my_server_key.le(&heistack1, &heistack2, &public_key, num_blocks);
 
-            let my_string_plain1 = "aaa";
-            let my_string_plain2 = "aaaa";
-        
-            let heistack1 =
-                my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
-            let heistack2 =
-                my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
-            let actual = my_server_key.gt(&heistack1, &heistack2, &public_key, num_blocks);
-        
-            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
-        
-            let expected = (my_string_plain1 > my_string_plain2) as u8;
-        
-            assert_eq!(expected, deccrypted_actual);
-        }
+        let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
 
-        #[test]
-        fn greater_equal() {
-            let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+        let expected = (my_string_plain1 <= my_string_plain2) as u8;
 
-            let my_string_plain1 = "aaa";
-            let my_string_plain2 = "aaaa";
-        
-            let heistack1 =
-                my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
-            let heistack2 =
-                my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
-            let actual = my_server_key.ge(&heistack1, &heistack2, &public_key, num_blocks);
-        
-            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
-        
-            let expected = (my_string_plain1 >= my_string_plain2) as u8;
-        
-            assert_eq!(expected, deccrypted_actual);
-        }
+        assert_eq!(expected, deccrypted_actual);
+    }
+
+    #[test]
+    fn greater_than() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+
+        let my_string_plain1 = "aaa";
+        let my_string_plain2 = "aaaa";
+
+        let heistack1 =
+            my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
+        let heistack2 =
+            my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
+        let actual = my_server_key.gt(&heistack1, &heistack2, &public_key, num_blocks);
+
+        let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+
+        let expected = (my_string_plain1 > my_string_plain2) as u8;
+
+        assert_eq!(expected, deccrypted_actual);
+    }
+
+    #[test]
+    fn greater_equal() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+
+        let my_string_plain1 = "aaa";
+        let my_string_plain2 = "aaaa";
+
+        let heistack1 =
+            my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
+        let heistack2 =
+            my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
+        let actual = my_server_key.ge(&heistack1, &heistack2, &public_key, num_blocks);
+
+        let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+
+        let expected = (my_string_plain1 >= my_string_plain2) as u8;
+
+        assert_eq!(expected, deccrypted_actual);
+    }
 
     //     #[test]
     //     fn split() {
