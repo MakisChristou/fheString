@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ciphertext::{fheasciichar::FheAsciiChar, fhesplit::FheSplit, fhestring::FheString},
+    ciphertext::{
+        fheasciichar::FheAsciiChar,
+        fhesplit::FheSplit,
+        fhestring::{Comparison, FheString},
+    },
     utils::{self, abs_difference},
     MAX_FIND_LENGTH, MAX_REPETITIONS,
 };
@@ -689,53 +693,95 @@ impl MyServerKey {
         self.strip_suffix(string, &pattern, public_key, num_blocks)
     }
 
-    // pub fn comparison(
-    //     string: &FheString,
-    //     other: &FheString,
-    //     operation: Comparison,
-    // ) -> FheAsciiChar {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let min_length = usize::min(string.bytes.len(), other.bytes.len());
-    //     let mut encountered_comparison = zero.clone();
-    //     let mut has_flag_became_one = zero.clone();
+    pub fn comparison(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        operation: Comparison,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let min_length = usize::min(string.bytes.len(), other.bytes.len());
+        let mut encountered_comparison = zero.clone();
+        let mut has_flag_became_one = zero.clone();
 
-    //     let mut ret = FheAsciiChar::encrypt_trivial(255u8);
+        let mut ret = FheAsciiChar::encrypt_trivial(255u8, public_key, num_blocks);
 
-    //     for i in 0..min_length {
-    //         let comparison_result = match operation {
-    //             Comparison::LessThan => string.bytes[i].lt(&other.bytes[i]),
-    //             Comparison::LessEqual => string.bytes[i].le(&other.bytes[i]),
-    //             Comparison::GreaterThan => string.bytes[i].gt(&other.bytes[i]),
-    //             Comparison::GreaterEqual => string.bytes[i].ge(&other.bytes[i]),
-    //         };
+        for i in 0..min_length {
+            let comparison_result = match operation {
+                Comparison::LessThan => string.bytes[i].lt(&self.key, &other.bytes[i]),
+                Comparison::LessEqual => string.bytes[i].le(&self.key, &other.bytes[i]),
+                Comparison::GreaterThan => string.bytes[i].gt(&self.key, &other.bytes[i]),
+                Comparison::GreaterEqual => string.bytes[i].ge(&self.key, &other.bytes[i]),
+            };
 
-    //         let is_ne = string.bytes[i].ne(&other.bytes[i]);
+            let is_ne = string.bytes[i].ne(&self.key, &other.bytes[i]);
 
-    //         encountered_comparison |= is_ne; // skip when the prefix is common among strings
+            encountered_comparison = encountered_comparison.bitor(&self.key, &is_ne); // skip when the prefix is common among strings
 
-    //         let flag = encountered_comparison.clone() & has_flag_became_one.flip();
-    //         has_flag_became_one |= flag.clone(); // this flag is required to only consider the first character we compare
-    //         ret = flag.if_then_else(&comparison_result, &ret)
-    //     }
+            let flag = encountered_comparison.bitand(
+                &self.key,
+                &has_flag_became_one.flip(&self.key, public_key, num_blocks),
+            );
+            has_flag_became_one = has_flag_became_one.bitor(&self.key, &flag); // this flag is required to only consider the first character we compare
+            ret = flag.if_then_else(&self.key, &comparison_result, &ret)
+        }
 
-    //     ret
-    // }
+        ret
+    }
 
-    // pub fn lt(string: &FheString, other: &FheString) -> FheAsciiChar {
-    //     MyServerKey::comparison(string, other, Comparison::LessThan)
-    // }
+    pub fn lt(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        self.comparison(string, other, Comparison::LessThan, public_key, num_blocks)
+    }
 
-    // pub fn le(string: &FheString, other: &FheString) -> FheAsciiChar {
-    //     MyServerKey::comparison(string, other, Comparison::LessEqual)
-    // }
+    pub fn le(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        self.comparison(string, other, Comparison::LessEqual, public_key, num_blocks)
+    }
 
-    // pub fn gt(string: &FheString, other: &FheString) -> FheAsciiChar {
-    //     MyServerKey::comparison(string, other, Comparison::GreaterThan)
-    // }
+    pub fn gt(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        self.comparison(
+            string,
+            other,
+            Comparison::GreaterThan,
+            public_key,
+            num_blocks,
+        )
+    }
 
-    // pub fn ge(string: &FheString, other: &FheString) -> FheAsciiChar {
-    //     MyServerKey::comparison(string, other, Comparison::GreaterEqual)
-    // }
+    pub fn ge(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        self.comparison(
+            string,
+            other,
+            Comparison::GreaterEqual,
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn replacen(
     //     string: &FheString,
