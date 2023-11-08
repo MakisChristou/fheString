@@ -604,22 +604,33 @@ impl MyServerKey {
         self.eq(&self_lowercase, &other_lowercase, public_key, num_blocks)
     }
 
-    // pub fn strip_prefix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheString {
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
-    //     let mut result = string.bytes.clone();
-    //     let mut pattern_found_flag = one.clone();
+    pub fn strip_prefix(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let mut result = string.bytes.clone();
+        let mut pattern_found_flag = one.clone();
 
-    //     for j in 0..pattern.len() {
-    //         pattern_found_flag &= pattern[j].eq(&result[j]);
-    //     }
+        for j in 0..pattern.len() {
+            pattern_found_flag =
+                pattern_found_flag.bitand(&self.key, &pattern[j].eq(&self.key, &result[j]));
+        }
 
-    //     for j in 0..pattern.len() {
-    //         result[j] = pattern_found_flag.if_then_else(&zero, &result[j]);
-    //     }
+        for j in 0..pattern.len() {
+            result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
+        }
 
-    //     FheString::from_vec(bubble_zeroes_left(result))
-    // }
+        FheString::from_vec(
+            utils::bubble_zeroes_left(result, &self.key, public_key, num_blocks),
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn strip_suffix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheString {
     //     let zero = FheAsciiChar::encrypt_trivial(0u8);

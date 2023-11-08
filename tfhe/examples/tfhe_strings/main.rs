@@ -29,22 +29,18 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let heistack1_plain = "hello TEST";
-    let heistack2_plain = "hello test";
+    let my_string_plain = "HELLO test test HELLO";
+    let pattern_plain = "HELLO";
 
-    let heistack1 = my_client_key.encrypt(heistack1_plain, STRING_PADDING, &public_key, num_blocks);
-    let heistack2 = my_client_key.encrypt(
-        heistack2_plain,
-        STRING_PADDING + 20,
-        &public_key,
-        num_blocks,
-    );
+    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+    let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    let my_string_upper = my_server_key.strip_prefix(&my_string, &pattern, &public_key, num_blocks);
 
-    let res = my_server_key.eq_ignore_case(&heistack1, &heistack2, &public_key, num_blocks);
-    let dec: u8 = my_client_key.decrypt_char(&res);
-    let expected = heistack1_plain.eq_ignore_ascii_case(heistack2_plain);
+    let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
 
-    assert_eq!(dec, expected as u8);
+    let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
+
+    assert_eq!(verif_string, expected);
 }
 
 #[cfg(test)]
@@ -536,27 +532,25 @@ mod test {
         assert_eq!(dec, expected as u8);
     }
 
-    //     #[test]
-    //     fn strip_prefix() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn strip_prefix() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "HELLO test test HELLO";
+        let pattern_plain = "HELLO";
 
-    //         let my_string_plain = "HELLO test test HELLO";
-    //         let pattern_plain = "HELLO";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+        let my_string_upper =
+            my_server_key.strip_prefix(&my_string, &pattern, &public_key, num_blocks);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
-    //         let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
 
-    //         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-    //         let expected = my_string_plain.strip_prefix(pattern_plain);
+        let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
 
-    //         let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
-
-    //         assert_eq!(verif_string, expected);
-    //     }
+        assert_eq!(verif_string, expected);
+    }
 
     //     #[test]
     //     fn strip_suffix() {
