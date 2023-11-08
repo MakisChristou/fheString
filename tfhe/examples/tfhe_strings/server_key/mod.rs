@@ -1,14 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ciphertext::{
-        fheasciichar::FheAsciiChar,
-        fhesplit::FheSplit,
-        fhestring::FheString,
-    },
+    ciphertext::{fheasciichar::FheAsciiChar, fhesplit::FheSplit, fhestring::FheString},
     utils::{self, abs_difference},
-    MAX_FIND_LENGTH,
-    MAX_REPETITIONS,
+    MAX_FIND_LENGTH, MAX_REPETITIONS,
 };
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -266,7 +261,10 @@ impl MyServerKey {
                 .is_whitespace(&self.key, public_key, num_blocks)
                 .flip(&self.key, public_key, num_blocks);
 
-            stop_trim_flag = stop_trim_flag.bitor(&self.key, &is_not_whitespace.bitand(&self.key, &is_not_zero));
+            stop_trim_flag = stop_trim_flag.bitor(
+                &self.key,
+                &is_not_whitespace.bitand(&self.key, &is_not_zero),
+            );
             let mask = stop_trim_flag.bitnot(&self.key).add(&self.key, &one);
             result[i] = string.bytes[i].bitand(&self.key, &zero.bitor(&self.key, &mask));
         }
@@ -278,10 +276,15 @@ impl MyServerKey {
         )
     }
 
-    // pub fn trim(string: &FheString) -> FheString {
-    //     let result = MyServerKey::trim_end(string);
-    //     MyServerKey::trim_start(&result)
-    // }
+    pub fn trim(
+        &self,
+        string: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let result = self.trim_end(string, public_key, num_blocks);
+        self.trim_start(&result, public_key, num_blocks)
+    }
 
     // pub fn repeat_clear(string: &FheString, repetitions: usize) -> FheString {
     //     let mut result = string.bytes.clone();
