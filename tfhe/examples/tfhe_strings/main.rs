@@ -32,18 +32,16 @@ fn main() {
 
     let my_string_plain = ".A.B.C.";
     let pattern_plain = ".";
-    let n_plain = 3u8;
 
-    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+    let my_string =
+        my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
-    let n = FheAsciiChar::encrypt_trivial(n_plain, &public_key, num_blocks);
 
-    let fhe_split = my_server_key.rsplitn(&my_string, &pattern, n, &public_key, num_blocks);
+    let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_key, num_blocks);
     let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-    let expected: Vec<&str> = my_string_plain
-        .rsplitn(n_plain.into(), pattern_plain)
-        .collect();
+    let expected_tuple = my_string_plain.rsplit_once(pattern_plain).unwrap();
+    let expected = vec![expected_tuple.1, expected_tuple.0];
 
     assert_eq!(plain_split[..expected.len()], expected);
 }
@@ -835,27 +833,25 @@ mod test {
         assert_eq!(plain_split[..expected.len()], expected);
     }
 
-    //     #[test]
-    //     fn rsplit_once() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn rsplit_once() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = ".A.B.C.";
+        let pattern_plain = ".";
 
-    //         let my_string_plain = ".A.B.C.";
-    //         let pattern_plain = ".";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+        let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_key, num_blocks);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-    //         let fhe_split = MyServerKey::rsplit_once(&my_string, &pattern);
-    //         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+        let expected_tuple = my_string_plain.rsplit_once(pattern_plain).unwrap();
+        let expected = vec![expected_tuple.1, expected_tuple.0];
 
-    //         let expected_tuple = my_string_plain.rsplit_once(pattern_plain).unwrap();
-    //         let expected = vec![expected_tuple.1, expected_tuple.0];
-
-    //         assert_eq!(plain_split[..expected.len()], expected);
-    //     }
+        assert_eq!(plain_split[..expected.len()], expected);
+    }
 
     #[test]
     fn rsplitn() {

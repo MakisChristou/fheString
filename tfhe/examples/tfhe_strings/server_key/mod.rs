@@ -1485,10 +1485,24 @@ impl MyServerKey {
         )
     }
 
-    // pub fn rsplit_once(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheSplit {
-    //     let n = FheAsciiChar::encrypt_trivial(2u8);
-    //     MyServerKey::_rsplit(string, pattern.clone(), false, false, Some(n))
-    // }
+    pub fn rsplit_once(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        let n = FheAsciiChar::encrypt_trivial(2u8, public_key, num_blocks);
+        self._rsplit(
+            string,
+            pattern.clone(),
+            false,
+            false,
+            Some(n),
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn rsplit_once_clear(string: &FheString, clear_pattern: &str) -> FheSplit {
     //     let pattern = clear_pattern
