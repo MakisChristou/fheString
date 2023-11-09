@@ -1044,13 +1044,19 @@ impl MyServerKey {
         )
     }
 
-    // pub fn split_clear(string: &FheString, clear_pattern: &str) -> FheSplit {
-    //     let pattern = clear_pattern
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
-    //     MyServerKey::split(string, &pattern)
-    // }
+    pub fn split_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
+        self.split(string, &pattern, public_key, num_blocks)
+    }
 
     pub fn split_inclusive(
         &self,
