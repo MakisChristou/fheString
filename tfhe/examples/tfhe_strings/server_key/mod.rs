@@ -393,28 +393,37 @@ impl MyServerKey {
         self.replace(string, &from, &to, public_key, num_blocks)
     }
 
-    // pub fn rfind(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheAsciiChar {
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
-    //     let mut pattern_position = FheAsciiChar::encrypt_trivial(MAX_FIND_LENGTH as u8);
+    pub fn rfind(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let mut pattern_position =
+            FheAsciiChar::encrypt_trivial(MAX_FIND_LENGTH as u8, public_key, num_blocks);
 
-    //     if string.bytes.len() >= MAX_FIND_LENGTH + pattern.len() {
-    //         panic!("Maximum supported size for find reached");
-    //     }
+        if string.bytes.len() >= MAX_FIND_LENGTH + pattern.len() {
+            panic!("Maximum supported size for find reached");
+        }
 
-    //     // Search for pattern
-    //     for i in 0..string.bytes.len() - pattern.len() {
-    //         let mut pattern_found_flag = one.clone();
+        // Search for pattern
+        for i in 0..string.bytes.len() - pattern.len() {
+            let mut pattern_found_flag = one.clone();
 
-    //         for j in 0..pattern.len() {
-    //             pattern_found_flag &= pattern[j].clone().eq(&string.bytes[i + j]);
-    //         }
+            for j in 0..pattern.len() {
+                pattern_found_flag = pattern_found_flag
+                    .bitand(&self.key, &pattern[j].eq(&self.key, &string.bytes[i + j]));
+            }
 
-    //         let enc_i = FheAsciiChar::encrypt_trivial(i as u8);
-    //         pattern_position = pattern_found_flag.if_then_else(&enc_i, &pattern_position);
-    //     }
+            let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_key, num_blocks);
+            pattern_position =
+                pattern_found_flag.if_then_else(&self.key, &enc_i, &pattern_position);
+        }
 
-    //     pattern_position
-    // }
+        pattern_position
+    }
 
     // pub fn rfind_clear(string: &FheString, clear_pattern: &str) -> FheAsciiChar {
     //     let pattern = clear_pattern

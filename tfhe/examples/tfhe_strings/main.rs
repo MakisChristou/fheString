@@ -29,20 +29,19 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let my_string_plain1 = "aaa";
-    let my_string_plain2 = "aaaa";
+    let heistack_plain = "hello test";
+    let needle_plain = "abc";
 
-    let heistack1 =
-        my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_key, num_blocks);
-    let heistack2 =
-        my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_key, num_blocks);
-    let actual = my_server_key.lt(&heistack1, &heistack2, &public_key, num_blocks);
+    let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
+    let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+    let res = my_server_key.rfind(&heistack, &needle, &public_key, num_blocks);
+    let dec: u8 = my_client_key.decrypt_char(&res);
 
-    let expected = (my_string_plain1 < my_string_plain2) as u8;
+    // The original algoritm returns None but since we don't have this luxury we will use a placeholder value
+    let _ = heistack_plain.rfind(needle_plain);
 
-    assert_eq!(expected, deccrypted_actual);
+    assert_eq!(dec, 255u8);
 }
 
 #[cfg(test)]
@@ -409,65 +408,59 @@ mod test {
         assert_eq!(dec, expected as u8);
     }
 
-    //     #[test]
-    //     fn rfind() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn rfind() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let heistack_plain = "hello abc abc test";
+        let needle_plain = "abc";
 
-    //         let heistack_plain = "hello abc abc test";
-    //         let needle_plain = "abc";
+        let heistack =
+            my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    //         let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
-    //         let needle = my_client_key.encrypt_no_padding(needle_plain);
+        let res = my_server_key.rfind(&heistack, &needle, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //         let res = MyServerKey::rfind(&heistack, &needle);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
+        let expected = heistack_plain.rfind(needle_plain).unwrap();
 
-    //         let expected = heistack_plain.rfind(needle_plain).unwrap();
+        assert_eq!(dec, expected as u8);
+    }
 
-    //         assert_eq!(dec, expected as u8);
-    //     }
+    #[test]
+    fn invalid_rfind() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //     #[test]
-    //     fn invalid_rfind() {
-    //         let (client_key, server_key) = setup_test();
+        let heistack_plain = "hello test";
+        let needle_plain = "abc";
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let heistack =
+            my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    //         let heistack_plain = "hello test";
-    //         let needle_plain = "abc";
+        let res = my_server_key.rfind(&heistack, &needle, &public_key, num_blocks);
+        let dec: u8 = my_client_key.decrypt_char(&res);
 
-    //         let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING);
-    //         let needle = my_client_key.encrypt_no_padding(needle_plain);
+        // The original algoritm returns None but since we don't have this luxury we will use a placeholder value
+        let _ = heistack_plain.rfind(needle_plain);
 
-    //         let res = MyServerKey::rfind(&heistack, &needle);
-    //         let dec: u8 = my_client_key.decrypt_char(&res);
+        assert_eq!(dec, 255u8);
+    }
 
-    //         // The original algoritm returns None but since we don't have this luxury we will use a placeholder value
-    //         let _ = heistack_plain.rfind(needle_plain);
+    #[test]
+    #[should_panic(expected = "Maximum supported size for find reached")]
+    fn unsupported_size_rfind() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         assert_eq!(dec, 255u8);
-    //     }
+        let heistack_plain = "hello test".repeat(100);
+        let needle_plain = "abc";
 
-    //     #[test]
-    //     #[should_panic(expected = "Maximum supported size for find reached")]
-    //     fn unsupported_size_rfind() {
-    //         let (client_key, server_key) = setup_test();
+        let heistack =
+            my_client_key.encrypt(&heistack_plain, STRING_PADDING, &public_key, num_blocks);
+        let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
-
-    //         let heistack_plain = "hello test".repeat(100);
-    //         let needle_plain = "abc";
-
-    //         let heistack = my_client_key.encrypt(&heistack_plain, STRING_PADDING);
-    //         let needle = my_client_key.encrypt_no_padding(needle_plain);
-
-    //         let res = MyServerKey::rfind(&heistack, &needle);
-    //     }
+        let _ = my_server_key.rfind(&heistack, &needle, &public_key, num_blocks);
+    }
 
     #[test]
     fn find() {
