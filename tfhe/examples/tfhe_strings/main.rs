@@ -33,8 +33,7 @@ fn main() {
     let my_string_plain = ".A.B.C.";
     let pattern_plain = ".";
 
-    let my_string =
-        my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
     let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_key, num_blocks);
