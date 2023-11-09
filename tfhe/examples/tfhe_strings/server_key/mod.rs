@@ -815,18 +815,39 @@ impl MyServerKey {
         )
     }
 
-    // pub fn replacen(
-    //     string: &FheString,
-    //     from: &Vec<FheAsciiChar>,
-    //     to: &Vec<FheAsciiChar>,
-    //     n: FheAsciiChar,
-    // ) -> FheString {
-    //     if from.len() >= to.len() {
-    //         Self::handle_longer_from(string.bytes.clone(), from.clone(), to.clone(), n, true)
-    //     } else {
-    //         Self::handle_shorter_from(string.bytes.clone(), from.clone(), to.clone(), n, true)
-    //     }
-    // }
+    pub fn replacen(
+        &self,
+        string: &FheString,
+        from: &Vec<FheAsciiChar>,
+        to: &Vec<FheAsciiChar>,
+        n: FheAsciiChar,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        if from.len() >= to.len() {
+            Self::handle_longer_from(
+                string.bytes.clone(),
+                from.clone(),
+                to.clone(),
+                n,
+                true,
+                &self.key,
+                public_key,
+                num_blocks,
+            )
+        } else {
+            Self::handle_shorter_from(
+                string.bytes.clone(),
+                from.clone(),
+                to.clone(),
+                n,
+                true,
+                &self.key,
+                public_key,
+                num_blocks,
+            )
+        }
+    }
 
     // fn _split(
     //     string: &FheString,
