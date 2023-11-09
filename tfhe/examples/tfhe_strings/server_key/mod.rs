@@ -1052,9 +1052,23 @@ impl MyServerKey {
     //     MyServerKey::split(string, &pattern)
     // }
 
-    // pub fn split_inclusive(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheSplit {
-    //     MyServerKey::_split(string, pattern.clone(), true, false, None)
-    // }
+    pub fn split_inclusive(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        self._split(
+            string,
+            pattern.clone(),
+            true,
+            false,
+            None,
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn split_inclusive_clear(string: &FheString, clear_pattern: &str) -> FheSplit {
     //     let pattern = clear_pattern

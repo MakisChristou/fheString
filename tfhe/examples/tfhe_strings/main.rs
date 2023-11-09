@@ -30,16 +30,16 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let my_string_plain = " Mary had a";
+    let my_string_plain = "Mary had a";
     let pattern_plain = " ";
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-    let fhe_split = my_server_key.split(&my_string, &pattern, &public_key, num_blocks);
+    let fhe_split = my_server_key.split_inclusive(&my_string, &pattern, &public_key, num_blocks);
     let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-    let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
+    let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
     assert_eq!(plain_split[..expected.len()], expected);
 }
@@ -730,25 +730,25 @@ mod test {
         assert_eq!(plain_split[..expected.len()], expected);
     }
 
-    // #[test]
-    // fn split_inclusive() {
-    //     let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
+    #[test]
+    fn split_inclusive() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //     let my_string_plain = "Mary had a";
-    //     let pattern_plain = " ";
+        let my_string_plain = "Mary had a";
+        let pattern_plain = " ";
 
-    //     let my_string =
-    //         my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
-    //     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-    //     let fhe_split =
-    //         my_server_key.split_inclusive(&my_string, &pattern, &public_key, num_blocks);
-    //     let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+        let fhe_split =
+            my_server_key.split_inclusive(&my_string, &pattern, &public_key, num_blocks);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-    //     let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
+        let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
-    //     assert_eq!(plain_split[..expected.len()], expected);
-    // }
+        assert_eq!(plain_split[..expected.len()], expected);
+    }
 
     // #[test]
     // fn split_terminator() {
