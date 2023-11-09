@@ -1108,51 +1108,70 @@ impl MyServerKey {
         )
     }
 
-    // pub fn split_ascii_whitespace(string: &FheString) -> FheSplit {
-    //     let max_buffer_size = string.bytes.len(); // when a single buffer holds the whole input
-    //     let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
+    pub fn split_ascii_whitespace(
+        &self,
+        string: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        let max_buffer_size = string.bytes.len(); // when a single buffer holds the whole input
+        let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
-    //     let zero = FheAsciiChar::encrypt_trivial(0u8);
-    //     let one = FheAsciiChar::encrypt_trivial(1u8);
-    //     let mut current_copy_buffer = zero.clone();
-    //     let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
-    //     let mut previous_was_whitespace = FheAsciiChar::encrypt_trivial(1u8);
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
+        let mut current_copy_buffer = zero.clone();
+        let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
+        let mut previous_was_whitespace =
+            FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
 
-    //     for i in 0..(string.bytes.len()) {
-    //         let pattern_found = string.bytes[i].is_whitespace();
-    //         let should_increment_buffer = pattern_found.clone() & previous_was_whitespace.flip();
+        for i in 0..(string.bytes.len()) {
+            let pattern_found = string.bytes[i].is_whitespace(&self.key, public_key, num_blocks);
+            let should_increment_buffer = pattern_found.bitand(
+                &self.key,
+                &previous_was_whitespace.flip(&self.key, public_key, num_blocks),
+            );
 
-    //         // Here we know if the pattern is found for position i
-    //         // If its found we need to switch from copying to old buffer and start copying to new one
-    //         current_copy_buffer = should_increment_buffer
-    //             .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+            // Here we know if the pattern is found for position i
+            // If its found we need to switch from copying to old buffer and start copying to new one
+            current_copy_buffer = should_increment_buffer.if_then_else(
+                &self.key,
+                &current_copy_buffer.add(&self.key, &one),
+                &current_copy_buffer,
+            );
 
-    //         // Copy ith character to the appropriate buffer
-    //         for j in 0..max_no_buffers {
-    //             let enc_j = FheAsciiChar::encrypt_trivial(j as u8);
-    //             let mut copy_flag = enc_j.eq(&current_copy_buffer);
-    //             copy_flag = copy_flag & string.bytes[i].is_whitespace().flip(); // copy if its not whitespace
-    //             result[j][i] = copy_flag.if_then_else(&string.bytes[i], &result[j][i]);
-    //         }
+            // Copy ith character to the appropriate buffer
+            for j in 0..max_no_buffers {
+                let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_key, num_blocks);
+                let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+                copy_flag = copy_flag.bitand(
+                    &self.key,
+                    &string.bytes[i]
+                        .is_whitespace(&self.key, public_key, num_blocks)
+                        .flip(&self.key, public_key, num_blocks),
+                ); // copy if its not whitespace
+                result[j][i] = copy_flag.if_then_else(&self.key, &string.bytes[i], &result[j][i]);
+            }
 
-    //         previous_was_whitespace = pattern_found;
-    //     }
+            previous_was_whitespace = pattern_found;
+        }
 
-    //     // Replace whitespace with \0
-    //     for i in 0..max_no_buffers {
-    //         for j in 0..max_buffer_size {
-    //             let replace_with_zero = result[i][j].is_whitespace();
-    //             result[i][j] = replace_with_zero.if_then_else(&zero, &result[i][j]);
-    //         }
-    //     }
+        // Replace whitespace with \0
+        for i in 0..max_no_buffers {
+            for j in 0..max_buffer_size {
+                let replace_with_zero =
+                    result[i][j].is_whitespace(&self.key, public_key, num_blocks);
+                result[i][j] = replace_with_zero.if_then_else(&self.key, &zero, &result[i][j]);
+            }
+        }
 
-    //     for i in 0..max_no_buffers {
-    //         let new_buf = bubble_zeroes_left(result[i].clone());
-    //         result[i] = new_buf;
-    //     }
+        for i in 0..max_no_buffers {
+            let new_buf =
+                utils::bubble_zeroes_left(result[i].clone(), &self.key, public_key, num_blocks);
+            result[i] = new_buf;
+        }
 
-    //     FheSplit::new(result)
-    // }
+        FheSplit::new(result, public_key, num_blocks)
+    }
 
     // pub fn splitn(string: &FheString, pattern: &Vec<FheAsciiChar>, n: FheAsciiChar) -> FheSplit {
     //     MyServerKey::_split(string, pattern.clone(), false, false, Some(n))
