@@ -1173,18 +1173,48 @@ impl MyServerKey {
         FheSplit::new(result, public_key, num_blocks)
     }
 
-    // pub fn splitn(string: &FheString, pattern: &Vec<FheAsciiChar>, n: FheAsciiChar) -> FheSplit {
-    //     MyServerKey::_split(string, pattern.clone(), false, false, Some(n))
-    // }
+    pub fn splitn(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        n: FheAsciiChar,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        self._split(
+            string,
+            pattern.clone(),
+            false,
+            false,
+            Some(n),
+            public_key,
+            num_blocks,
+        )
+    }
 
-    // pub fn splitn_clear(string: &FheString, clear_pattern: &str, clear_n: usize) -> FheSplit {
-    //     let pattern = clear_pattern
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
-    //     let n = FheAsciiChar::encrypt_trivial(clear_n as u8);
-    //     MyServerKey::_split(string, pattern, false, false, Some(n))
-    // }
+    pub fn splitn_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        clear_n: usize,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
+        let n = FheAsciiChar::encrypt_trivial(clear_n as u8, public_key, num_blocks);
+        self._split(
+            string,
+            pattern,
+            false,
+            false,
+            Some(n),
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn concatenate(string: &FheString, other: &FheString) -> FheString {
     //     let mut result = string.bytes.clone();
