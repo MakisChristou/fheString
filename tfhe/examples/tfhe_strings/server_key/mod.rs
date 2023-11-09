@@ -1216,12 +1216,22 @@ impl MyServerKey {
         )
     }
 
-    // pub fn concatenate(string: &FheString, other: &FheString) -> FheString {
-    //     let mut result = string.bytes.clone();
-    //     let mut clone_other = other.bytes.clone();
-    //     result.append(&mut clone_other);
-    //     FheString::from_vec(bubble_zeroes_left(result))
-    // }
+    pub fn concatenate(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheString {
+        let mut result = string.bytes.clone();
+        let mut clone_other = other.bytes.clone();
+        result.append(&mut clone_other);
+        FheString::from_vec(
+            utils::bubble_zeroes_left(result, &self.key, public_key, num_blocks),
+            public_key,
+            num_blocks,
+        )
+    }
 
     // fn _rsplit(
     //     string: &FheString,
