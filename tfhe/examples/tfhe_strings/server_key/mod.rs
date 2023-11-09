@@ -1442,9 +1442,24 @@ impl MyServerKey {
         self.rsplit(string, &pattern, public_key, num_blocks)
     }
 
-    // pub fn rsplitn(string: &FheString, pattern: &Vec<FheAsciiChar>, n: FheAsciiChar) -> FheSplit {
-    //     MyServerKey::_rsplit(string, pattern.clone(), false, false, Some(n))
-    // }
+    pub fn rsplitn(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        n: FheAsciiChar,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        self._rsplit(
+            string,
+            pattern.clone(),
+            false,
+            false,
+            Some(n),
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn rsplitn_clear(string: &FheString, clear_pattern: &str, clear_n: usize) -> FheSplit {
     //     let pattern = clear_pattern
