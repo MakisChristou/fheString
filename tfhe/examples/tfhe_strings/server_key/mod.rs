@@ -425,14 +425,20 @@ impl MyServerKey {
         pattern_position
     }
 
-    // pub fn rfind_clear(string: &FheString, clear_pattern: &str) -> FheAsciiChar {
-    //     let pattern = clear_pattern
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
+    pub fn rfind_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheAsciiChar {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
 
-    //     MyServerKey::rfind(string, &pattern)
-    // }
+        self.rfind(string, &pattern, public_key, num_blocks)
+    }
 
     // The "easy" case
     fn handle_longer_from(
