@@ -30,17 +30,19 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let my_string_plain = ".A.B.C.";
+    let my_string_plain = "....A.B.C.";
     let pattern_plain = ".";
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-    let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_key, num_blocks);
-    let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+    let fhe_split = my_server_key.rsplit_terminator(&my_string, &pattern, &public_key, num_blocks);
+    let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-    let expected_tuple = my_string_plain.rsplit_once(pattern_plain).unwrap();
-    let expected = vec![expected_tuple.1, expected_tuple.0];
+    // Plain_split always has a leading empty string, the client can safely ignore it
+    plain_split.remove(0);
+
+    let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
     assert_eq!(plain_split[..expected.len()], expected);
 }
@@ -875,27 +877,26 @@ mod test {
         assert_eq!(plain_split[..expected.len()], expected);
     }
 
-    //     #[test]
-    //     fn rplitn_terminator() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn rplitn_terminator() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "....A.B.C.";
+        let pattern_plain = ".";
 
-    //         let my_string_plain = "....A.B.C.";
-    //         let pattern_plain = ".";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+        let fhe_split =
+            my_server_key.rsplit_terminator(&my_string, &pattern, &public_key, num_blocks);
+        let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-    //         let fhe_split = MyServerKey::rsplit_terminator(&my_string, &pattern);
-    //         let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+        // Plain_split always has a leading empty string, the client can safely ignore it
+        plain_split.remove(0);
 
-    //         // Plain_split always has a leading empty string, the client can safely ignore it
-    //         plain_split.remove(0);
+        let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
-    //         let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
-
-    //         assert_eq!(plain_split[..expected.len()], expected);
-    //     }
+        assert_eq!(plain_split[..expected.len()], expected);
+    }
 }

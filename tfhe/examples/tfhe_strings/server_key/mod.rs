@@ -1527,15 +1527,35 @@ impl MyServerKey {
         )
     }
 
-    // pub fn rsplit_terminator(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheSplit {
-    //     MyServerKey::_rsplit(string, pattern.clone(), false, true, None)
-    // }
+    pub fn rsplit_terminator(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        self._rsplit(
+            string,
+            pattern.clone(),
+            false,
+            true,
+            None,
+            public_key,
+            num_blocks,
+        )
+    }
 
-    // pub fn rsplit_terminator_clear(string: &FheString, clear_pattern: &str) -> FheSplit {
-    //     let pattern = clear_pattern
-    //         .bytes()
-    //         .map(|b| FheAsciiChar::encrypt_trivial(b))
-    //         .collect::<Vec<FheAsciiChar>>();
-    //     MyServerKey::_rsplit(string, pattern, false, true, None)
-    // }
+    pub fn rsplit_terminator_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
+            .collect::<Vec<FheAsciiChar>>();
+        self._rsplit(string, pattern, false, true, None, public_key, num_blocks)
+    }
 }
