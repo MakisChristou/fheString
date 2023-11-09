@@ -29,19 +29,21 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let heistack_plain = "hello test";
-    let needle_plain = "abc";
+    let my_string_plain = "HELLO test test HELLO";
+    let pattern_plain = "WORLD";
 
-    let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_key, num_blocks);
-    let needle = my_client_key.encrypt_no_padding(needle_plain);
+    let my_string =
+        my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+    let pattern = my_client_key.encrypt(pattern_plain, 0, &public_key, num_blocks);
+    let my_string_upper =
+        my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_key, num_blocks);
 
-    let res = my_server_key.rfind(&heistack, &needle, &public_key, num_blocks);
-    let dec: u8 = my_client_key.decrypt_char(&res);
+    let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
 
-    // The original algoritm returns None but since we don't have this luxury we will use a placeholder value
-    let _ = heistack_plain.rfind(needle_plain);
+    // This is None but in our case the string is not modified
+    let _ = my_string_plain.strip_suffix(pattern_plain);
 
-    assert_eq!(dec, 255u8);
+    assert_eq!(verif_string, my_string_plain);
 }
 
 #[cfg(test)]
@@ -566,27 +568,26 @@ mod test {
         assert_eq!(verif_string, expected);
     }
 
-    //     #[test]
-    //     fn dont_strip_suffix() {
-    //         let (client_key, server_key) = setup_test();
+    #[test]
+    fn dont_strip_suffix() {
+        let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-    //         let my_client_key = MyClientKey::new(client_key);
-    //         let _ = MyServerKey::new(server_key);
+        let my_string_plain = "HELLO test test HELLO";
+        let pattern_plain = "WORLD";
 
-    //         let my_string_plain = "HELLO test test HELLO";
-    //         let pattern_plain = "WORLD";
+        let my_string =
+            my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
+        let pattern = my_client_key.encrypt(pattern_plain, 0, &public_key, num_blocks);
+        let my_string_upper =
+            my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_key, num_blocks);
 
-    //         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    //         let pattern = my_client_key.encrypt(pattern_plain, 0);
-    //         let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
+        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
 
-    //         let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        // This is None but in our case the string is not modified
+        let _ = my_string_plain.strip_suffix(pattern_plain);
 
-    //         // This is None but in our case the string is not modified
-    //         let _ = my_string_plain.strip_suffix(pattern_plain);
-
-    //         assert_eq!(verif_string, my_string_plain);
-    //     }
+        assert_eq!(verif_string, my_string_plain);
+    }
 
     //     #[test]
     //     fn dont_strip_prefix() {
