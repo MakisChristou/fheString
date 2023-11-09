@@ -1090,9 +1090,23 @@ impl MyServerKey {
         self.split_inclusive(string, &pattern, public_key, num_blocks)
     }
 
-    // pub fn split_terminator(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheSplit {
-    //     MyServerKey::_split(string, pattern.clone(), false, true, None)
-    // }
+    pub fn split_terminator(
+        &self,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        public_key: &tfhe::integer::PublicKey,
+        num_blocks: usize,
+    ) -> FheSplit {
+        self._split(
+            string,
+            pattern.clone(),
+            false,
+            true,
+            None,
+            public_key,
+            num_blocks,
+        )
+    }
 
     // pub fn split_ascii_whitespace(string: &FheString) -> FheSplit {
     //     let max_buffer_size = string.bytes.len(); // when a single buffer holds the whole input
