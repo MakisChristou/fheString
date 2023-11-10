@@ -30,26 +30,27 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let my_string_plain = "....A.B.C.";
+    let my_string_plain = ".A.B.C.";
     let pattern_plain = ".";
+    let n_plain = 2u8;
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    let n = FheAsciiChar::encrypt_trivial(n_plain, &public_key, num_blocks);
 
-    let fhe_split = my_server_key.rsplit_terminator(&my_string, &pattern, &public_key, num_blocks);
-    let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+    let fhe_split = my_server_key.splitn(&my_string, &pattern, n, &public_key, num_blocks);
+    let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
 
-    // Plain_split always has a leading empty string, the client can safely ignore it
-    plain_split.remove(0);
-
-    let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
+    let expected: Vec<&str> = my_string_plain
+        .splitn(n_plain.into(), pattern_plain)
+        .collect();
 
     assert_eq!(plain_split[..expected.len()], expected);
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{FheAsciiChar, FheString, STRING_PADDING};
+    use crate::{FheAsciiChar, FheSplit, FheString, STRING_PADDING};
     use crate::{MyClientKey, MyServerKey};
     use tfhe::integer::gen_keys_radix;
     use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
@@ -715,9 +716,6 @@ mod test {
     fn split() {
         let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
-        let my_client_key = MyClientKey::new(client_key);
-        let _ = MyServerKey::new(server_key);
-
         let my_string_plain = " Mary had a";
         let pattern_plain = " ";
 
@@ -776,9 +774,6 @@ mod test {
     #[test]
     fn split_ascii_whitespace() {
         let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
-
-        let my_client_key = MyClientKey::new(client_key);
-        let _ = MyServerKey::new(server_key);
 
         let my_string_plain = " A\nB\t";
         let my_string =
@@ -878,7 +873,7 @@ mod test {
     }
 
     #[test]
-    fn rplitn_terminator() {
+    fn rsplit_terminator() {
         let (my_client_key, my_server_key, public_key, num_blocks) = setup_test();
 
         let my_string_plain = "....A.B.C.";

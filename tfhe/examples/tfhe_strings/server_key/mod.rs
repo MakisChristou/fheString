@@ -896,17 +896,18 @@ impl MyServerKey {
                 Some(max_splits) => {
                     stop_counter_increment = stop_counter_increment.bitor(
                         &self.key,
-                        &current_copy_buffer.eq(&self.key, &(max_splits.sub(&self.key, &one))),
+                        &current_copy_buffer.eq(&self.key, &max_splits.sub(&self.key, &one)),
                     );
 
                     // Here we know if the pattern is found for position i
                     // If its found we need to switch from copying to old buffer and start copying to new one
-                    current_copy_buffer = (pattern_found
-                        .bitand(&self.key, &stop_counter_increment))
-                    .flip(&self.key, public_key, num_blocks)
+                    current_copy_buffer = (pattern_found.bitand(
+                        &self.key,
+                        &stop_counter_increment.flip(&self.key, public_key, num_blocks),
+                    ))
                     .if_then_else(
                         &self.key,
-                        &(current_copy_buffer.add(&self.key, &one)),
+                        &current_copy_buffer.add(&self.key, &one),
                         &current_copy_buffer,
                     );
                 }
