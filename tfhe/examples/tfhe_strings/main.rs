@@ -613,7 +613,7 @@ mod test {
 
         let expected_pattern_found = if let Some(_) = expected { true } else { false };
 
-        assert_eq!(pattern_found, expected_pattern_found);
+        assert_eq!(pattern_found, expected_pattern_found as u8);
     }
 
     #[test]
