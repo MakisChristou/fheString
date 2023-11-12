@@ -5,6 +5,7 @@ use crate::{
         fheasciichar::FheAsciiChar,
         fhesplit::FheSplit,
         fhestring::{Comparison, FheString},
+        fhestrip::FheStrip,
     },
     utils::{self, abs_difference},
     MAX_FIND_LENGTH, MAX_REPETITIONS,
@@ -644,7 +645,7 @@ impl MyServerKey {
         pattern: &Vec<FheAsciiChar>,
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
-    ) -> FheString {
+    ) -> FheStrip {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
         let mut result = string.bytes.clone();
@@ -659,11 +660,13 @@ impl MyServerKey {
             result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
         }
 
-        FheString::from_vec(
+        let string = FheString::from_vec(
             utils::bubble_zeroes_left(result, &self.key, public_key, num_blocks),
             public_key,
             num_blocks,
-        )
+        );
+
+        FheStrip::new(string, pattern_found_flag)
     }
 
     pub fn strip_suffix(
@@ -672,7 +675,7 @@ impl MyServerKey {
         pattern: &Vec<FheAsciiChar>,
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
-    ) -> FheString {
+    ) -> FheStrip {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
         let mut result = string.bytes.clone();
@@ -692,7 +695,9 @@ impl MyServerKey {
             result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
         }
 
-        FheString::from_vec(result, public_key, num_blocks)
+        let string = FheString::from_vec(result, public_key, num_blocks);
+
+        FheStrip::new(string, pattern_found_flag)
     }
 
     pub fn strip_prefix_clear(
@@ -701,7 +706,7 @@ impl MyServerKey {
         clear_pattern: &str,
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
-    ) -> FheString {
+    ) -> FheStrip {
         let pattern = clear_pattern
             .bytes()
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
@@ -715,7 +720,7 @@ impl MyServerKey {
         clear_pattern: &str,
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
-    ) -> FheString {
+    ) -> FheStrip {
         let pattern = clear_pattern
             .bytes()
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_key, num_blocks))
