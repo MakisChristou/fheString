@@ -239,8 +239,7 @@ impl MyServerKey {
                 &self.key,
                 &is_not_whitespace.bitand(&self.key, &is_not_zero),
             );
-            let mask = stop_trim_flag.bitnot(&self.key).add(&self.key, &one);
-            result[i] = string.bytes[i].bitand(&self.key, &zero.bitor(&self.key, &mask));
+            result[i] = stop_trim_flag.if_then_else(&self.key, &string.bytes[i], &zero);
         }
 
         FheString::from_vec(result, public_key, num_blocks)
@@ -269,8 +268,7 @@ impl MyServerKey {
                 &self.key,
                 &is_not_whitespace.bitand(&self.key, &is_not_zero),
             );
-            let mask = stop_trim_flag.bitnot(&self.key).add(&self.key, &one);
-            result[i] = string.bytes[i].bitand(&self.key, &zero.bitor(&self.key, &mask));
+            result[i] = stop_trim_flag.if_then_else(&self.key, &string.bytes[i], &zero)
         }
 
         FheString::from_vec(
