@@ -1,7 +1,7 @@
+use crate::ciphertext::fheasciichar::FheAsciiChar;
+use crate::ciphertext::fhestring::FheString;
 use serde::{Deserialize, Serialize};
 use tfhe::integer::RadixClientKey;
-
-use crate::ciphertext::{fheasciichar::FheAsciiChar, fhestring::FheString};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MyClientKey {

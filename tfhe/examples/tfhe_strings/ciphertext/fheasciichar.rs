@@ -1,7 +1,6 @@
-use tfhe::{
-    integer::{ciphertext::BaseRadixCiphertext, RadixClientKey},
-    shortint::Ciphertext,
-};
+use tfhe::integer::ciphertext::BaseRadixCiphertext;
+use tfhe::integer::RadixClientKey;
+use tfhe::shortint::Ciphertext;
 
 #[derive(Clone)]
 pub struct FheAsciiChar {

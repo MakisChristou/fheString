@@ -1,6 +1,5 @@
 use crate::client_key::MyClientKey;
-use crate::FheAsciiChar;
-use crate::FheString;
+use crate::{FheAsciiChar, FheString};
 
 pub struct FheStrip {
     pub string: FheString,

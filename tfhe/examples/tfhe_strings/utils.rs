@@ -1,7 +1,7 @@
 use crate::ciphertext::fheasciichar::FheAsciiChar;
 
 pub fn abs_difference(a: usize, b: usize) -> usize {
-    a.checked_sub(b).unwrap_or_else(|| b - a)
+    a.checked_sub(b).unwrap_or(b - a)
 }
 
 pub fn bubble_zeroes_left(

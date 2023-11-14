@@ -1,15 +1,10 @@
+use crate::ciphertext::fheasciichar::{self, FheAsciiChar};
+use crate::ciphertext::fhesplit::FheSplit;
+use crate::ciphertext::fhestring::{Comparison, FheString};
+use crate::ciphertext::fhestrip::FheStrip;
+use crate::utils::{self, abs_difference};
+use crate::{MAX_FIND_LENGTH, MAX_REPETITIONS};
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    ciphertext::{
-        fheasciichar::FheAsciiChar,
-        fhesplit::FheSplit,
-        fhestring::{Comparison, FheString},
-        fhestrip::FheStrip,
-    },
-    utils::{self, abs_difference},
-    MAX_FIND_LENGTH, MAX_REPETITIONS,
-};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MyServerKey {
@@ -83,8 +78,8 @@ impl MyServerKey {
 
         for i in 0..string.bytes.len() - needle.len() {
             let mut current_result = one.clone();
-            for j in 0..needle.len() {
-                let eql = string.bytes[i + j].eq(&self.key, &needle[j]);
+            for (j, needle_char) in needle.iter().enumerate() {
+                let eql = string.bytes[i + j].eq(&self.key, needle_char);
                 current_result = current_result.bitand(&self.key, &eql);
             }
             result = result.bitor(&self.key, &current_result);
@@ -145,13 +140,13 @@ impl MyServerKey {
     pub fn starts_with(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheAsciiChar {
         let mut result = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
-        for i in 0..pattern.len() {
-            let eql = string.bytes[i].eq(&self.key, &pattern[i]);
+        for (i, pattern_char) in pattern.iter().enumerate() {
+            let eql = string.bytes[i].eq(&self.key, pattern_char);
             result = result.bitand(&self.key, &eql);
         }
         result
@@ -253,13 +248,12 @@ impl MyServerKey {
         num_blocks: usize,
     ) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_key, num_blocks);
-        let one = FheAsciiChar::encrypt_trivial(1u8, public_key, num_blocks);
 
         let mut stop_trim_flag = zero.clone();
         let mut result = vec![zero.clone(); string.bytes.len()];
 
         // Replace whitespace with \0 starting from the start
-        for i in 0..string.bytes.len() {
+        for (i, result_char) in result.iter_mut().enumerate().take(string.bytes.len()) {
             let is_not_zero = string.bytes[i].ne(&self.key, &zero);
             let is_not_whitespace = string.bytes[i]
                 .is_whitespace(&self.key, public_key, num_blocks)
@@ -269,7 +263,7 @@ impl MyServerKey {
                 &self.key,
                 &is_not_whitespace.bitand(&self.key, &is_not_zero),
             );
-            result[i] = stop_trim_flag.if_then_else(&self.key, &string.bytes[i], &zero)
+            *result_char = stop_trim_flag.if_then_else(&self.key, &string.bytes[i], &zero)
         }
 
         FheString::from_vec(
@@ -411,9 +405,10 @@ impl MyServerKey {
         for i in 0..string.bytes.len() - pattern.len() {
             let mut pattern_found_flag = one.clone();
 
-            for j in 0..pattern.len() {
+            // for (j, pattern_char) in pattern.iter().enumerate() {
+            for (j, pattern_char) in pattern.iter().enumerate() {
                 pattern_found_flag = pattern_found_flag
-                    .bitand(&self.key, &pattern[j].eq(&self.key, &string.bytes[i + j]));
+                    .bitand(&self.key, &pattern_char.eq(&self.key, &string.bytes[i + j]));
             }
 
             let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_key, num_blocks);
@@ -482,11 +477,11 @@ impl MyServerKey {
                 result[i + k] = pattern_found_flag.if_then_else(server_key, &to[k], &result[i + k]);
             }
         }
-        return FheString::from_vec(
+        FheString::from_vec(
             utils::bubble_zeroes_left(result, server_key, public_key, num_blocks),
             public_key,
             num_blocks,
-        );
+        )
     }
 
     // The "hard" case
@@ -550,7 +545,7 @@ impl MyServerKey {
                 );
             }
         }
-        return FheString::from_vec(result, public_key, num_blocks);
+        FheString::from_vec(result, public_key, num_blocks)
     }
 
     pub fn find(
@@ -634,7 +629,7 @@ impl MyServerKey {
         num_blocks: usize,
     ) -> FheAsciiChar {
         let self_lowercase = self.to_lower(string, public_key, num_blocks);
-        let other_lowercase = self.to_lower(&other, public_key, num_blocks);
+        let other_lowercase = self.to_lower(other, public_key, num_blocks);
 
         self.eq(&self_lowercase, &other_lowercase, public_key, num_blocks)
     }
@@ -656,8 +651,8 @@ impl MyServerKey {
                 pattern_found_flag.bitand(&self.key, &pattern[j].eq(&self.key, &result[j]));
         }
 
-        for j in 0..pattern.len() {
-            result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
+        for result_char in result.iter_mut().take(pattern.len()) {
+            *result_char = pattern_found_flag.if_then_else(&self.key, &zero, result_char);
         }
 
         let string = FheString::from_vec(
@@ -873,15 +868,16 @@ impl MyServerKey {
 
         for i in 0..(string.bytes.len() - pattern.len()) {
             // Copy ith character to the appropriate buffer
-            for j in 0..max_no_buffers {
+            for (j, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_key, num_blocks);
                 let copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
-                result[j][i] = copy_flag.if_then_else(&self.key, &string.bytes[i], &result[j][i]);
+                result_buffer[i] =
+                    copy_flag.if_then_else(&self.key, &string.bytes[i], &result_buffer[i]);
             }
 
             let mut pattern_found = one.clone();
-            for j in 0..pattern.len() {
-                let eql = string.bytes[i + j].eq(&self.key, &pattern[j]);
+            for (j, pattern_char) in pattern.iter().enumerate() {
+                let eql = string.bytes[i + j].eq(&self.key, pattern_char);
                 pattern_found = pattern_found.bitand(&self.key, &eql);
             }
 
@@ -889,7 +885,8 @@ impl MyServerKey {
             match &n {
                 None => {
                     // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
+                    // If its found we need to switch from copying to old buffer and start copying
+                    // to new one
                     current_copy_buffer = pattern_found.if_then_else(
                         &self.key,
                         &current_copy_buffer.add(&self.key, &one),
@@ -903,7 +900,8 @@ impl MyServerKey {
                     );
 
                     // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
+                    // If its found we need to switch from copying to old buffer and start copying
+                    // to new one
                     current_copy_buffer = (pattern_found.bitand(
                         &self.key,
                         &stop_counter_increment.flip(&self.key, public_key, num_blocks),
@@ -927,7 +925,7 @@ impl MyServerKey {
                     .collect();
                 let mut stop_replacing_pattern = zero.clone();
 
-                for i in 0..max_no_buffers {
+                for (i, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
                     let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_key, num_blocks);
                     stop_replacing_pattern = stop_replacing_pattern.bitor(
                         &self.key,
@@ -935,7 +933,7 @@ impl MyServerKey {
                     );
 
                     let current_string =
-                        FheString::from_vec(result[i].clone(), public_key, num_blocks);
+                        FheString::from_vec(result_buffer.clone(), public_key, num_blocks);
                     let current_string = FheString::from_vec(
                         utils::bubble_zeroes_left(
                             current_string.bytes,
@@ -947,11 +945,13 @@ impl MyServerKey {
                         num_blocks,
                     );
                     let replacement_string =
-                        self.replace(&&current_string, &pattern, &to, public_key, num_blocks);
+                        self.replace(&current_string, &pattern, &to, public_key, num_blocks);
 
                     // Don't remove pattern from (n-1)th buffer
-                    for j in 0..max_buffer_size {
-                        result[i][j] = stop_replacing_pattern.if_then_else(
+                    for (j, result_buffer_char) in
+                        result_buffer.iter_mut().enumerate().take(max_buffer_size)
+                    {
+                        *result_buffer_char = stop_replacing_pattern.if_then_else(
                             &self.key,
                             &current_string.bytes[j],
                             &replacement_string.bytes[j],
@@ -968,23 +968,24 @@ impl MyServerKey {
                         .map(|b| FheAsciiChar::encrypt_trivial(*b, public_key, num_blocks))
                         .collect();
 
-                    // Since the pattern is also copied at the end of each buffer go through them and delete it
-                    for i in 0..max_no_buffers {
+                    // Since the pattern is also copied at the end of each buffer go through them
+                    // and delete it
+                    for result_buffer in result.iter_mut().take(max_no_buffers) {
                         let current_string =
-                            FheString::from_vec(result[i].clone(), public_key, num_blocks);
+                            FheString::from_vec(result_buffer.clone(), public_key, num_blocks);
                         let replacement_string =
                             self.replace(&current_string, &pattern, &to, public_key, num_blocks);
-                        result[i] = replacement_string.bytes;
+                        *result_buffer = replacement_string.bytes;
                     }
                 } else {
-                    for i in 0..max_no_buffers {
+                    for result_buffer in result.iter_mut().take(max_no_buffers) {
                         let new_buf = utils::bubble_zeroes_left(
-                            result[i].clone(),
+                            result_buffer.clone(),
                             &self.key,
                             public_key,
                             num_blocks,
                         );
-                        result[i] = new_buf;
+                        *result_buffer = new_buf;
                     }
                 }
 
@@ -1033,13 +1034,13 @@ impl MyServerKey {
     pub fn split(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         self._split(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             false,
             false,
             None,
@@ -1065,13 +1066,13 @@ impl MyServerKey {
     pub fn split_inclusive(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         self._split(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             true,
             false,
             None,
@@ -1097,13 +1098,13 @@ impl MyServerKey {
     pub fn split_terminator(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         self._split(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             false,
             true,
             None,
@@ -1136,7 +1137,8 @@ impl MyServerKey {
             );
 
             // Here we know if the pattern is found for position i
-            // If its found we need to switch from copying to old buffer and start copying to new one
+            // If its found we need to switch from copying to old buffer and start copying
+            // to new one
             current_copy_buffer = should_increment_buffer.if_then_else(
                 &self.key,
                 &current_copy_buffer.add(&self.key, &one),
@@ -1144,7 +1146,7 @@ impl MyServerKey {
             );
 
             // Copy ith character to the appropriate buffer
-            for j in 0..max_no_buffers {
+            for (j, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_key, num_blocks);
                 let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
                 copy_flag = copy_flag.bitand(
@@ -1153,25 +1155,27 @@ impl MyServerKey {
                         .is_whitespace(&self.key, public_key, num_blocks)
                         .flip(&self.key, public_key, num_blocks),
                 ); // copy if its not whitespace
-                result[j][i] = copy_flag.if_then_else(&self.key, &string.bytes[i], &result[j][i]);
+                result_buffer[i] =
+                    copy_flag.if_then_else(&self.key, &string.bytes[i], &result_buffer[i]);
             }
 
             previous_was_whitespace = pattern_found;
         }
 
         // Replace whitespace with \0
-        for i in 0..max_no_buffers {
-            for j in 0..max_buffer_size {
+        for result_buffer in result.iter_mut().take(max_no_buffers) {
+            for result_buffer_char in result_buffer.iter_mut().take(max_buffer_size) {
                 let replace_with_zero =
-                    result[i][j].is_whitespace(&self.key, public_key, num_blocks);
-                result[i][j] = replace_with_zero.if_then_else(&self.key, &zero, &result[i][j]);
+                    result_buffer_char.is_whitespace(&self.key, public_key, num_blocks);
+                *result_buffer_char =
+                    replace_with_zero.if_then_else(&self.key, &zero, result_buffer_char);
             }
         }
 
-        for i in 0..max_no_buffers {
+        for result_buffer in result.iter_mut().take(max_no_buffers) {
             let new_buf =
-                utils::bubble_zeroes_left(result[i].clone(), &self.key, public_key, num_blocks);
-            result[i] = new_buf;
+                utils::bubble_zeroes_left(result_buffer.clone(), &self.key, public_key, num_blocks);
+            *result_buffer = new_buf;
         }
 
         FheSplit::new(result, public_key, num_blocks)
@@ -1180,14 +1184,14 @@ impl MyServerKey {
     pub fn splitn(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         n: FheAsciiChar,
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         self._split(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             false,
             false,
             Some(n),
@@ -1258,15 +1262,16 @@ impl MyServerKey {
 
         for i in (0..(string.bytes.len() - pattern.len())).rev() {
             // Copy ith character to the appropriate buffer
-            for j in 0..max_no_buffers {
+            for (j, result_item) in result.iter_mut().enumerate().take(max_no_buffers) {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_key, num_blocks);
                 let copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
-                result[j][i] = copy_flag.if_then_else(&self.key, &string.bytes[i], &result[j][i]);
+                result_item[i] =
+                    copy_flag.if_then_else(&self.key, &string.bytes[i], &result_item[i]);
             }
 
             let mut pattern_found = one.clone();
-            for j in 0..pattern.len() {
-                let eql = string.bytes[i + j].eq(&self.key, &pattern[j]);
+            for (j, pattern_char) in pattern.iter().enumerate() {
+                let eql = string.bytes[i + j].eq(&self.key, pattern_char);
                 pattern_found = pattern_found.bitand(&self.key, &eql);
             }
 
@@ -1274,7 +1279,8 @@ impl MyServerKey {
             match &n {
                 None => {
                     // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
+                    // If its found we need to switch from copying to old buffer and start copying
+                    // to new one
                     current_copy_buffer = pattern_found.if_then_else(
                         &self.key,
                         &current_copy_buffer.add(&self.key, &one),
@@ -1288,7 +1294,8 @@ impl MyServerKey {
                     );
 
                     // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
+                    // If its found we need to switch from copying to old buffer and start copying
+                    // to new one
                     current_copy_buffer = (pattern_found.bitand(
                         &self.key,
                         &stop_counter_increment.flip(&self.key, public_key, num_blocks),
@@ -1312,7 +1319,7 @@ impl MyServerKey {
                     .collect();
                 let mut stop_replacing_pattern = zero.clone();
 
-                for i in 0..max_no_buffers {
+                for (i, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
                     let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_key, num_blocks);
                     stop_replacing_pattern = stop_replacing_pattern.bitor(
                         &self.key,
@@ -1320,7 +1327,7 @@ impl MyServerKey {
                     );
 
                     let current_string =
-                        FheString::from_vec(result[i].clone(), public_key, num_blocks);
+                        FheString::from_vec(result_buffer.clone(), public_key, num_blocks);
                     let current_string = FheString::from_vec(
                         utils::bubble_zeroes_left(
                             current_string.bytes,
@@ -1335,8 +1342,10 @@ impl MyServerKey {
                         self.replace(&current_string, &pattern, &to, public_key, num_blocks);
 
                     // Don't remove pattern from (n-1)th buffer
-                    for j in 0..max_buffer_size {
-                        result[i][j] = stop_replacing_pattern.if_then_else(
+                    for (j, result_buffer_char) in
+                        result_buffer.iter_mut().enumerate().take(max_buffer_size)
+                    {
+                        *result_buffer_char = stop_replacing_pattern.if_then_else(
                             &self.key,
                             &current_string.bytes[j],
                             &replacement_string.bytes[j],
@@ -1353,23 +1362,24 @@ impl MyServerKey {
                         .map(|b| FheAsciiChar::encrypt_trivial(*b, public_key, num_blocks))
                         .collect();
 
-                    // Since the pattern is also copied at the end of each buffer go through them and delete it
-                    for i in 0..max_no_buffers {
+                    // Since the pattern is also copied at the end of each buffer go through them
+                    // and delete it
+                    for result_buffer in result.iter_mut().take(max_no_buffers) {
                         let current_string =
-                            FheString::from_vec(result[i].clone(), public_key, num_blocks);
+                            FheString::from_vec(result_buffer.clone(), public_key, num_blocks);
                         let replacement_string =
                             self.replace(&current_string, &pattern, &to, public_key, num_blocks);
-                        result[i] = replacement_string.bytes;
+                        *result_buffer = replacement_string.bytes;
                     }
                 } else {
-                    for i in 0..max_no_buffers {
+                    for result_buffer in result.iter_mut().take(max_no_buffers) {
                         let new_buf = utils::bubble_zeroes_left(
-                            result[i].clone(),
+                            result_buffer.clone(),
                             &self.key,
                             public_key,
                             num_blocks,
                         );
-                        result[i] = new_buf;
+                        *result_buffer = new_buf;
                     }
                 }
 
@@ -1417,13 +1427,13 @@ impl MyServerKey {
     pub fn rsplit(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         self._rsplit(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             false,
             false,
             None,
@@ -1449,14 +1459,14 @@ impl MyServerKey {
     pub fn rsplitn(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         n: FheAsciiChar,
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         self._rsplit(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             false,
             false,
             Some(n),
@@ -1492,14 +1502,14 @@ impl MyServerKey {
     pub fn rsplit_once(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         let n = FheAsciiChar::encrypt_trivial(2u8, public_key, num_blocks);
         self._rsplit(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             false,
             false,
             Some(n),
@@ -1534,13 +1544,13 @@ impl MyServerKey {
     pub fn rsplit_terminator(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        pattern: &[FheAsciiChar],
         public_key: &tfhe::integer::PublicKey,
         num_blocks: usize,
     ) -> FheSplit {
         self._rsplit(
             string,
-            pattern.clone(),
+            pattern.to_owned(),
             false,
             true,
             None,

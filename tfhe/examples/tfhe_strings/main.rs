@@ -5,9 +5,7 @@ use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::fhestrip::FheStrip;
 use crate::server_key::MyServerKey;
-
-use tfhe::integer::gen_keys_radix;
-use tfhe::integer::PublicKey;
+use tfhe::integer::{gen_keys_radix, PublicKey};
 
 const STRING_PADDING: usize = 3;
 const MAX_REPETITIONS: usize = 4;
@@ -32,27 +30,24 @@ fn main() {
     let my_server_key = MyServerKey::new(server_key);
 
     let my_string_plain = "HELLO test test HELLO";
-    let pattern_plain = "WORLD";
+    let pattern_plain = "HELLO";
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
-    let pattern = my_client_key.encrypt(pattern_plain, 0, &public_key, num_blocks);
-    let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_key, num_blocks);
+    let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern, &public_key, num_blocks);
 
-    let (_, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+    let (verif_string, _) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
 
-    // This is None but in our case the string is not modified
-    let expected = my_string_plain.strip_suffix(pattern_plain);
+    let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
 
-    let expected_pattern_found = if let Some(_) = expected { true } else { false };
-
-    assert_eq!(pattern_found, expected_pattern_found as u8);
+    assert_eq!(verif_string, expected);
 }
 
 #[cfg(test)]
 mod test {
-    use crate::ciphertext::fhestrip::FheStrip;
-    use crate::{FheAsciiChar, FheSplit, FheString, STRING_PADDING};
-    use crate::{MyClientKey, MyServerKey};
+    use crate::{
+        FheAsciiChar, FheSplit, FheString, FheStrip, MyClientKey, MyServerKey, STRING_PADDING,
+    };
     use tfhe::integer::gen_keys_radix;
     use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
     use tfhe::{generate_keys, set_server_key, PublicKey};
@@ -445,7 +440,8 @@ mod test {
         let res = my_server_key.rfind(&heistack, &needle, &public_key, num_blocks);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
-        // The original algoritm returns None but since we don't have this luxury we will use a placeholder value
+        // The original algoritm returns None but since we don't have this luxury we will use a
+        // placeholder value
         let _ = heistack_plain.rfind(needle_plain);
 
         assert_eq!(dec, 255u8);
@@ -559,8 +555,9 @@ mod test {
 
         let my_string =
             my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_key, num_blocks);
-        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
-        let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_key, num_blocks);
+        let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING, &public_key, num_blocks);
+        let fhe_strip =
+            my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_key, num_blocks);
 
         let (verif_string, _) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
 
