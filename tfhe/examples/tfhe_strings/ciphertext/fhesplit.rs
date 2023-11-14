@@ -1,19 +1,15 @@
 use crate::client_key::MyClientKey;
-use crate::{FheAsciiChar, FheString};
+use crate::{FheAsciiChar, FheString, PublicParameters};
 
 pub struct FheSplit {
     pub buffers: Vec<FheString>,
 }
 
 impl FheSplit {
-    pub fn new(
-        buffers: Vec<Vec<FheAsciiChar>>,
-        public_key: &tfhe::integer::PublicKey,
-        num_blocks: usize,
-    ) -> Self {
+    pub fn new(buffers: Vec<Vec<FheAsciiChar>>, public_parameters: &PublicParameters) -> Self {
         let mut fhe_string_buffers = Vec::new();
         for buffer in buffers {
-            fhe_string_buffers.push(FheString::from_vec(buffer, public_key, num_blocks));
+            fhe_string_buffers.push(FheString::from_vec(buffer, public_parameters));
         }
 
         FheSplit {

@@ -1,5 +1,6 @@
 use crate::ciphertext::fheasciichar::FheAsciiChar;
 use crate::ciphertext::fhestring::FheString;
+use crate::PublicParameters;
 use serde::{Deserialize, Serialize};
 use tfhe::integer::RadixClientKey;
 
@@ -17,8 +18,7 @@ impl MyClientKey {
         &self,
         string: &str,
         padding: usize,
-        public_key: &tfhe::integer::PublicKey,
-        num_blocks: usize,
+        public_parameters: &PublicParameters,
     ) -> FheString {
         assert!(
             string.chars().all(|char| char.is_ascii() && char != '\0'),
@@ -33,7 +33,7 @@ impl MyClientKey {
             .collect::<Vec<FheAsciiChar>>();
         let cst = FheAsciiChar::encrypt(32u8, &self.client_key);
 
-        FheString::from_vec(fhe_bytes, public_key, num_blocks)
+        FheString::from_vec(fhe_bytes, public_parameters)
     }
 
     pub fn encrypt_no_padding(&self, string: &str) -> Vec<FheAsciiChar> {
