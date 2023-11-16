@@ -1,8 +1,7 @@
+use crate::ciphertext::public_parameters::PublicParameters;
 use tfhe::integer::ciphertext::BaseRadixCiphertext;
 use tfhe::integer::RadixClientKey;
 use tfhe::shortint::Ciphertext;
-
-use crate::PublicParameters;
 
 #[derive(Clone)]
 pub struct FheAsciiChar {

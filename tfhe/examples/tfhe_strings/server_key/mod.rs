@@ -2,8 +2,9 @@ use crate::ciphertext::fheasciichar::{self, FheAsciiChar};
 use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestring::{Comparison, FheString};
 use crate::ciphertext::fhestrip::FheStrip;
+use crate::ciphertext::public_parameters::PublicParameters;
 use crate::utils::{self, abs_difference};
-use crate::{PublicParameters, MAX_FIND_LENGTH, MAX_REPETITIONS};
+use crate::{MAX_FIND_LENGTH, MAX_REPETITIONS};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -1,9 +1,9 @@
 use ciphertext::fheasciichar::FheAsciiChar;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
-use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::fhestrip::FheStrip;
+use crate::ciphertext::{fhesplit::FheSplit, public_parameters::PublicParameters};
 use crate::server_key::MyServerKey;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
@@ -17,20 +17,6 @@ mod server_key;
 mod utils;
 
 use client_key::MyClientKey;
-
-pub struct PublicParameters {
-    pub public_key: PublicKey,
-    pub num_blocks: usize,
-}
-
-impl PublicParameters {
-    pub fn new(public_key: PublicKey, num_blocks: usize) -> Self {
-        PublicParameters {
-            public_key,
-            num_blocks,
-        }
-    }
-}
 
 fn main() {
     // We generate a set of client/server keys, using the default parameters:

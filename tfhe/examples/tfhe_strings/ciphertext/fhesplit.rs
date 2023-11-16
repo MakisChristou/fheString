@@ -1,5 +1,6 @@
+use super::public_parameters::PublicParameters;
 use crate::client_key::MyClientKey;
-use crate::{FheAsciiChar, FheString, PublicParameters};
+use crate::{FheAsciiChar, FheString};
 
 pub struct FheSplit {
     pub buffers: Vec<FheString>,

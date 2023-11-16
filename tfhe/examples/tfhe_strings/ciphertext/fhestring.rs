@@ -1,6 +1,7 @@
 use tfhe::shortint::PublicKey;
 
-use crate::{FheAsciiChar, PublicParameters};
+use super::public_parameters::PublicParameters;
+use crate::FheAsciiChar;
 
 pub struct FheString {
     pub bytes: Vec<FheAsciiChar>,
