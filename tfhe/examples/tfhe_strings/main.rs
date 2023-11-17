@@ -5,6 +5,7 @@ use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::fhestrip::FheStrip;
 use crate::ciphertext::{fhesplit::FheSplit, public_parameters::PublicParameters};
 use crate::server_key::MyServerKey;
+use clap::{Arg, Command, Parser};
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
 const STRING_PADDING: usize = 3;
@@ -18,7 +19,26 @@ mod utils;
 
 use client_key::MyClientKey;
 
+/// A FHE string implementation using tfhe-rs
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// The string to do the processing on
+    #[arg(short, long)]
+    string: String,
+
+    /// The pattern for the algoritmhs that need it
+    #[arg(short, long)]
+    pattern: String,
+
+    /// The number of times to make an operation for the algoritmhs that need it
+    #[arg(short, long)]
+    n: usize,
+}
+
 fn main() {
+    let args = Args::parse();
+
     // We generate a set of client/server keys, using the default parameters:
     let num_blocks = 4;
     let (client_key, server_key) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
@@ -30,8 +50,11 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let my_string_plain = "HELLO test test HELLO";
-    let pattern_plain = "HELLO";
+    // let my_string_plain = "HELLO test test HELLO";
+    // let pattern_plain = "HELLO";
+
+    let my_string_plain = &args.string;
+    let pattern_plain = &args.pattern;
 
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
