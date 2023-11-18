@@ -1,11 +1,12 @@
 use ciphertext::fheasciichar::FheAsciiChar;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
+use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::fhestrip::FheStrip;
-use crate::ciphertext::{fhesplit::FheSplit, public_parameters::PublicParameters};
+use crate::ciphertext::public_parameters::PublicParameters;
 use crate::server_key::MyServerKey;
-use clap::{Arg, Command, Parser};
+use clap::Parser;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
 const STRING_PADDING: usize = 3;

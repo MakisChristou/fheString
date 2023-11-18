@@ -1,5 +1,6 @@
+use crate::ciphertext::fheasciichar::FheAsciiChar;
 use crate::ciphertext::fhestring::FheString;
-use crate::ciphertext::{fheasciichar::FheAsciiChar, public_parameters::PublicParameters};
+use crate::ciphertext::public_parameters::PublicParameters;
 use serde::{Deserialize, Serialize};
 use tfhe::integer::RadixClientKey;
 
