@@ -38,33 +38,30 @@ struct Args {
 }
 
 fn main() {
+    // Argument parsing
     let args = Args::parse();
+    let my_string_plain = &args.string;
+    let pattern_plain = &args.pattern;
+    let n_plain = args.n;
 
-    // We generate a set of client/server keys, using the default parameters:
+    // Generate keys based on the default parameters
     let num_blocks = 4;
     let (client_key, server_key) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
-
-    //We generate the public key from the secret client key:
     let public_key = PublicKey::new(&client_key);
     let public_parameters = PublicParameters::new(public_key, num_blocks);
 
+    // Construct my keys from tfhe-rs keys
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    // let my_string_plain = "HELLO test test HELLO";
-    // let pattern_plain = "HELLO";
-
-    let my_string_plain = &args.string;
-    let pattern_plain = &args.pattern;
-
     let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    let n = my_client_key.encrypt_char(n_plain as u8);
+
+    // This should be in a a for loop
     let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern, &public_parameters);
-
     let (verif_string, _) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
-
     let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
-
     assert_eq!(verif_string, expected);
 }
 
