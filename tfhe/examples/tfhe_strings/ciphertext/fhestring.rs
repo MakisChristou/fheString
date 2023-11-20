@@ -3,6 +3,7 @@ use tfhe::shortint::PublicKey;
 use super::public_parameters::PublicParameters;
 use crate::FheAsciiChar;
 
+#[derive(Clone)]
 pub struct FheString {
     pub bytes: Vec<FheAsciiChar>,
     pub cst: FheAsciiChar,

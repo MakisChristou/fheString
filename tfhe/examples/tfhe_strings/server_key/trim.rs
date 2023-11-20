@@ -8,7 +8,6 @@ use super::MyServerKey;
 impl MyServerKey {
     pub fn trim_end(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
-        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
 
         let mut stop_trim_flag = zero.clone();
         let mut result = vec![zero.clone(); string.bytes.len()];
