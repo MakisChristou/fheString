@@ -25,7 +25,7 @@ impl MyServerKey {
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
 
-        for i in (0..(string.bytes.len() - pattern.len())).rev() {
+        for i in (0..(string.bytes.len())).rev() {
             // Copy ith character to the appropriate buffer
             for (j, result_item) in result.iter_mut().enumerate().take(max_no_buffers) {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters);
@@ -35,9 +35,13 @@ impl MyServerKey {
             }
 
             let mut pattern_found = one.clone();
-            for (j, pattern_char) in pattern.iter().enumerate() {
-                let eql = string.bytes[i + j].eq(&self.key, pattern_char);
-                pattern_found = pattern_found.bitand(&self.key, &eql);
+            if i + pattern.len() >= string.bytes.len() {
+                pattern_found = zero.clone();
+            } else {
+                for (j, pattern_char) in pattern.iter().enumerate() {
+                    let eql = string.bytes[i + j].eq(&self.key, pattern_char);
+                    pattern_found = pattern_found.bitand(&self.key, &eql);
+                }
             }
 
             // If its splitn stop after n splits
@@ -322,7 +326,7 @@ impl MyServerKey {
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
 
-        for i in 0..(string.bytes.len() - pattern.len()) {
+        for i in 0..(string.bytes.len()) {
             // Copy ith character to the appropriate buffer
             for (j, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters);
@@ -332,9 +336,14 @@ impl MyServerKey {
             }
 
             let mut pattern_found = one.clone();
-            for (j, pattern_char) in pattern.iter().enumerate() {
-                let eql = string.bytes[i + j].eq(&self.key, pattern_char);
-                pattern_found = pattern_found.bitand(&self.key, &eql);
+            if (i as i64) < (pattern.len() as i64) - 1 {
+                pattern_found = zero.clone();
+            } else {
+                for (j, pattern_char) in pattern.iter().enumerate() {
+                    let string_index = i - pattern.len() + 1 + j;
+                    let eql = string.bytes[string_index].eq(&self.key, pattern_char);
+                    pattern_found = pattern_found.bitand(&self.key, &eql);
+                }
             }
 
             // If its splitn stop after n splits
