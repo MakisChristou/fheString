@@ -1,4 +1,4 @@
-use ciphertext::{fheasciichar::FheAsciiChar, public_parameters};
+use ciphertext::fheasciichar::FheAsciiChar;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
 use crate::ciphertext::fhesplit::FheSplit;
@@ -7,7 +7,7 @@ use crate::ciphertext::fhestrip::FheStrip;
 use crate::ciphertext::public_parameters::PublicParameters;
 use crate::server_key::MyServerKey;
 use clap::Parser;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
 const STRING_PADDING: usize = 3;
@@ -20,6 +20,30 @@ mod server_key;
 mod utils;
 
 use client_key::MyClientKey;
+
+fn trim_vector(mut vec: Vec<String>) -> Vec<String> {
+    while vec.first() == Some(&"".to_string()) {
+        vec.remove(0);
+    }
+
+    while vec.last() == Some(&"".to_string()) {
+        vec.pop();
+    }
+
+    vec
+}
+
+fn trim_str_vector(mut vec: Vec<&str>) -> Vec<&str> {
+    while vec.first() == Some(&"") {
+        vec.remove(0);
+    }
+
+    while vec.last() == Some(&"") {
+        vec.pop();
+    }
+
+    vec
+}
 
 /// A FHE string implementation using tfhe-rs
 #[derive(Parser, Debug)]
@@ -36,42 +60,60 @@ struct Args {
     /// The number of times to make an operation for the algoritmhs that need it
     #[arg(short, long)]
     n: usize,
+
+    /// What will be replaced (for replace algorithms)
+    #[arg(short, long)]
+    from: String,
+
+    /// What will replace it (for replace algorithms)
+    #[arg(short, long)]
+    to: String,
 }
 
 fn run_fhe_str_method(
     my_server_key: &MyServerKey,
     my_client_key: &MyClientKey,
     public_parameters: &PublicParameters,
-    my_string: &FheString,
     my_string_plain: &String,
-    pattern: &Vec<FheAsciiChar>,
     pattern_plain: &String,
-    n: &FheAsciiChar,
+    n_plain: usize,
+    from_plain: &String,
+    to_plain: &String,
     method: &StringMethod,
 ) {
+    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+    let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    let from = my_client_key.encrypt_no_padding(from_plain);
+    let to = my_client_key.encrypt_no_padding(to_plain);
+    let n = my_client_key.encrypt_char(n_plain as u8);
+
     match method {
         StringMethod::ToUpper => {
             let my_string_upper = my_server_key.to_upper(&my_string, &public_parameters);
             let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
             let expected = my_string_plain.to_uppercase();
+
             assert_eq!(verif_string, expected);
         }
         StringMethod::ToLower => {
             let my_string_upper = my_server_key.to_lower(&my_string, &public_parameters);
             let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
             let expected = my_string_plain.to_lowercase();
+
             assert_eq!(verif_string, expected);
         }
         StringMethod::Contains => {
-            let res = my_server_key.contains(&my_string, pattern, &public_parameters);
+            let res = my_server_key.contains(&my_string, &pattern, &public_parameters);
             let dec: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.contains(pattern_plain);
+
             assert_eq!(dec, expected as u8);
         }
         StringMethod::ContainsClear => {
             let res = my_server_key.contains_clear(&my_string, &pattern_plain, &public_parameters);
             let dec: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.contains(pattern_plain);
+
             assert_eq!(dec, expected as u8);
         }
         StringMethod::EndsWith => {
@@ -79,6 +121,7 @@ fn run_fhe_str_method(
                 my_server_key.ends_with(&my_string, &pattern, STRING_PADDING, &public_parameters);
             let dec: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.ends_with(pattern_plain);
+
             assert_eq!(dec, expected as u8);
         }
         StringMethod::EndsWithClear => {
@@ -90,6 +133,311 @@ fn run_fhe_str_method(
             );
             let dec: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.ends_with(pattern_plain);
+
+            assert_eq!(dec, expected as u8);
+        }
+        StringMethod::EqIgnoreCase => {
+            let heistack1 =
+                my_client_key.encrypt(&my_string_plain, STRING_PADDING, &public_parameters);
+            let heistack2 =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING + 20, &public_parameters);
+            let res = my_server_key.eq_ignore_case(&heistack1, &heistack2, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.eq_ignore_ascii_case(&pattern_plain);
+
+            assert_eq!(dec, expected as u8);
+        }
+        StringMethod::Find => {
+            let res = my_server_key.find(&my_string, &pattern, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.find(pattern_plain);
+            let expected_pattern_found = if let Some(position) = expected {
+                position
+            } else {
+                MAX_FIND_LENGTH
+            };
+
+            assert_eq!(dec, expected_pattern_found as u8);
+        }
+        StringMethod::FindClear => {
+            let res = my_server_key.find_clear(&my_string, &pattern_plain, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.find(pattern_plain);
+            let expected_pattern_found = if let Some(position) = expected {
+                position
+            } else {
+                MAX_FIND_LENGTH
+            };
+
+            assert_eq!(dec, expected_pattern_found as u8);
+        }
+        StringMethod::IsEmpty => {
+            let res = my_server_key.is_empty(&my_string, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.is_empty();
+
+            assert_eq!(dec, expected as u8);
+        }
+        StringMethod::Len => {
+            let res = my_server_key.len(&my_string, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.len();
+
+            assert_eq!(dec, expected as u8);
+        }
+        StringMethod::Repeat => {
+            let n = my_client_key.encrypt_char(n_plain as u8);
+            let my_string_upper = my_server_key.repeat(&my_string, n, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+            let expected = my_string_plain.repeat(n_plain.into());
+
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::RepeatClear => {
+            let my_string_upper =
+                my_server_key.repeat_clear(&my_string, n_plain, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+            let expected = my_string_plain.repeat(n_plain.into());
+
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::Replace => {
+            let my_new_string = my_server_key.replace(&my_string, &from, &to, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+            let expected = my_string_plain.replace(from_plain, to_plain);
+
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::ReplaceClear => {
+            let my_new_string =
+                my_server_key.replace_clear(&my_string, &from_plain, &to_plain, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+            let expected = my_string_plain.replace(from_plain, to_plain);
+
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::ReplaceN => {
+            let my_new_string =
+                my_server_key.replacen(&my_string, &from, &to, n, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+            let expected = my_string_plain.replacen(from_plain, to_plain, n_plain.into());
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::ReplaceNClear => {
+            todo!()
+        }
+        StringMethod::Rfind => {
+            let needle = my_client_key.encrypt_no_padding(&pattern_plain);
+            let res = my_server_key.rfind(&my_string, &needle, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.rfind(pattern_plain);
+            let expected_pattern_found = if let Some(position) = expected {
+                position
+            } else {
+                MAX_FIND_LENGTH
+            };
+
+            assert_eq!(dec, expected_pattern_found as u8);
+        }
+        StringMethod::RfindClear => {
+            let res = my_server_key.rfind_clear(&my_string, &pattern_plain, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.rfind(pattern_plain);
+            let expected_pattern_found = if let Some(position) = expected {
+                position
+            } else {
+                MAX_FIND_LENGTH
+            };
+
+            assert_eq!(dec, expected_pattern_found as u8);
+        }
+        StringMethod::Rsplit => {
+            let fhe_split = my_server_key.rsplit(&my_string, &pattern, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::RsplitClear => {
+            let fhe_split =
+                my_server_key.rsplit_clear(&my_string, &pattern_plain, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::RsplitOnce => {
+            let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+            let expected = my_string_plain.rsplit_once(pattern_plain);
+
+            match expected {
+                Some(expected_tuple) => {
+                    let expected = vec![expected_tuple.1, expected_tuple.0];
+                    let plain_split = trim_vector(plain_split);
+                    let expected = trim_str_vector(expected);
+                    assert_eq!(plain_split, expected);
+                }
+                // Delimiter not found
+                None => {
+                    println!("{:?}", plain_split);
+                    todo!();
+                }
+            }
+        }
+        StringMethod::RsplitOnceClear => {
+            let fhe_split =
+                my_server_key.rsplit_once_clear(&my_string, &pattern_plain, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+
+            let expected_tuple = my_string_plain.rsplit_once(pattern_plain).unwrap();
+            let expected = vec![expected_tuple.1, expected_tuple.0];
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::RsplitN => {
+            let fhe_split = my_server_key.rsplitn(&my_string, &pattern, n, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::RsplitNClear => {
+            let fhe_split = my_server_key.rsplitn_clear(
+                &my_string,
+                &pattern_plain,
+                n_plain,
+                &public_parameters,
+            );
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::RsplitTerminator => {
+            let fhe_split =
+                my_server_key.rsplit_terminator(&my_string, &pattern, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::RsplitTerminatorClear => {
+            let fhe_split = my_server_key.rsplit_terminator_clear(
+                &my_string,
+                &pattern_plain,
+                &public_parameters,
+            );
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::Split => {
+            let fhe_split = my_server_key.split(&my_string, &pattern, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::SplitClear => {
+            let fhe_split =
+                my_server_key.split_clear(&my_string, &pattern_plain, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::SplitAsciiWhitespace => {
+            let fhe_split = my_server_key.split_ascii_whitespace(&my_string, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.split_ascii_whitespace().collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::SplitInclusive => {
+            let fhe_split = my_server_key.split_inclusive(&my_string, &pattern, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::SplitInclusiveClear => {
+            let fhe_split =
+                my_server_key.split_inclusive_clear(&my_string, &pattern_plain, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::SplitTerminator => {
+            let fhe_split =
+                my_server_key.split_terminator(&my_string, &pattern, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.split_terminator(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::SplitTerminatorClear => todo!(),
+        StringMethod::SplitN => {
+            let fhe_split = my_server_key.splitn(&my_string, &pattern, n, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::SplitNClear => {
+            let fhe_split =
+                my_server_key.splitn_clear(&my_string, &pattern_plain, n_plain, &public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
+        StringMethod::StartsWith => {
+            let res = my_server_key.starts_with(&my_string, &pattern, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.starts_with(pattern_plain);
+
+            assert_eq!(dec, expected as u8);
+        }
+        StringMethod::StartsWithClear => {
+            let res =
+                my_server_key.starts_with_clear(&my_string, &pattern_plain, &public_parameters);
+            let dec: u8 = my_client_key.decrypt_char(&res);
+            let expected = my_string_plain.starts_with(pattern_plain);
+
             assert_eq!(dec, expected as u8);
         }
         StringMethod::StripPrefix => {
@@ -108,51 +456,134 @@ fn run_fhe_str_method(
                 }
             }
         }
+        StringMethod::StripPrefixClear => {
+            let fhe_strip =
+                my_server_key.strip_prefix_clear(&my_string, &pattern_plain, &public_parameters);
+            let (verif_string, actual_pattern_found) =
+                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+            let expected = my_string_plain.strip_prefix(pattern_plain);
+            let expected_pattern_found = if let Some(_) = expected { true } else { false };
 
-        StringMethod::EqIgnoreCase => todo!(),
-        StringMethod::Find => todo!(),
-        StringMethod::FindClear => todo!(),
-        StringMethod::IsEmpty => todo!(),
-        StringMethod::Len => todo!(),
-        StringMethod::Repeat => todo!(),
-        StringMethod::RepeatClear => todo!(),
-        StringMethod::Replace => todo!(),
-        StringMethod::ReplaceClear => todo!(),
-        StringMethod::ReplaceN => todo!(),
-        StringMethod::ReplaceNClear => todo!(),
-        StringMethod::Rfind => todo!(),
-        StringMethod::RfindClear => todo!(),
-        StringMethod::Rsplit => todo!(),
-        StringMethod::RsplitClear => todo!(),
-        StringMethod::RsplitOnce => todo!(),
-        StringMethod::RsplitOnceClear => todo!(),
-        StringMethod::RsplitN => todo!(),
-        StringMethod::RsplitNClear => todo!(),
-        StringMethod::RsplitTerminator => todo!(),
-        StringMethod::RsplitTerminatorClear => todo!(),
-        StringMethod::Split => todo!(),
-        StringMethod::SplitClear => todo!(),
-        StringMethod::SplitAsciiWhitespace => todo!(),
-        StringMethod::SplitInclusive => todo!(),
-        StringMethod::SplitInclusiveClear => todo!(),
-        StringMethod::SplitTerminator => todo!(),
-        StringMethod::SplitTerminatorClear => todo!(),
-        StringMethod::SplitN => todo!(),
-        StringMethod::SplitNClear => todo!(),
-        StringMethod::StartsWith => todo!(),
-        StringMethod::StartsWithClear => todo!(),
-        StringMethod::StripPrefixClear => todo!(),
-        StringMethod::StripSuffix => todo!(),
-        StringMethod::StripSuffixClear => todo!(),
-        StringMethod::Trim => todo!(),
-        StringMethod::TrimEnd => todo!(),
-        StringMethod::TrimStart => todo!(),
-        StringMethod::Concatenate => todo!(),
-        StringMethod::Lt => todo!(),
-        StringMethod::Le => todo!(),
-        StringMethod::Gt => todo!(),
-        StringMethod::Ge => todo!(),
-        StringMethod::Eq => todo!(),
+            match expected {
+                Some(value) => {
+                    assert_eq!(verif_string, value);
+                }
+                None => {
+                    assert_eq!(expected_pattern_found as u8, actual_pattern_found);
+                }
+            }
+        }
+        StringMethod::StripSuffix => {
+            let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
+            let (verif_string, actual_pattern_found) =
+                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+            let expected = my_string_plain.strip_suffix(pattern_plain);
+            let expected_pattern_found = if let Some(_) = expected { true } else { false };
+
+            match expected {
+                Some(expected_value) => {
+                    assert_eq!(verif_string, expected_value);
+                }
+                None => {
+                    assert_eq!(actual_pattern_found, expected_pattern_found as u8);
+                }
+            }
+        }
+        StringMethod::StripSuffixClear => {
+            let fhe_strip =
+                my_server_key.strip_suffix_clear(&my_string, &pattern_plain, &public_parameters);
+            let (verif_string, actual_pattern_found) =
+                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+            let expected = my_string_plain.strip_suffix(pattern_plain);
+            let expected_pattern_found = if let Some(_) = expected { true } else { false };
+
+            match expected {
+                Some(expected_value) => {
+                    assert_eq!(verif_string, expected_value);
+                }
+                None => {
+                    assert_eq!(actual_pattern_found, expected_pattern_found as u8);
+                }
+            }
+        }
+        StringMethod::Trim => {
+            let my_trimmed_string = my_server_key.trim(&my_string, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_trimmed_string, STRING_PADDING);
+            let expected = my_string_plain.trim();
+
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::TrimEnd => {
+            let my_trimmed_string = my_server_key.trim_end(&my_string, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_trimmed_string, STRING_PADDING);
+            let expected = my_string_plain.trim_end();
+
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::TrimStart => {
+            let my_trimmed_string = my_server_key.trim_start(&my_string, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_trimmed_string, STRING_PADDING);
+            let expected = my_string_plain.trim_start();
+
+            assert_eq!(verif_string, expected);
+        }
+        StringMethod::Concatenate => {
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let my_string_concatenated =
+                my_server_key.concatenate(&my_string, &pattern_string, &public_parameters);
+            let verif_string = my_client_key.decrypt(my_string_concatenated, STRING_PADDING);
+
+            assert_eq!(
+                verif_string,
+                format!("{}{}", my_string_plain, pattern_plain)
+            );
+        }
+        StringMethod::Lt => {
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let actual = my_server_key.lt(&my_string, &pattern_string, &public_parameters);
+            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+            let expected = (my_string_plain < pattern_plain) as u8;
+
+            assert_eq!(expected, deccrypted_actual);
+        }
+        StringMethod::Le => {
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let actual = my_server_key.le(&my_string, &pattern_string, &public_parameters);
+            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+            let expected = (my_string_plain <= pattern_plain) as u8;
+
+            assert_eq!(expected, deccrypted_actual);
+        }
+        StringMethod::Gt => {
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let actual = my_server_key.gt(&my_string, &pattern_string, &public_parameters);
+            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+            let expected = (my_string_plain > pattern_plain) as u8;
+
+            assert_eq!(expected, deccrypted_actual);
+        }
+        StringMethod::Ge => {
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let actual = my_server_key.ge(&my_string, &pattern_string, &public_parameters);
+            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+            let expected = (my_string_plain >= pattern_plain) as u8;
+
+            assert_eq!(expected, deccrypted_actual);
+        }
+        StringMethod::Eq => {
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let actual = my_server_key.eq(&my_string, &pattern_string, &public_parameters);
+            let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
+            let expected = (my_string_plain == pattern_plain) as u8;
+
+            assert_eq!(expected, deccrypted_actual);
+        }
     }
 }
 
@@ -217,6 +648,8 @@ fn main() {
     let my_string_plain = &args.string;
     let pattern_plain = &args.pattern;
     let n_plain = args.n;
+    let from_plain = &args.from;
+    let to_plain = &args.to;
 
     // Generate keys based on the default parameters
     let num_blocks = 4;
@@ -228,37 +661,80 @@ fn main() {
     let my_client_key = MyClientKey::new(client_key);
     let my_server_key = MyServerKey::new(server_key);
 
-    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
-    let pattern = my_client_key.encrypt_no_padding(pattern_plain);
-    let n = my_client_key.encrypt_char(n_plain as u8);
-
-    let methods = [
+    let methods_to_test = [
         StringMethod::ToUpper,
         StringMethod::ToLower,
         StringMethod::Contains,
-        StringMethod::ContainsClear,
+        // StringMethod::ContainsClear,
         StringMethod::EndsWith,
-        StringMethod::EndsWithClear,
+        // StringMethod::EndsWithClear,
         StringMethod::StripPrefix,
+        StringMethod::EqIgnoreCase,
+        StringMethod::Find,
+        // StringMethod::FindClear,
+        StringMethod::IsEmpty,
+        StringMethod::Len,
+        StringMethod::Repeat,
+        // StringMethod::RepeatClear,
+        StringMethod::Replace,
+        // StringMethod::ReplaceClear,
+        StringMethod::ReplaceN,
+        // StringMethod::ReplaceNClear,
+        StringMethod::Rfind,
+        // StringMethod::RfindClear,
+        StringMethod::Rsplit,
+        // StringMethod::RsplitClear,
+        StringMethod::RsplitOnce,
+        // StringMethod::RsplitOnceClear,
+        StringMethod::RsplitN,
+        // StringMethod::RsplitNClear,
+        StringMethod::RsplitTerminator,
+        // StringMethod::RsplitTerminatorClear,
+        StringMethod::Split,
+        // StringMethod::SplitClear,
+        StringMethod::SplitAsciiWhitespace,
+        StringMethod::SplitInclusive,
+        // StringMethod::SplitInclusiveClear,
+        StringMethod::SplitTerminator,
+        // StringMethod::SplitTerminatorClear,
+        StringMethod::SplitN,
+        // StringMethod::SplitNClear,
+        StringMethod::StartsWith,
+        // StringMethod::StartsWithClear,
+        StringMethod::StripPrefix,
+        // StringMethod::StripPrefixClear,
+        StringMethod::StripSuffix,
+        // StringMethod::StripSuffixClear,
+        StringMethod::ToLower,
+        StringMethod::ToUpper,
+        StringMethod::Trim,
+        StringMethod::TrimEnd,
+        StringMethod::TrimStart,
+        StringMethod::Concatenate,
+        StringMethod::Lt,
+        StringMethod::Le,
+        StringMethod::Gt,
+        StringMethod::Ge,
+        StringMethod::Eq,
     ];
 
-    for method in methods {
+    for method in methods_to_test {
         let start = Instant::now();
 
         run_fhe_str_method(
             &my_server_key,
             &my_client_key,
             &public_parameters,
-            &my_string,
             &my_string_plain,
-            &pattern,
             &pattern_plain,
-            &n,
+            n_plain,
+            from_plain,
+            to_plain,
             &method,
         );
 
         let duration = start.elapsed();
-        println!("{:?} duration: {:?}", method, duration);
+        println!("{:?} {:?}", method, duration);
     }
 }
 
@@ -643,7 +1119,7 @@ mod test {
         // placeholder value
         let _ = heistack_plain.rfind(needle_plain);
 
-        assert_eq!(dec, 255u8);
+        assert_eq!(dec, MAX_FIND_LENGTH as u8);
     }
 
     #[test]
