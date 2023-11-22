@@ -24,6 +24,7 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
+        let mut global_pattern_found = one.clone();
 
         for i in (0..(string.bytes.len())).rev() {
             // Copy ith character to the appropriate buffer
@@ -43,6 +44,8 @@ impl MyServerKey {
                     pattern_found = pattern_found.bitand(&self.key, &eql);
                 }
             }
+
+            global_pattern_found = global_pattern_found.bitand(&self.key, &pattern_found);
 
             // If its splitn stop after n splits
             match &n {
@@ -184,7 +187,7 @@ impl MyServerKey {
             }
         }
 
-        FheSplit::new(result, public_parameters)
+        FheSplit::new(result, global_pattern_found, public_parameters)
     }
 
     pub fn rsplit(
@@ -325,6 +328,7 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
+        let mut global_pattern_found = one.clone();
 
         for i in 0..(string.bytes.len()) {
             // Copy ith character to the appropriate buffer
@@ -345,6 +349,8 @@ impl MyServerKey {
                     pattern_found = pattern_found.bitand(&self.key, &eql);
                 }
             }
+
+            global_pattern_found = global_pattern_found.bitand(&self.key, &pattern_found);
 
             // If its splitn stop after n splits
             match &n {
@@ -487,7 +493,7 @@ impl MyServerKey {
             }
         }
 
-        FheSplit::new(result, public_parameters)
+        FheSplit::new(result, global_pattern_found, public_parameters)
     }
 
     pub fn split(
@@ -577,9 +583,12 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
         let mut previous_was_whitespace = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
+        let mut global_pattern_found = one.clone();
 
         for i in 0..(string.bytes.len()) {
             let pattern_found = string.bytes[i].is_whitespace(&self.key, public_parameters);
+            global_pattern_found = global_pattern_found.bitand(&self.key, &pattern_found);
+
             let should_increment_buffer = pattern_found.bitand(
                 &self.key,
                 &previous_was_whitespace.flip(&self.key, public_parameters),
@@ -627,7 +636,7 @@ impl MyServerKey {
             *result_buffer = new_buf;
         }
 
-        FheSplit::new(result, public_parameters)
+        FheSplit::new(result, global_pattern_found, public_parameters)
     }
 
     pub fn splitn(

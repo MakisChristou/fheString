@@ -4,10 +4,15 @@ use crate::{FheAsciiChar, FheString};
 
 pub struct FheSplit {
     pub buffers: Vec<FheString>,
+    pub pattern_found: FheAsciiChar,
 }
 
 impl FheSplit {
-    pub fn new(buffers: Vec<Vec<FheAsciiChar>>, public_parameters: &PublicParameters) -> Self {
+    pub fn new(
+        buffers: Vec<Vec<FheAsciiChar>>,
+        pattern_found: FheAsciiChar,
+        public_parameters: &PublicParameters,
+    ) -> Self {
         let mut fhe_string_buffers = Vec::new();
         for buffer in buffers {
             fhe_string_buffers.push(FheString::from_vec(buffer, public_parameters));
@@ -15,6 +20,7 @@ impl FheSplit {
 
         FheSplit {
             buffers: fhe_string_buffers,
+            pattern_found,
         }
     }
 
@@ -23,7 +29,7 @@ impl FheSplit {
         fhe_split: FheSplit,
         my_client_key: &MyClientKey,
         padding: usize,
-    ) -> Vec<String> {
+    ) -> (Vec<String>, u8) {
         let mut plain_split = Vec::new();
 
         for some_fhe_string in fhe_split.buffers {
@@ -31,6 +37,8 @@ impl FheSplit {
             plain_split.push(dec_string);
         }
 
-        plain_split
+        let plain_pattern_found = my_client_key.decrypt_char(&fhe_split.pattern_found);
+
+        (plain_split, plain_pattern_found)
     }
 }

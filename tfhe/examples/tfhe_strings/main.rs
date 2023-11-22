@@ -256,7 +256,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -266,27 +266,26 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
         StringMethod::RsplitOnce => {
             let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_parameters);
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
-
             let expected = my_string_plain.rsplit_once(pattern_plain);
 
             match expected {
                 Some(expected_tuple) => {
                     let expected = vec![expected_tuple.1, expected_tuple.0];
-                    let plain_split = trim_vector(plain_split);
+                    let plain_split = trim_vector(plain_split.0);
                     let expected = trim_str_vector(expected);
                     assert_eq!(plain_split, expected);
                 }
                 // Delimiter not found
                 None => {
                     println!("{:?}", plain_split);
-                    todo!();
+                    assert_eq!(plain_split.1, 0u8);
                 }
             }
         }
@@ -298,7 +297,7 @@ fn run_fhe_str_method(
             let expected_tuple = my_string_plain.rsplit_once(pattern_plain).unwrap();
             let expected = vec![expected_tuple.1, expected_tuple.0];
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -307,7 +306,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -321,7 +320,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -331,7 +330,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -344,7 +343,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -353,7 +352,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -363,7 +362,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -372,7 +371,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_ascii_whitespace().collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -381,7 +380,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -391,7 +390,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -401,7 +400,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_terminator(pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -411,7 +410,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -421,7 +420,7 @@ fn run_fhe_str_method(
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
 
-            let plain_split = trim_vector(plain_split);
+            let plain_split = trim_vector(plain_split.0);
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
@@ -474,24 +473,37 @@ fn run_fhe_str_method(
             }
         }
         StringMethod::StripSuffix => {
-            let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
+            // Limitation: Client needs to know the string padding
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let fhe_strip =
+                my_server_key.strip_suffix(&my_string, &pattern_string.bytes, &public_parameters);
             let (verif_string, actual_pattern_found) =
                 FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
             let expected = my_string_plain.strip_suffix(pattern_plain);
             let expected_pattern_found = if let Some(_) = expected { true } else { false };
 
             match expected {
+                // Pattern was found and stripped from original string
                 Some(expected_value) => {
                     assert_eq!(verif_string, expected_value);
                 }
+                // Pattern not found
                 None => {
                     assert_eq!(actual_pattern_found, expected_pattern_found as u8);
                 }
             }
         }
         StringMethod::StripSuffixClear => {
-            let fhe_strip =
-                my_server_key.strip_suffix_clear(&my_string, &pattern_plain, &public_parameters);
+            // Limitation: Client needs to know the string padding
+            let null_bytes = "\0".repeat(STRING_PADDING);
+            let padded_pattern_plain = format!("{}{}", pattern_plain, null_bytes);
+
+            let fhe_strip = my_server_key.strip_suffix_clear(
+                &my_string,
+                &padded_pattern_plain,
+                &public_parameters,
+            );
             let (verif_string, actual_pattern_found) =
                 FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
             let expected = my_string_plain.strip_suffix(pattern_plain);
