@@ -101,14 +101,32 @@ impl MyServerKey {
         padding: usize,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
-        let mut j = pattern.len() - 1;
-        for i in (string.bytes.len() - pattern.len()..string.bytes.len() - padding).rev() {
-            let eql = string.bytes[i].eq(&self.key, &pattern[j]);
-            result = result.bitand(&self.key, &eql);
-            j -= 1;
+        let string_length = string.bytes.len();
+        let pattern_length = pattern.len();
+
+        let start = string_length
+            .checked_sub(padding)
+            .and_then(|x| x.checked_sub(pattern_length));
+
+        let end = start
+            .and_then(|s| s.checked_add(pattern_length))
+            .and_then(|x| x.checked_sub(1));
+
+        match (start, end) {
+            (Some(start_val), Some(end_val)) => {
+                // Safe to use start_val and end_val here
+                let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
+                let mut j = 0;
+
+                for i in start_val..(end_val + 1) {
+                    let eql = string.bytes[i].eq(&self.key, &pattern[j]);
+                    result = result.bitand(&self.key, &eql);
+                    j += 1;
+                }
+                result
+            }
+            _ => FheAsciiChar::encrypt_trivial(0u8, public_parameters),
         }
-        result
     }
 
     pub fn ends_with_clear(
