@@ -374,26 +374,30 @@ impl MyServerKey {
 
         let mut result = bytes.clone();
 
-        // Replace from wih to
-        for i in 0..result.len() - from.len() {
-            let mut pattern_found_flag = one.clone();
+        if from.len() <= result.len() {
+            // Replace from wih to
+            for i in 0..result.len() - from.len() {
+                let mut pattern_found_flag = one.clone();
 
-            for j in 0..from.len() {
-                pattern_found_flag =
-                    pattern_found_flag.bitand(server_key, &from[j].eq(server_key, &bytes[i + j]));
-            }
+                for j in 0..from.len() {
+                    pattern_found_flag = pattern_found_flag
+                        .bitand(server_key, &from[j].eq(server_key, &bytes[i + j]));
+                }
 
-            // Stop replacing after n encounters of from
-            if use_counter {
-                counter = counter.add(server_key, &pattern_found_flag);
-                let keep_replacing = n.ge(server_key, &counter);
-                pattern_found_flag = pattern_found_flag.bitand(server_key, &keep_replacing);
-            }
+                // Stop replacing after n encounters of from
+                if use_counter {
+                    counter = counter.add(server_key, &pattern_found_flag);
+                    let keep_replacing = n.ge(server_key, &counter);
+                    pattern_found_flag = pattern_found_flag.bitand(server_key, &keep_replacing);
+                }
 
-            for k in 0..to.len() {
-                result[i + k] = pattern_found_flag.if_then_else(server_key, &to[k], &result[i + k]);
+                for k in 0..to.len() {
+                    result[i + k] =
+                        pattern_found_flag.if_then_else(server_key, &to[k], &result[i + k]);
+                }
             }
         }
+
         FheString::from_vec(
             utils::bubble_zeroes_left(result, server_key, public_parameters),
             public_parameters,
@@ -414,9 +418,7 @@ impl MyServerKey {
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
         let size_difference = abs_difference(from.len(), to.len());
         let mut counter = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
-
-        let max_possible_output_len = (bytes.len() / from.len()) * (size_difference) + bytes.len();
-
+        let max_possible_output_len = to.len() * bytes.len() + bytes.len();
         let mut result = bytes.clone();
 
         for _ in 0..max_possible_output_len - bytes.len() {
@@ -424,6 +426,9 @@ impl MyServerKey {
         }
 
         let mut copy_buffer = vec![zero.clone(); max_possible_output_len];
+        // This is used to ignore invalid pattern found flags
+        // This happens if for example we replace e with test, the e in test will match the pattern but its invalid
+        let mut ignore_pattern_mask = vec![one.clone(); max_possible_output_len];
 
         // Replace from wih to
         for i in 0..result.len() - to.len() {
@@ -432,10 +437,23 @@ impl MyServerKey {
             for j in 0..from.len() {
                 pattern_found_flag =
                     pattern_found_flag.bitand(server_key, &from[j].eq(server_key, &result[i + j]));
+                pattern_found_flag =
+                    pattern_found_flag.bitand(server_key, &ignore_pattern_mask[i + j]);
+            }
+
+            // Handle spacial case where from is empty which means that it matches all characters
+            // I know its ugly but it works
+            if from.len() == 0 {
+                if i % (to.len() + 1) == 0 {
+                    pattern_found_flag = one.clone();
+                } else {
+                    pattern_found_flag = zero.clone();
+                }
             }
 
             // Stop replacing after n encounters of from
             if use_counter {
+                // println!("use_counter!");
                 counter = counter.add(server_key, &pattern_found_flag);
                 let keep_replacing = n.ge(server_key, &counter);
                 pattern_found_flag = pattern_found_flag.bitand(server_key, &keep_replacing);
@@ -449,6 +467,10 @@ impl MyServerKey {
             // Replace from with to
             for k in 0..to.len() {
                 result[i + k] = pattern_found_flag.if_then_else(server_key, &to[k], &result[i + k]);
+                ignore_pattern_mask[i + k] = ignore_pattern_mask[i + k].bitand(
+                    server_key,
+                    &pattern_found_flag.if_then_else(server_key, &zero, &one),
+                );
             }
 
             // Fix the result buffer by copying back the rest of the string
