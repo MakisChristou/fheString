@@ -665,9 +665,11 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
         let min_length = usize::min(string.bytes.len(), other.bytes.len());
         let mut encountered_comparison = zero.clone();
         let mut has_flag_became_one = zero.clone();
+        let two_five_five = FheAsciiChar::encrypt_trivial(255u8, public_parameters);
 
         let mut ret = FheAsciiChar::encrypt_trivial(255u8, public_parameters);
 
@@ -689,6 +691,18 @@ impl MyServerKey {
             );
             has_flag_became_one = has_flag_became_one.bitor(&self.key, &flag); // this flag is required to only consider the first character we compare
             ret = flag.if_then_else(&self.key, &comparison_result, &ret)
+        }
+
+        // if ret = 255u8 it means that we never compared anything, which means the 2 strings are equal
+        let are_strings_equal = ret.eq(&self.key, &two_five_five);
+
+        match operation {
+            Comparison::GreaterEqual | Comparison::LessEqual => {
+                ret = are_strings_equal.if_then_else(&self.key, &one, &ret)
+            }
+            Comparison::GreaterThan | Comparison::LessThan => {
+                ret = are_strings_equal.if_then_else(&self.key, &zero, &ret)
+            }
         }
 
         ret
