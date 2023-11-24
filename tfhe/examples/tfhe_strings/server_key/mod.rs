@@ -325,11 +325,27 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
         let mut pattern_position =
             FheAsciiChar::encrypt_trivial(MAX_FIND_LENGTH as u8, public_parameters);
 
         if string.bytes.len() >= MAX_FIND_LENGTH + pattern.len() {
             panic!("Maximum supported size for find reached");
+        }
+
+        // Handle edge case
+        if pattern.len() == 0 {
+            let mut last_non_zero_position = zero.clone();
+
+            // Find the last char position that is non \0
+            for i in 0..string.bytes.len() {
+                let is_not_zero = string.bytes[i].ne(&self.key, &zero);
+                let enc_i = FheAsciiChar::encrypt_trivial((i + 1) as u8, public_parameters);
+                last_non_zero_position =
+                    is_not_zero.if_then_else(&self.key, &enc_i, &last_non_zero_position);
+            }
+
+            return last_non_zero_position;
         }
 
         let end = string.bytes.len().checked_sub(pattern.len());
