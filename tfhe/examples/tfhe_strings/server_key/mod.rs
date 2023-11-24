@@ -112,6 +112,12 @@ impl MyServerKey {
             .and_then(|s| s.checked_add(pattern_length))
             .and_then(|x| x.checked_sub(1));
 
+        // Handle Edge case
+        // When pattern is an empty string we consider it to always match
+        if pattern.len() == 0 {
+            return FheAsciiChar::encrypt_trivial(1u8, public_parameters);
+        }
+
         match (start, end) {
             (Some(start_val), Some(end_val)) => {
                 // Safe to use start_val and end_val here
