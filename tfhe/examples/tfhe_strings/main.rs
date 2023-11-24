@@ -221,10 +221,21 @@ fn run_fhe_str_method(
                 my_server_key.replacen(&my_string, &from, &to, n, &public_parameters);
             let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
             let expected = my_string_plain.replacen(from_plain, to_plain, n_plain.into());
+
             assert_eq!(verif_string, expected);
         }
         StringMethod::ReplaceNClear => {
-            todo!()
+            let my_new_string = my_server_key.replacen_clear(
+                &my_string,
+                &from_plain,
+                &to_plain,
+                n_plain as u8,
+                &public_parameters,
+            );
+            let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+            let expected = my_string_plain.replacen(from_plain, to_plain, n_plain.into());
+
+            assert_eq!(verif_string, expected);
         }
         StringMethod::Rfind => {
             let needle = my_client_key.encrypt_no_padding(&pattern_plain);
@@ -404,7 +415,19 @@ fn run_fhe_str_method(
             let expected = trim_str_vector(expected);
             assert_eq!(plain_split, expected);
         }
-        StringMethod::SplitTerminatorClear => todo!(),
+        StringMethod::SplitTerminatorClear => {
+            let fhe_split = my_server_key.split_terminator_clear(
+                &my_string,
+                &pattern_plain,
+                &public_parameters,
+            );
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected: Vec<&str> = my_string_plain.split_terminator(pattern_plain).collect();
+
+            let plain_split = trim_vector(plain_split.0);
+            let expected = trim_str_vector(expected);
+            assert_eq!(plain_split, expected);
+        }
         StringMethod::SplitN => {
             let fhe_split = my_server_key.splitn(&my_string, &pattern, n, &public_parameters);
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
