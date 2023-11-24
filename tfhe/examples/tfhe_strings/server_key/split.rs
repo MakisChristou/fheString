@@ -570,6 +570,26 @@ impl MyServerKey {
         )
     }
 
+    pub fn split_terminator_clear(
+        &self,
+        string: &FheString,
+        clear_pattern: &str,
+        public_parameters: &PublicParameters,
+    ) -> FheSplit {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters))
+            .collect::<Vec<FheAsciiChar>>();
+        self._split(
+            string,
+            pattern.to_owned(),
+            false,
+            true,
+            None,
+            public_parameters,
+        )
+    }
+
     pub fn split_ascii_whitespace(
         &self,
         string: &FheString,
