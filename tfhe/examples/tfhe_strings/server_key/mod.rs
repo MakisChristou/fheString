@@ -612,23 +612,31 @@ impl MyServerKey {
         let mut result = string.bytes.clone();
         let mut pattern_found_flag = one.clone();
 
-        let start_of_pattern = result.len() - pattern.len();
         let end_of_pattern = result.len();
+        let start = result.len().checked_sub(pattern.len());
         let mut k = pattern.len() - 1;
 
-        for j in (start_of_pattern..end_of_pattern).rev() {
-            pattern_found_flag =
-                pattern_found_flag.bitand(&self.key, &pattern[k].eq(&self.key, &result[j]));
-            k -= 1;
+        match start {
+            Some(start_of_pattern) => {
+                for j in (start_of_pattern..end_of_pattern).rev() {
+                    pattern_found_flag =
+                        pattern_found_flag.bitand(&self.key, &pattern[k].eq(&self.key, &result[j]));
+                    k -= 1;
+                }
+
+                for j in (start_of_pattern..end_of_pattern).rev() {
+                    result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
+                }
+
+                let string = FheString::from_vec(result, public_parameters);
+
+                FheStrip::new(string, pattern_found_flag)
+            }
+            None => {
+                // Return unmodified string
+                FheStrip::new(string.clone(), zero)
+            }
         }
-
-        for j in (start_of_pattern..end_of_pattern).rev() {
-            result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
-        }
-
-        let string = FheString::from_vec(result, public_parameters);
-
-        FheStrip::new(string, pattern_found_flag)
     }
 
     pub fn strip_prefix_clear(
