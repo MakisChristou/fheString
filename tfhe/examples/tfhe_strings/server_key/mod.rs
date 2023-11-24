@@ -67,16 +67,22 @@ impl MyServerKey {
     ) -> FheAsciiChar {
         let mut result = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
+        let end = string.bytes.len().checked_sub(needle.len());
 
-        for i in 0..string.bytes.len() - needle.len() {
-            let mut current_result = one.clone();
-            for (j, needle_char) in needle.iter().enumerate() {
-                let eql = string.bytes[i + j].eq(&self.key, needle_char);
-                current_result = current_result.bitand(&self.key, &eql);
+        match end {
+            Some(end_of_pattern) => {
+                for i in 0..end_of_pattern {
+                    let mut current_result = one.clone();
+                    for (j, needle_char) in needle.iter().enumerate() {
+                        let eql = string.bytes[i + j].eq(&self.key, needle_char);
+                        current_result = current_result.bitand(&self.key, &eql);
+                    }
+                    result = result.bitor(&self.key, &current_result);
+                }
+                result
             }
-            result = result.bitor(&self.key, &current_result);
+            None => FheAsciiChar::encrypt_trivial(0u8, public_parameters),
         }
-        result
     }
 
     pub fn contains_clear(
@@ -326,22 +332,29 @@ impl MyServerKey {
             panic!("Maximum supported size for find reached");
         }
 
-        // Search for pattern
-        for i in 0..string.bytes.len() - pattern.len() {
-            let mut pattern_found_flag = one.clone();
+        let end = string.bytes.len().checked_sub(pattern.len());
 
-            // for (j, pattern_char) in pattern.iter().enumerate() {
-            for (j, pattern_char) in pattern.iter().enumerate() {
-                pattern_found_flag = pattern_found_flag
-                    .bitand(&self.key, &pattern_char.eq(&self.key, &string.bytes[i + j]));
+        match end {
+            Some(end_of_pattern) => {
+                // Search for pattern
+                for i in 0..end_of_pattern {
+                    let mut pattern_found_flag = one.clone();
+
+                    // This is okay since pattern.len() <= string.bytes.len()
+                    for (j, pattern_char) in pattern.iter().enumerate() {
+                        pattern_found_flag = pattern_found_flag
+                            .bitand(&self.key, &pattern_char.eq(&self.key, &string.bytes[i + j]));
+                    }
+
+                    let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_parameters);
+                    pattern_position =
+                        pattern_found_flag.if_then_else(&self.key, &enc_i, &pattern_position);
+                }
+
+                pattern_position
             }
-
-            let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_parameters);
-            pattern_position =
-                pattern_found_flag.if_then_else(&self.key, &enc_i, &pattern_position);
+            None => FheAsciiChar::encrypt_trivial(255u8, public_parameters),
         }
-
-        pattern_position
     }
 
     pub fn rfind_clear(
@@ -505,21 +518,29 @@ impl MyServerKey {
             panic!("Maximum supported size for find reached");
         }
 
-        // Search for pattern
-        for i in (0..string.bytes.len() - pattern.len()).rev() {
-            let mut pattern_found_flag = one.clone();
+        let end = string.bytes.len().checked_sub(pattern.len());
 
-            for j in (0..pattern.len()).rev() {
-                pattern_found_flag = pattern_found_flag
-                    .bitand(&self.key, &pattern[j].eq(&self.key, &string.bytes[i + j]));
+        match end {
+            Some(end_of_pattern) => {
+                // Search for pattern
+                for i in (0..end_of_pattern).rev() {
+                    let mut pattern_found_flag = one.clone();
+
+                    // This is okay since the pattern here is <= string.bytes.len()
+                    for j in (0..pattern.len()).rev() {
+                        pattern_found_flag = pattern_found_flag
+                            .bitand(&self.key, &pattern[j].eq(&self.key, &string.bytes[i + j]));
+                    }
+
+                    let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_parameters);
+                    pattern_position =
+                        pattern_found_flag.if_then_else(&self.key, &enc_i, &pattern_position);
+                }
+
+                pattern_position
             }
-
-            let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_parameters);
-            pattern_position =
-                pattern_found_flag.if_then_else(&self.key, &enc_i, &pattern_position);
+            None => FheAsciiChar::encrypt_trivial(255u8, public_parameters),
         }
-
-        pattern_position
     }
 
     pub fn find_clear(
@@ -584,7 +605,9 @@ impl MyServerKey {
         let mut result = string.bytes.clone();
         let mut pattern_found_flag = one.clone();
 
-        for j in 0..pattern.len() {
+        let end = std::cmp::min(pattern.len(), result.len());
+
+        for j in 0..end {
             pattern_found_flag =
                 pattern_found_flag.bitand(&self.key, &pattern[j].eq(&self.key, &result[j]));
         }
