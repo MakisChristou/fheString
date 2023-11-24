@@ -822,6 +822,49 @@ impl MyServerKey {
         }
     }
 
+    pub fn replacen_clear(
+        &self,
+        string: &FheString,
+        from_clear: &str,
+        to_clear: &str,
+        n_clear: u8,
+        public_parameters: &PublicParameters,
+    ) -> FheString {
+        let from = from_clear
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters))
+            .collect::<Vec<FheAsciiChar>>();
+
+        let to = to_clear
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters))
+            .collect::<Vec<FheAsciiChar>>();
+
+        let n = FheAsciiChar::encrypt_trivial(n_clear, public_parameters);
+
+        if from.len() >= to.len() {
+            Self::handle_longer_from(
+                string.bytes.clone(),
+                from.clone(),
+                to.clone(),
+                n,
+                true,
+                &self.key,
+                public_parameters,
+            )
+        } else {
+            Self::handle_shorter_from(
+                string.bytes.clone(),
+                from.clone(),
+                to.clone(),
+                n,
+                true,
+                &self.key,
+                public_parameters,
+            )
+        }
+    }
+
     pub fn concatenate(
         &self,
         string: &FheString,
