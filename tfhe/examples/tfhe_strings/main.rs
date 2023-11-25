@@ -1,13 +1,14 @@
 use ciphertext::fheasciichar::FheAsciiChar;
+use clap::Parser;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
+use crate::args::Args;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::fhestrip::FheStrip;
 use crate::ciphertext::public_parameters::PublicParameters;
 use crate::server_key::MyServerKey;
 use crate::utils::trim_str_vector;
 use crate::{ciphertext::fhesplit::FheSplit, utils::trim_vector};
-use clap::Parser;
 use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
@@ -15,37 +16,13 @@ const STRING_PADDING: usize = 3;
 const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 
+mod args;
 mod ciphertext;
 mod client_key;
 mod server_key;
 mod utils;
 
 use client_key::MyClientKey;
-
-/// A FHE string implementation using tfhe-rs
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// The string to do the processing on
-    #[arg(short, long)]
-    string: String,
-
-    /// The pattern for the algoritmhs that need it
-    #[arg(short, long)]
-    pattern: String,
-
-    /// The number of times to make an operation for the algoritmhs that need it
-    #[arg(short, long)]
-    n: usize,
-
-    /// What will be replaced (for replace algorithms)
-    #[arg(short, long)]
-    from: String,
-
-    /// What will replace it (for replace algorithms)
-    #[arg(short, long)]
-    to: String,
-}
 
 fn run_fhe_str_method(
     my_server_key: &MyServerKey,
