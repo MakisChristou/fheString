@@ -1,5 +1,6 @@
 use ciphertext::fheasciichar::FheAsciiChar;
 use clap::Parser;
+use string_method::StringMethod;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
 use crate::args::Args;
@@ -20,6 +21,7 @@ mod args;
 mod ciphertext;
 mod client_key;
 mod server_key;
+mod string_method;
 mod utils;
 
 use client_key::MyClientKey;
@@ -573,61 +575,6 @@ fn run_fhe_str_method(
             assert_eq!(expected, deccrypted_actual);
         }
     }
-}
-
-#[derive(Debug)]
-enum StringMethod {
-    Contains,
-    ContainsClear,
-    EndsWith,
-    EndsWithClear,
-    EqIgnoreCase,
-    Find,
-    FindClear,
-    IsEmpty,
-    Len,
-    Repeat,
-    RepeatClear,
-    Replace,
-    ReplaceClear,
-    ReplaceN,
-    ReplaceNClear,
-    Rfind,
-    RfindClear,
-    Rsplit,
-    RsplitClear,
-    RsplitOnce,
-    RsplitOnceClear,
-    RsplitN,
-    RsplitNClear,
-    RsplitTerminator,
-    RsplitTerminatorClear,
-    Split,
-    SplitClear,
-    SplitAsciiWhitespace,
-    SplitInclusive,
-    SplitInclusiveClear,
-    SplitTerminator,
-    SplitTerminatorClear,
-    SplitN,
-    SplitNClear,
-    StartsWith,
-    StartsWithClear,
-    StripPrefix,
-    StripPrefixClear,
-    StripSuffix,
-    StripSuffixClear,
-    ToLower,
-    ToUpper,
-    Trim,
-    TrimEnd,
-    TrimStart,
-    Concatenate,
-    Lt,
-    Le,
-    Gt,
-    Ge,
-    Eq,
 }
 
 fn main() {
