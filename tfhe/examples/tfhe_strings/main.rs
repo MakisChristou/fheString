@@ -1,17 +1,18 @@
 use ciphertext::fheasciichar::FheAsciiChar;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
-use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::fhestrip::FheStrip;
 use crate::ciphertext::public_parameters::PublicParameters;
 use crate::server_key::MyServerKey;
+use crate::utils::trim_str_vector;
+use crate::{ciphertext::fhesplit::FheSplit, utils::trim_vector};
 use clap::Parser;
 use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
 const STRING_PADDING: usize = 3;
-const MAX_REPETITIONS: usize = 4;
+const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 
 mod ciphertext;
@@ -20,30 +21,6 @@ mod server_key;
 mod utils;
 
 use client_key::MyClientKey;
-
-fn trim_vector(mut vec: Vec<String>) -> Vec<String> {
-    while vec.first() == Some(&"".to_string()) {
-        vec.remove(0);
-    }
-
-    while vec.last() == Some(&"".to_string()) {
-        vec.pop();
-    }
-
-    vec
-}
-
-fn trim_str_vector(mut vec: Vec<&str>) -> Vec<&str> {
-    while vec.first() == Some(&"") {
-        vec.remove(0);
-    }
-
-    while vec.last() == Some(&"") {
-        vec.pop();
-    }
-
-    vec
-}
 
 /// A FHE string implementation using tfhe-rs
 #[derive(Parser, Debug)]
@@ -295,7 +272,6 @@ fn run_fhe_str_method(
                 }
                 // Delimiter not found
                 None => {
-                    println!("{:?}", plain_split);
                     assert_eq!(plain_split.1, 0u8);
                 }
             }

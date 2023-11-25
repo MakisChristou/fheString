@@ -24,3 +24,27 @@ pub fn bubble_zeroes_left(
 
     result
 }
+
+pub fn trim_vector(mut vec: Vec<String>) -> Vec<String> {
+    while vec.first() == Some(&"".to_string()) {
+        vec.remove(0);
+    }
+
+    while vec.last() == Some(&"".to_string()) {
+        vec.pop();
+    }
+
+    vec
+}
+
+pub fn trim_str_vector(mut vec: Vec<&str>) -> Vec<&str> {
+    while vec.first() == Some(&"") {
+        vec.remove(0);
+    }
+
+    while vec.last() == Some(&"") {
+        vec.pop();
+    }
+
+    vec
+}
