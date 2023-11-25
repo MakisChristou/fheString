@@ -163,10 +163,13 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
-        for (i, pattern_char) in pattern.iter().enumerate() {
-            let eql = string.bytes[i].eq(&self.key, pattern_char);
+        let end_of_pattern = std::cmp::min(pattern.len(), string.bytes.len());
+
+        for (string_char, pattern_char) in string.bytes.iter().take(end_of_pattern).zip(pattern) {
+            let eql = string_char.eq(&self.key, pattern_char);
             result = result.bitand(&self.key, &eql);
         }
+
         result
     }
 
