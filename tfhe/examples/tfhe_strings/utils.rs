@@ -37,7 +37,7 @@ pub fn trim_vector(mut vec: Vec<String>) -> Vec<String> {
     vec
 }
 
-pub fn trim_str_vector(mut vec: Vec<&str>) -> Vec<&str> {
+pub fn trim_str_vector(mut vec: Vec<&str>) -> Vec<String> {
     while vec.first() == Some(&"") {
         vec.remove(0);
     }
@@ -46,5 +46,5 @@ pub fn trim_str_vector(mut vec: Vec<&str>) -> Vec<&str> {
         vec.pop();
     }
 
-    vec
+    vec.into_iter().map(|s| s.to_string()).collect()
 }
