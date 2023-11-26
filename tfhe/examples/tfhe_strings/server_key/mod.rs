@@ -6,6 +6,7 @@ use crate::{
         fheasciichar::FheAsciiChar,
         fhesplit::FheSplit,
         fhestring::{Comparison, FheString},
+        fhestrip::FheStrip,
     },
     utils::abs_difference,
     utils::bubble_zeroes_left,
@@ -440,14 +441,18 @@ impl MyServerKey {
         is_eq
     }
 
+    pub fn ne(string: &FheString, other: &FheString) -> FheAsciiChar {
+        MyServerKey::eq(string, other).flip()
+    }
+
     pub fn eq_ignore_case(string: &FheString, other: &FheString) -> FheAsciiChar {
         let self_lowercase = MyServerKey::to_lower(string);
-        let other_lowercase = MyServerKey::to_lower(&self_lowercase);
+        let other_lowercase = MyServerKey::to_lower(&other);
 
         MyServerKey::eq(&self_lowercase, &other_lowercase)
     }
 
-    pub fn strip_prefix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheString {
+    pub fn strip_prefix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheStrip {
         let zero = FheAsciiChar::encrypt_trivial(0u8);
         let one = FheAsciiChar::encrypt_trivial(1u8);
         let mut result = string.bytes.clone();
@@ -461,10 +466,13 @@ impl MyServerKey {
             result[j] = pattern_found_flag.if_then_else(&zero, &result[j]);
         }
 
-        FheString::from_vec(bubble_zeroes_left(result))
+        FheStrip::new(
+            FheString::from_vec(bubble_zeroes_left(result)),
+            pattern_found_flag,
+        )
     }
 
-    pub fn strip_suffix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheString {
+    pub fn strip_suffix(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheStrip {
         let zero = FheAsciiChar::encrypt_trivial(0u8);
         let one = FheAsciiChar::encrypt_trivial(1u8);
         let mut result = string.bytes.clone();
@@ -483,10 +491,10 @@ impl MyServerKey {
             result[j] = pattern_found_flag.if_then_else(&zero, &result[j]);
         }
 
-        FheString::from_vec(result)
+        FheStrip::new(FheString::from_vec(result), pattern_found_flag)
     }
 
-    pub fn strip_prefix_clear(string: &FheString, clear_pattern: &str) -> FheString {
+    pub fn strip_prefix_clear(string: &FheString, clear_pattern: &str) -> FheStrip {
         let pattern = clear_pattern
             .bytes()
             .map(|b| FheAsciiChar::encrypt_trivial(b))
@@ -494,7 +502,7 @@ impl MyServerKey {
         MyServerKey::strip_prefix(string, &pattern)
     }
 
-    pub fn strip_suffix_clear(string: &FheString, clear_pattern: &str) -> FheString {
+    pub fn strip_suffix_clear(string: &FheString, clear_pattern: &str) -> FheStrip {
         let pattern = clear_pattern
             .bytes()
             .map(|b| FheAsciiChar::encrypt_trivial(b))
@@ -563,6 +571,29 @@ impl MyServerKey {
         }
     }
 
+    pub fn replacen_clear(
+        string: &FheString,
+        clear_from: &str,
+        clear_to: &str,
+        n: u8,
+    ) -> FheString {
+        let from = clear_from
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b))
+            .collect::<Vec<FheAsciiChar>>();
+        let to = clear_to
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b))
+            .collect::<Vec<FheAsciiChar>>();
+        let n = FheAsciiChar::encrypt_trivial(n);
+
+        if from.len() >= to.len() {
+            Self::handle_longer_from(string.bytes.clone(), from.clone(), to.clone(), n, true)
+        } else {
+            Self::handle_shorter_from(string.bytes.clone(), from.clone(), to.clone(), n, true)
+        }
+    }
+
     fn _split(
         string: &FheString,
         pattern: Vec<FheAsciiChar>,
@@ -578,6 +609,7 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
+        let mut global_pattern_found = one.clone();
 
         for i in 0..(string.bytes.len() - pattern.len()) {
             // Copy ith character to the appropriate buffer
@@ -592,6 +624,8 @@ impl MyServerKey {
                 let eql = string.bytes[i + j].eq(&pattern[j]);
                 pattern_found &= eql;
             }
+
+            global_pattern_found = global_pattern_found & pattern_found.clone();
 
             // If its splitn stop after n splits
             match &n {
@@ -691,7 +725,7 @@ impl MyServerKey {
             }
         }
 
-        FheSplit::new(result)
+        FheSplit::new(result, global_pattern_found)
     }
 
     pub fn split(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheSplit {
@@ -722,6 +756,14 @@ impl MyServerKey {
         MyServerKey::_split(string, pattern.clone(), false, true, None)
     }
 
+    pub fn split_terminator_clear(string: &FheString, clear_pattern: &str) -> FheSplit {
+        let pattern = clear_pattern
+            .bytes()
+            .map(|b| FheAsciiChar::encrypt_trivial(b))
+            .collect::<Vec<FheAsciiChar>>();
+        MyServerKey::_split(string, pattern.clone(), false, true, None)
+    }
+
     pub fn split_ascii_whitespace(string: &FheString) -> FheSplit {
         let max_buffer_size = string.bytes.len(); // when a single buffer holds the whole input
         let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
@@ -731,9 +773,12 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
         let mut previous_was_whitespace = FheAsciiChar::encrypt_trivial(1u8);
+        let mut global_pattern_found = one.clone();
 
         for i in 0..(string.bytes.len()) {
             let pattern_found = string.bytes[i].is_whitespace();
+            global_pattern_found = global_pattern_found & pattern_found.clone();
+
             let should_increment_buffer = pattern_found.clone() & previous_was_whitespace.flip();
 
             // Here we know if the pattern is found for position i
@@ -765,7 +810,7 @@ impl MyServerKey {
             result[i] = new_buf;
         }
 
-        FheSplit::new(result)
+        FheSplit::new(result, global_pattern_found)
     }
 
     pub fn splitn(string: &FheString, pattern: &Vec<FheAsciiChar>, n: FheAsciiChar) -> FheSplit {
@@ -803,6 +848,7 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
+        let mut global_pattern_found = one.clone();
 
         for i in (0..(string.bytes.len() - pattern.len())).rev() {
             // Copy ith character to the appropriate buffer
@@ -817,6 +863,8 @@ impl MyServerKey {
                 let eql = string.bytes[i + j].eq(&pattern[j]);
                 pattern_found &= eql;
             }
+
+            global_pattern_found = global_pattern_found & pattern_found.clone();
 
             // If its splitn stop after n splits
             match &n {
@@ -915,7 +963,7 @@ impl MyServerKey {
             }
         }
 
-        FheSplit::new(result)
+        FheSplit::new(result, global_pattern_found)
     }
 
     pub fn rsplit(string: &FheString, pattern: &Vec<FheAsciiChar>) -> FheSplit {

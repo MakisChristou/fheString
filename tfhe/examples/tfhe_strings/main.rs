@@ -1,7 +1,11 @@
+use std::time::Instant;
+
 use ciphertext::fheasciichar::FheAsciiChar;
+use clap::Parser;
+use string_method::StringMethod;
 use tfhe::{generate_keys, ConfigBuilder};
 
-use crate::ciphertext::fhesplit::FheSplit;
+use crate::args::Args;
 use crate::ciphertext::fhestring::FheString;
 use crate::server_key::MyServerKey;
 
@@ -9,34 +13,105 @@ const STRING_PADDING: usize = 3;
 const MAX_REPETITIONS: usize = 4;
 const MAX_FIND_LENGTH: usize = 255;
 
+mod args;
 mod ciphertext;
 mod client_key;
 mod server_key;
+mod string_method;
 mod utils;
 
 use client_key::MyClientKey;
 
 fn main() {
+    let args = Args::parse();
+    let my_string_plain = &args.string;
+    let pattern_plain = &args.pattern;
+    let n_plain = args.n;
+    let from_plain = &args.from;
+    let to_plain = &args.to;
+
     let config = ConfigBuilder::all_disabled()
         .enable_default_integers()
         .build();
 
     let (client_key, server_key) = generate_keys(config);
-
     let my_client_key = MyClientKey::new(client_key);
-    let _ = MyServerKey::new(server_key);
+    let _ = MyServerKey::new(server_key); // set server key
 
-    let my_string_plain = "HELLO test test HELLO";
-    let pattern_plain = "HELLO";
+    let methods_to_test = [
+        StringMethod::ToUpper,
+        StringMethod::ToLower,
+        StringMethod::Contains,
+        StringMethod::ContainsClear,
+        StringMethod::EndsWith,
+        StringMethod::EndsWithClear,
+        StringMethod::StripPrefix,
+        StringMethod::EqIgnoreCase,
+        StringMethod::Find,
+        StringMethod::FindClear,
+        StringMethod::IsEmpty,
+        StringMethod::Len,
+        StringMethod::Repeat,
+        StringMethod::RepeatClear,
+        StringMethod::Replace,
+        StringMethod::ReplaceClear,
+        StringMethod::ReplaceN,
+        StringMethod::ReplaceNClear,
+        StringMethod::Rfind,
+        StringMethod::RfindClear,
+        StringMethod::Rsplit,
+        StringMethod::RsplitClear,
+        StringMethod::RsplitOnce,
+        StringMethod::RsplitOnceClear,
+        StringMethod::RsplitN,
+        StringMethod::RsplitNClear,
+        StringMethod::RsplitTerminator,
+        StringMethod::RsplitTerminatorClear,
+        StringMethod::Split,
+        StringMethod::SplitClear,
+        StringMethod::SplitAsciiWhitespace,
+        StringMethod::SplitInclusive,
+        StringMethod::SplitInclusiveClear,
+        StringMethod::SplitTerminator,
+        StringMethod::SplitTerminatorClear,
+        StringMethod::SplitN,
+        StringMethod::SplitNClear,
+        StringMethod::StartsWith,
+        StringMethod::StartsWithClear,
+        StringMethod::StripPrefix,
+        StringMethod::StripPrefixClear,
+        StringMethod::StripSuffix,
+        StringMethod::StripSuffixClear,
+        StringMethod::ToLower,
+        StringMethod::ToUpper,
+        StringMethod::Trim,
+        StringMethod::TrimEnd,
+        StringMethod::TrimStart,
+        StringMethod::Concatenate,
+        StringMethod::Lt,
+        StringMethod::Le,
+        StringMethod::Gt,
+        StringMethod::Ge,
+        StringMethod::Eq,
+        StringMethod::Ne,
+    ];
 
-    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
-    let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING);
-    let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
+    for method in methods_to_test {
+        let start = Instant::now();
 
-    let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-    let expected = my_string_plain.strip_suffix(pattern_plain).unwrap();
+        utils::run_fhe_str_method(
+            &my_client_key,
+            &my_string_plain,
+            &pattern_plain,
+            n_plain,
+            from_plain,
+            to_plain,
+            &method,
+        );
 
-    assert_eq!(verif_string, expected);
+        let duration = start.elapsed();
+        println!("{:?} {:?}", method, duration);
+    }
 }
 
 #[cfg(test)]
@@ -149,7 +224,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::to_upper(&my_string);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.to_uppercase();
 
         assert_eq!(verif_string, expected);
@@ -169,7 +244,7 @@ mod test {
         let n = my_client_key.encrypt_char(n_plain);
 
         let my_string_upper = MyServerKey::repeat(&my_string, n);
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.repeat(n_plain.into());
 
         assert_eq!(verif_string, expected);
@@ -192,7 +267,7 @@ mod test {
 
         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
-        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_new_string);
         let expected = my_string_plain.replace(from_plain, to_plain);
 
         assert_eq!(verif_string, expected);
@@ -215,7 +290,7 @@ mod test {
 
         let my_new_string = MyServerKey::replace(&my_string, &from, &to);
 
-        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_new_string);
         let expected = my_string_plain.replace(from_plain, to_plain);
 
         assert_eq!(verif_string, expected);
@@ -240,7 +315,7 @@ mod test {
 
         let my_new_string = MyServerKey::replacen(&my_string, &from, &to, n);
 
-        let verif_string = my_client_key.decrypt(my_new_string, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_new_string);
         let expected = my_string_plain.replacen(from_plain, to_plain, n_plain.into());
 
         assert_eq!(verif_string, expected);
@@ -258,7 +333,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::to_lower(&my_string);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.to_lowercase();
 
         assert_eq!(verif_string, expected);
@@ -275,7 +350,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim_end(&my_string);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.trim_end();
 
         assert_eq!(verif_string, expected);
@@ -292,7 +367,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim_end(&my_string);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.trim_end();
 
         assert_eq!(verif_string, expected);
@@ -309,7 +384,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim_start(&my_string);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.trim_start();
 
         assert_eq!(verif_string, expected);
@@ -327,7 +402,7 @@ mod test {
         let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::trim(&my_string);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.trim();
 
         assert_eq!(verif_string, expected);
@@ -536,7 +611,7 @@ mod test {
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
         let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.strip_prefix(pattern_plain);
 
         let expected = my_string_plain.strip_prefix(pattern_plain).unwrap();
@@ -558,7 +633,7 @@ mod test {
         let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         let expected = my_string_plain.strip_suffix(pattern_plain).unwrap();
 
         assert_eq!(verif_string, expected);
@@ -578,7 +653,7 @@ mod test {
         let pattern = my_client_key.encrypt(pattern_plain, 0);
         let my_string_upper = MyServerKey::strip_suffix(&my_string, &pattern.bytes);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
 
         // This is None but in our case the string is not modified
         let _ = my_string_plain.strip_suffix(pattern_plain);
@@ -600,7 +675,7 @@ mod test {
         let pattern = my_client_key.encrypt(pattern_plain, 0);
         let my_string_upper = MyServerKey::strip_prefix(&my_string, &pattern.bytes);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
 
         // This is None but in our case the string is not modified
         let _ = my_string_plain.strip_prefix(pattern_plain);
@@ -622,7 +697,7 @@ mod test {
         let my_string2 = my_client_key.encrypt(my_string2_plain, STRING_PADDING);
         let my_string_upper = MyServerKey::concatenate(&my_string1, &my_string2);
 
-        let verif_string = my_client_key.decrypt(my_string_upper, STRING_PADDING);
+        let verif_string = my_client_key.decrypt(my_string_upper);
         assert_eq!(
             verif_string,
             format!("{}{}", my_string1_plain, my_string2_plain)

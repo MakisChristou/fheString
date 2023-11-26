@@ -60,11 +60,9 @@ impl MyClientKey {
         }
     }
 
-    pub fn decrypt(&self, cipher_string: FheString, padding: usize) -> String {
-        let new_len = cipher_string.bytes.len().saturating_sub(padding);
-        let trimed_bytes: Vec<FheAsciiChar> = cipher_string.bytes.clone()[..new_len].to_vec();
-
-        let ascii_bytes = trimed_bytes
+    pub fn decrypt(&self, cipher_string: FheString) -> String {
+        let ascii_bytes = cipher_string
+            .bytes
             .iter()
             .map(|fhe_b| fhe_b.inner.decrypt(&self.client_key))
             .collect::<Vec<u8>>();
