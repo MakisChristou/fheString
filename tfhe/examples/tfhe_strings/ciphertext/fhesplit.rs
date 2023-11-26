@@ -20,11 +20,7 @@ impl FheSplit {
     }
 
     // Equivalent to running collect() on the iterator
-    pub fn decrypt(
-        fhe_split: FheSplit,
-        my_client_key: &MyClientKey,
-        padding: usize,
-    ) -> (Vec<String>, u8) {
+    pub fn decrypt(fhe_split: FheSplit, my_client_key: &MyClientKey) -> (Vec<String>, u8) {
         let mut plain_split = Vec::new();
 
         for some_fhe_string in fhe_split.buffers {

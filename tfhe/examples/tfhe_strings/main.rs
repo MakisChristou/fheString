@@ -10,7 +10,7 @@ use crate::ciphertext::fhestring::FheString;
 use crate::server_key::MyServerKey;
 
 const STRING_PADDING: usize = 3;
-const MAX_REPETITIONS: usize = 4;
+const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 
 mod args;

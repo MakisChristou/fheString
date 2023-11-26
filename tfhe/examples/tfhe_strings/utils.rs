@@ -234,7 +234,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Rsplit => {
             let fhe_split = MyServerKey::rsplit(&my_string, &pattern);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -244,7 +244,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitClear => {
             let fhe_split = MyServerKey::rsplit_clear(&my_string, &pattern_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -254,7 +254,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitOnce => {
             let fhe_split = MyServerKey::rsplit_once(&my_string, &pattern);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected = my_string_plain.rsplit_once(pattern_plain);
 
             match expected {
@@ -274,7 +274,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitOnceClear => {
             let fhe_split = MyServerKey::rsplit_once_clear(&my_string, &pattern_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected = my_string_plain.rsplit_once(pattern_plain);
 
             match expected {
@@ -294,7 +294,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitN => {
             let fhe_split = MyServerKey::rsplitn(&my_string, &pattern, n);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -304,7 +304,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitNClear => {
             let fhe_split = MyServerKey::rsplitn_clear(&my_string, &pattern_plain, n_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -314,7 +314,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitTerminator => {
             let fhe_split = MyServerKey::rsplit_terminator(&my_string, &pattern);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -324,7 +324,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitTerminatorClear => {
             let fhe_split = MyServerKey::rsplit_terminator_clear(&my_string, &pattern_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -334,7 +334,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Split => {
             let fhe_split = MyServerKey::split(&my_string, &pattern);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -344,7 +344,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitClear => {
             let fhe_split = MyServerKey::split_clear(&my_string, &pattern_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -354,7 +354,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitAsciiWhitespace => {
             let fhe_split = MyServerKey::split_ascii_whitespace(&my_string);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.split_ascii_whitespace().collect();
 
             let actual = trim_vector(plain_split.0);
@@ -364,7 +364,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitInclusive => {
             let fhe_split = MyServerKey::split_inclusive(&my_string, &pattern);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -374,7 +374,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitInclusiveClear => {
             let fhe_split = MyServerKey::split_inclusive_clear(&my_string, &pattern_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -384,7 +384,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitTerminator => {
             let fhe_split = MyServerKey::split_terminator(&my_string, &pattern);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.split_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -394,7 +394,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitTerminatorClear => {
             let fhe_split = MyServerKey::split_terminator_clear(&my_string, &pattern_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.split_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -404,7 +404,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitN => {
             let fhe_split = MyServerKey::splitn(&my_string, &pattern, n);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -414,7 +414,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitNClear => {
             let fhe_split = MyServerKey::splitn_clear(&my_string, &pattern_plain, n_plain);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
             let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
