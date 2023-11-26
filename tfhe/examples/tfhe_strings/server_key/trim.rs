@@ -7,7 +7,7 @@ use super::MyServerKey;
 
 impl MyServerKey {
     pub fn trim_end(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
-        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
         let mut stop_trim_flag = zero.clone();
         let mut result = vec![zero.clone(); string.bytes.len()];
@@ -26,7 +26,7 @@ impl MyServerKey {
             result[i] = stop_trim_flag.if_then_else(&self.key, &string.bytes[i], &zero);
         }
 
-        FheString::from_vec(result, public_parameters)
+        FheString::from_vec(result, public_parameters, &self.key)
     }
 
     pub fn trim_start(
@@ -34,7 +34,7 @@ impl MyServerKey {
         string: &FheString,
         public_parameters: &PublicParameters,
     ) -> FheString {
-        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
         let mut stop_trim_flag = zero.clone();
         let mut result = vec![zero.clone(); string.bytes.len()];
@@ -56,6 +56,7 @@ impl MyServerKey {
         FheString::from_vec(
             utils::bubble_zeroes_left(result, &self.key, public_parameters),
             public_parameters,
+            &self.key,
         )
     }
 

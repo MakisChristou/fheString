@@ -889,9 +889,14 @@ mod test {
         let pattern_plain = ".";
         let n_plain = 3u8;
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
-        let n = FheAsciiChar::encrypt_trivial(n_plain, &public_parameters);
+        let n = FheAsciiChar::encrypt_trivial(n_plain, &public_parameters, &my_server_key.key);
 
         let fhe_split = my_server_key.rsplitn(&my_string, &pattern, n, &public_parameters);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);

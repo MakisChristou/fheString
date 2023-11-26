@@ -13,10 +13,15 @@ impl FheAsciiChar {
         FheAsciiChar { inner: value }
     }
 
-    pub fn encrypt_trivial(value: u8, public_parameters: &PublicParameters) -> FheAsciiChar {
+    pub fn encrypt_trivial(
+        value: u8,
+        public_parameters: &PublicParameters,
+        server_key: &tfhe::integer::ServerKey,
+    ) -> FheAsciiChar {
         let public_key = &public_parameters.public_key;
         let num_blocks = public_parameters.num_blocks;
-        FheAsciiChar::new(public_key.encrypt_radix(value as u64, num_blocks))
+        let new_char = server_key.create_trivial_radix(value, num_blocks);
+        FheAsciiChar::new(new_char)
     }
 
     pub fn encrypt(value: u8, client_key: &RadixClientKey) -> FheAsciiChar {
@@ -130,12 +135,12 @@ impl FheAsciiChar {
         server_key: &tfhe::integer::ServerKey,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let space = FheAsciiChar::encrypt_trivial(0x20u8, public_parameters); // Space
-        let tab = FheAsciiChar::encrypt_trivial(0x09u8, public_parameters); // Horizontal Tab
-        let newline = FheAsciiChar::encrypt_trivial(0x0Au8, public_parameters); // Newline
-        let vertical_tab = FheAsciiChar::encrypt_trivial(0x0Bu8, public_parameters); // Vertical Tab
-        let form_feed = FheAsciiChar::encrypt_trivial(0x0Cu8, public_parameters); // Form Feed
-        let carriage_return = FheAsciiChar::encrypt_trivial(0x0Du8, public_parameters); // Carriage Return
+        let space = FheAsciiChar::encrypt_trivial(0x20u8, public_parameters, server_key); // Space
+        let tab = FheAsciiChar::encrypt_trivial(0x09u8, public_parameters, server_key); // Horizontal Tab
+        let newline = FheAsciiChar::encrypt_trivial(0x0Au8, public_parameters, server_key); // Newline
+        let vertical_tab = FheAsciiChar::encrypt_trivial(0x0Bu8, public_parameters, server_key); // Vertical Tab
+        let form_feed = FheAsciiChar::encrypt_trivial(0x0Cu8, public_parameters, server_key); // Form Feed
+        let carriage_return = FheAsciiChar::encrypt_trivial(0x0Du8, public_parameters, server_key); // Carriage Return
 
         let res1 = self.eq(server_key, &space);
         let res2 = self.eq(server_key, &tab);
@@ -156,8 +161,8 @@ impl FheAsciiChar {
         server_key: &tfhe::integer::ServerKey,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let uppercase_a = FheAsciiChar::encrypt_trivial(0x41u8, public_parameters); // 'A'
-        let uppercase_z = FheAsciiChar::encrypt_trivial(0x5Au8, public_parameters); // 'Z'
+        let uppercase_a = FheAsciiChar::encrypt_trivial(0x41u8, public_parameters, server_key); // 'A'
+        let uppercase_z = FheAsciiChar::encrypt_trivial(0x5Au8, public_parameters, server_key); // 'Z'
 
         let res1 = self.ge(server_key, &uppercase_a);
         let res2 = self.le(server_key, &uppercase_z);
@@ -170,8 +175,8 @@ impl FheAsciiChar {
         server_key: &tfhe::integer::ServerKey,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let lowercase_a = FheAsciiChar::encrypt_trivial(0x61u8, public_parameters); // 'a'
-        let lowercase_z = FheAsciiChar::encrypt_trivial(0x7Au8, public_parameters); // 'z'
+        let lowercase_a = FheAsciiChar::encrypt_trivial(0x61u8, public_parameters, server_key); // 'a'
+        let lowercase_z = FheAsciiChar::encrypt_trivial(0x7Au8, public_parameters, server_key); // 'z'
 
         let res1 = self.ge(server_key, &lowercase_a);
         let res2 = self.le(server_key, &lowercase_z);
@@ -195,8 +200,8 @@ impl FheAsciiChar {
         server_key: &tfhe::integer::ServerKey,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let digit_0 = FheAsciiChar::encrypt_trivial(0x30u8, public_parameters); // '0'
-        let digit_9 = FheAsciiChar::encrypt_trivial(0x39u8, public_parameters); // '9'
+        let digit_0 = FheAsciiChar::encrypt_trivial(0x30u8, public_parameters, server_key); // '0'
+        let digit_9 = FheAsciiChar::encrypt_trivial(0x39u8, public_parameters, server_key); // '9'
 
         let res1 = self.ge(server_key, &digit_0);
         let res2 = self.le(server_key, &digit_9);
@@ -221,7 +226,7 @@ impl FheAsciiChar {
         server_key: &tfhe::integer::ServerKey,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, server_key);
         one.sub(server_key, self)
     }
 }

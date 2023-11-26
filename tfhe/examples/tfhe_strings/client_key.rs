@@ -19,6 +19,7 @@ impl MyClientKey {
         string: &str,
         padding: usize,
         public_parameters: &PublicParameters,
+        server_key: &tfhe::integer::ServerKey,
     ) -> FheString {
         assert!(
             string.chars().all(|char| char.is_ascii() && char != '\0'),
@@ -33,7 +34,7 @@ impl MyClientKey {
             .collect::<Vec<FheAsciiChar>>();
         let cst = FheAsciiChar::encrypt(32u8, &self.client_key);
 
-        FheString::from_vec(fhe_bytes, public_parameters)
+        FheString::from_vec(fhe_bytes, public_parameters, server_key)
     }
 
     pub fn encrypt_no_padding(&self, string: &str) -> Vec<FheAsciiChar> {

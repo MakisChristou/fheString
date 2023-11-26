@@ -12,10 +12,11 @@ impl FheSplit {
         buffers: Vec<Vec<FheAsciiChar>>,
         pattern_found: FheAsciiChar,
         public_parameters: &PublicParameters,
+        server_key: &tfhe::integer::ServerKey,
     ) -> Self {
         let mut fhe_string_buffers = Vec::new();
         for buffer in buffers {
-            fhe_string_buffers.push(FheString::from_vec(buffer, public_parameters));
+            fhe_string_buffers.push(FheString::from_vec(buffer, public_parameters, server_key));
         }
 
         FheSplit {

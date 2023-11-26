@@ -1,5 +1,3 @@
-use tfhe::shortint::PublicKey;
-
 use super::public_parameters::PublicParameters;
 use crate::FheAsciiChar;
 
@@ -17,8 +15,12 @@ pub enum Comparison {
 }
 
 impl FheString {
-    pub fn from_vec(bytes: Vec<FheAsciiChar>, public_paramters: &PublicParameters) -> Self {
-        let cst = FheAsciiChar::encrypt_trivial(32u8, public_paramters);
+    pub fn from_vec(
+        bytes: Vec<FheAsciiChar>,
+        public_paramters: &PublicParameters,
+        server_key: &tfhe::integer::ServerKey,
+    ) -> Self {
+        let cst = FheAsciiChar::encrypt_trivial(32u8, public_paramters, server_key);
         FheString { bytes, cst }
     }
 }

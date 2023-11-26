@@ -15,7 +15,7 @@ pub fn bubble_zeroes_left(
     server_key: &tfhe::integer::ServerKey,
     public_parameters: &PublicParameters,
 ) -> Vec<FheAsciiChar> {
-    let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters);
+    let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, server_key);
 
     // Bring non \0 characters in front O(n^2), essentially bubble sort
     for _ in 0..result.len() {
@@ -73,7 +73,12 @@ pub fn run_fhe_str_method(
     to_plain: &String,
     method: &StringMethod,
 ) {
-    let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+    let my_string = my_client_key.encrypt(
+        my_string_plain,
+        STRING_PADDING,
+        &public_parameters,
+        &my_server_key.key,
+    );
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
     let from = my_client_key.encrypt_no_padding(from_plain);
     let to = my_client_key.encrypt_no_padding(to_plain);
@@ -129,10 +134,18 @@ pub fn run_fhe_str_method(
             compare_and_print(expected as u8, actual);
         }
         StringMethod::EqIgnoreCase => {
-            let heistack1 =
-                my_client_key.encrypt(&my_string_plain, STRING_PADDING, &public_parameters);
-            let heistack2 =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING + 20, &public_parameters);
+            let heistack1 = my_client_key.encrypt(
+                &my_string_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
+            let heistack2 = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let res = my_server_key.eq_ignore_case(&heistack1, &heistack2, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.eq_ignore_ascii_case(&pattern_plain);
@@ -514,8 +527,12 @@ pub fn run_fhe_str_method(
         }
         StringMethod::StripSuffix => {
             // Limitation: Client needs to know the string padding
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let fhe_strip =
                 my_server_key.strip_suffix(&my_string, &pattern_string.bytes, &public_parameters);
             let (actual, actual_pattern_found) =
@@ -580,8 +597,12 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, &actual);
         }
         StringMethod::Concatenate => {
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let my_string_concatenated =
                 my_server_key.concatenate(&my_string, &pattern_string, &public_parameters);
             let actual = my_client_key.decrypt(my_string_concatenated, STRING_PADDING);
@@ -590,8 +611,12 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual.into());
         }
         StringMethod::Lt => {
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let actual = my_server_key.lt(&my_string, &pattern_string, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain < pattern_plain) as u8;
@@ -599,8 +624,12 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::Le => {
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let actual = my_server_key.le(&my_string, &pattern_string, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain <= pattern_plain) as u8;
@@ -608,8 +637,12 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::Gt => {
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let actual = my_server_key.gt(&my_string, &pattern_string, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain > pattern_plain) as u8;
@@ -617,8 +650,12 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::Ge => {
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let actual = my_server_key.ge(&my_string, &pattern_string, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain >= pattern_plain) as u8;
@@ -626,8 +663,12 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::Eq => {
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let actual = my_server_key.eq(&my_string, &pattern_string, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain == pattern_plain) as u8;
@@ -635,8 +676,12 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::Ne => {
-            let pattern_string =
-                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let pattern_string = my_client_key.encrypt(
+                &pattern_plain,
+                STRING_PADDING,
+                &public_parameters,
+                &my_server_key.key,
+            );
             let actual = my_server_key.ne(&my_string, &pattern_string, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain != pattern_plain) as u8;
