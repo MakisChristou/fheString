@@ -438,8 +438,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::StripPrefix => {
             let fhe_strip = MyServerKey::strip_prefix(&my_string, &pattern);
-            let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+            let (actual, actual_pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
             let expected = my_string_plain.strip_prefix(pattern_plain);
             let expected_pattern_found = if let Some(_) = expected { true } else { false };
 
@@ -454,8 +453,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::StripPrefixClear => {
             let fhe_strip = MyServerKey::strip_prefix_clear(&my_string, &pattern_plain);
-            let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+            let (actual, actual_pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
             let expected = my_string_plain.strip_prefix(pattern_plain);
             let expected_pattern_found = if let Some(_) = expected { true } else { false };
 
@@ -472,8 +470,7 @@ pub fn run_fhe_str_method(
             // Limitation: Client needs to know the string padding
             let pattern_string = my_client_key.encrypt(&pattern_plain, STRING_PADDING);
             let fhe_strip = MyServerKey::strip_suffix(&my_string, &pattern_string.bytes);
-            let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+            let (actual, actual_pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
             let expected = my_string_plain.strip_suffix(pattern_plain);
             let expected_pattern_found = if let Some(_) = expected { true } else { false };
 
@@ -494,8 +491,7 @@ pub fn run_fhe_str_method(
             let padded_pattern_plain = format!("{}{}", pattern_plain, null_bytes);
 
             let fhe_strip = MyServerKey::strip_suffix_clear(&my_string, &padded_pattern_plain);
-            let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+            let (actual, actual_pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
             let expected = my_string_plain.strip_suffix(pattern_plain);
             let expected_pattern_found = if let Some(_) = expected { true } else { false };
 

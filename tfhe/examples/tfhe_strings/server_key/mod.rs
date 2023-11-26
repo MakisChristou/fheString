@@ -611,39 +611,48 @@ impl MyServerKey {
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
         let mut global_pattern_found = one.clone();
 
-        for i in 0..(string.bytes.len() - pattern.len()) {
-            // Copy ith character to the appropriate buffer
-            for j in 0..max_no_buffers {
-                let enc_j = FheAsciiChar::encrypt_trivial(j as u8);
-                let copy_flag = enc_j.eq(&current_copy_buffer);
-                result[j][i] = copy_flag.if_then_else(&string.bytes[i], &result[j][i]);
-            }
+        let end = string.bytes.len().checked_sub(pattern.len());
 
-            let mut pattern_found = one.clone();
-            for j in 0..pattern.len() {
-                let eql = string.bytes[i + j].eq(&pattern[j]);
-                pattern_found &= eql;
-            }
+        match end {
+            Some(end_of_pattern) => {
+                for i in 0..(end_of_pattern) {
+                    // Copy ith character to the appropriate buffer
+                    for j in 0..max_no_buffers {
+                        let enc_j = FheAsciiChar::encrypt_trivial(j as u8);
+                        let copy_flag = enc_j.eq(&current_copy_buffer);
+                        result[j][i] = copy_flag.if_then_else(&string.bytes[i], &result[j][i]);
+                    }
 
-            global_pattern_found = global_pattern_found & pattern_found.clone();
+                    let mut pattern_found = one.clone();
+                    for j in 0..pattern.len() {
+                        let eql = string.bytes[i + j].eq(&pattern[j]);
+                        pattern_found &= eql;
+                    }
 
-            // If its splitn stop after n splits
-            match &n {
-                None => {
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
-                    current_copy_buffer = pattern_found
-                        .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+                    global_pattern_found = global_pattern_found & pattern_found.clone();
+
+                    // If its splitn stop after n splits
+                    match &n {
+                        None => {
+                            // Here we know if the pattern is found for position i
+                            // If its found we need to switch from copying to old buffer and start copying to new one
+                            current_copy_buffer = pattern_found
+                                .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+                        }
+                        Some(max_splits) => {
+                            stop_counter_increment |= current_copy_buffer.eq(&(max_splits - &one));
+
+                            // Here we know if the pattern is found for position i
+                            // If its found we need to switch from copying to old buffer and start copying to new one
+                            current_copy_buffer = (pattern_found & stop_counter_increment.flip())
+                                .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+                        }
+                    };
                 }
-                Some(max_splits) => {
-                    stop_counter_increment |= current_copy_buffer.eq(&(max_splits - &one));
-
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
-                    current_copy_buffer = (pattern_found & stop_counter_increment.flip())
-                        .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
-                }
-            };
+            }
+            None => {
+                return FheSplit::new(result, zero);
+            }
         }
 
         match &n {
@@ -850,39 +859,48 @@ impl MyServerKey {
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
         let mut global_pattern_found = one.clone();
 
-        for i in (0..(string.bytes.len() - pattern.len())).rev() {
-            // Copy ith character to the appropriate buffer
-            for j in 0..max_no_buffers {
-                let enc_j = FheAsciiChar::encrypt_trivial(j as u8);
-                let copy_flag = enc_j.eq(&current_copy_buffer);
-                result[j][i] = copy_flag.if_then_else(&string.bytes[i], &result[j][i]);
-            }
+        let end = string.bytes.len().checked_sub(pattern.len());
 
-            let mut pattern_found = one.clone();
-            for j in 0..pattern.len() {
-                let eql = string.bytes[i + j].eq(&pattern[j]);
-                pattern_found &= eql;
-            }
+        match end {
+            Some(end_of_pattern) => {
+                for i in (0..(end_of_pattern)).rev() {
+                    // Copy ith character to the appropriate buffer
+                    for j in 0..max_no_buffers {
+                        let enc_j = FheAsciiChar::encrypt_trivial(j as u8);
+                        let copy_flag = enc_j.eq(&current_copy_buffer);
+                        result[j][i] = copy_flag.if_then_else(&string.bytes[i], &result[j][i]);
+                    }
 
-            global_pattern_found = global_pattern_found & pattern_found.clone();
+                    let mut pattern_found = one.clone();
+                    for j in 0..pattern.len() {
+                        let eql = string.bytes[i + j].eq(&pattern[j]);
+                        pattern_found &= eql;
+                    }
 
-            // If its splitn stop after n splits
-            match &n {
-                None => {
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
-                    current_copy_buffer = pattern_found
-                        .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+                    global_pattern_found = global_pattern_found & pattern_found.clone();
+
+                    // If its splitn stop after n splits
+                    match &n {
+                        None => {
+                            // Here we know if the pattern is found for position i
+                            // If its found we need to switch from copying to old buffer and start copying to new one
+                            current_copy_buffer = pattern_found
+                                .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+                        }
+                        Some(max_splits) => {
+                            stop_counter_increment |= current_copy_buffer.eq(&(max_splits - &one));
+
+                            // Here we know if the pattern is found for position i
+                            // If its found we need to switch from copying to old buffer and start copying to new one
+                            current_copy_buffer = (pattern_found & stop_counter_increment.flip())
+                                .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
+                        }
+                    };
                 }
-                Some(max_splits) => {
-                    stop_counter_increment |= current_copy_buffer.eq(&(max_splits - &one));
-
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying to new one
-                    current_copy_buffer = (pattern_found & stop_counter_increment.flip())
-                        .if_then_else(&(&current_copy_buffer + &one), &current_copy_buffer);
-                }
-            };
+            }
+            None => {
+                return FheSplit::new(result, zero);
+            }
         }
 
         match &n {
