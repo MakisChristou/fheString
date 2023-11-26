@@ -299,14 +299,22 @@ pub fn run_fhe_str_method(
             let fhe_split =
                 my_server_key.rsplit_once_clear(&my_string, &pattern_plain, &public_parameters);
             let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let expected = my_string_plain.rsplit_once(pattern_plain);
 
-            let expected_tuple = my_string_plain.rsplit_once(pattern_plain).unwrap();
-            let expected = vec![expected_tuple.1, expected_tuple.0];
+            match expected {
+                Some(expected_tuple) => {
+                    let expected = vec![expected_tuple.1, expected_tuple.0];
+                    let actual = trim_vector(plain_split.0);
+                    let expected = trim_str_vector(expected);
 
-            let actual = trim_vector(plain_split.0);
-            let expected = trim_str_vector(expected);
-
-            compare_and_print(expected, actual);
+                    compare_and_print(expected, actual);
+                }
+                // Delimiter not found
+                None => {
+                    let actual = plain_split.1;
+                    compare_and_print(0u8, actual);
+                }
+            }
         }
         StringMethod::RsplitN => {
             let fhe_split = my_server_key.rsplitn(&my_string, &pattern, n, &public_parameters);
@@ -623,6 +631,15 @@ pub fn run_fhe_str_method(
             let actual = my_server_key.eq(&my_string, &pattern_string, &public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain == pattern_plain) as u8;
+
+            compare_and_print(expected, actual);
+        }
+        StringMethod::Ne => {
+            let pattern_string =
+                my_client_key.encrypt(&pattern_plain, STRING_PADDING, &public_parameters);
+            let actual = my_server_key.ne(&my_string, &pattern_string, &public_parameters);
+            let actual: u8 = my_client_key.decrypt_char(&actual);
+            let expected = (my_string_plain != pattern_plain) as u8;
 
             compare_and_print(expected, actual);
         }

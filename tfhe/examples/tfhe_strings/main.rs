@@ -11,7 +11,7 @@ use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
 const STRING_PADDING: usize = 3;
-const MAX_REPETITIONS: usize = 4;
+const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 
 mod args;
@@ -102,6 +102,7 @@ fn main() {
         StringMethod::Gt,
         StringMethod::Ge,
         StringMethod::Eq,
+        StringMethod::Ne,
     ];
 
     for method in methods_to_test {

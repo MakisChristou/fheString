@@ -601,6 +601,16 @@ impl MyServerKey {
         is_eq
     }
 
+    pub fn ne(
+        &self,
+        string: &FheString,
+        other: &FheString,
+        public_parameters: &PublicParameters,
+    ) -> FheAsciiChar {
+        let res = self.eq(string, other, public_parameters);
+        res.flip(&self.key, public_parameters)
+    }
+
     pub fn eq_ignore_case(
         &self,
         string: &FheString,

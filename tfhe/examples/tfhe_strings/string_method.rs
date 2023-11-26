@@ -51,4 +51,5 @@ pub enum StringMethod {
     Gt,
     Ge,
     Eq,
+    Ne,
 }
