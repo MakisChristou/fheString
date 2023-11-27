@@ -470,7 +470,8 @@ impl MyServerKey {
 
         let mut copy_buffer = vec![zero.clone(); max_possible_output_len];
         // This is used to ignore invalid pattern found flags
-        // This happens if for example we replace e with test, the e in test will match the pattern but its invalid
+        // This happens if for example we replace e with test, the e in test will match the pattern
+        // but its invalid
         let mut ignore_pattern_mask = vec![one.clone(); max_possible_output_len];
 
         // Replace from wih to
@@ -760,7 +761,8 @@ impl MyServerKey {
             ret = flag.if_then_else(&self.key, &comparison_result, &ret)
         }
 
-        // if ret = 255u8 it means that we never compared anything, which means the 2 strings are equal
+        // if ret = 255u8 it means that we never compared anything, which means the 2 strings are
+        // equal
         let are_strings_equal = ret.eq(&self.key, &two_five_five);
 
         match operation {

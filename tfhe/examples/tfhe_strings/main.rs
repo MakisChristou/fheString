@@ -127,9 +127,10 @@ fn main() {
 
 #[cfg(test)]
 mod test {
+    use crate::utils::{trim_str_vector, trim_vector};
     use crate::{
-        utils::trim_str_vector, utils::trim_vector, FheAsciiChar, FheSplit, FheString, FheStrip,
-        MyClientKey, MyServerKey, PublicParameters, MAX_FIND_LENGTH, STRING_PADDING,
+        FheAsciiChar, FheSplit, FheString, FheStrip, MyClientKey, MyServerKey, PublicParameters,
+        MAX_FIND_LENGTH, STRING_PADDING,
     };
     use tfhe::integer::gen_keys_radix;
     use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;

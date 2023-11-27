@@ -18,7 +18,7 @@ impl FheAsciiChar {
         public_parameters: &PublicParameters,
         server_key: &tfhe::integer::ServerKey,
     ) -> FheAsciiChar {
-        let public_key = &public_parameters.public_key;
+        let _ = &public_parameters.public_key;
         let num_blocks = public_parameters.num_blocks;
         let new_char = server_key.create_trivial_radix(value, num_blocks);
         FheAsciiChar::new(new_char)
