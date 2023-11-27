@@ -3,7 +3,7 @@ use clap::Parser;
 /// A FHE string implementation using tfhe-rs
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-pub struct Args {
+pub struct StringArgs {
     /// The string to do the processing on
     #[arg(short, long)]
     pub string: String,
@@ -23,4 +23,11 @@ pub struct Args {
     /// What will replace it (for replace algorithms)
     #[arg(short, long)]
     pub to: String,
+}
+
+impl StringArgs {
+    // The from_args method
+    pub fn from_args() -> Self {
+        <Self as clap::Parser>::parse()
+    }
 }

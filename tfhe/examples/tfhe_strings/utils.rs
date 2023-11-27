@@ -1,3 +1,4 @@
+use crate::args::StringArgs;
 use crate::ciphertext::fheasciichar::FheAsciiChar;
 use crate::ciphertext::fhesplit::FheSplit;
 use crate::ciphertext::fhestrip::FheStrip;
@@ -62,32 +63,6 @@ fn compare_and_print<T: PartialEq + std::fmt::Debug>(expected: T, actual: T) {
     }
 }
 
-pub struct StringArgs {
-    my_string_plain: String,
-    pattern_plain: String,
-    from_plain: String,
-    to_plain: String,
-    n_plain: usize,
-}
-
-impl StringArgs {
-    pub fn new(
-        my_string_plain: String,
-        pattern_plain: String,
-        from_plain: String,
-        to_plain: String,
-        n_plain: usize,
-    ) -> Self {
-        Self {
-            my_string_plain,
-            pattern_plain,
-            from_plain,
-            to_plain,
-            n_plain,
-        }
-    }
-}
-
 pub fn run_fhe_str_method(
     my_server_key: &MyServerKey,
     my_client_key: &MyClientKey,
@@ -95,11 +70,11 @@ pub fn run_fhe_str_method(
     string_args: &StringArgs,
     method: &StringMethod,
 ) {
-    let my_string_plain = &string_args.my_string_plain;
-    let pattern_plain = &string_args.pattern_plain;
-    let from_plain = &string_args.from_plain;
-    let to_plain = &string_args.to_plain;
-    let n_plain = string_args.n_plain;
+    let my_string_plain = &string_args.string;
+    let pattern_plain = &string_args.pattern;
+    let from_plain = &string_args.from;
+    let to_plain = &string_args.to;
+    let n_plain = string_args.n;
 
     let my_string = my_client_key.encrypt(
         my_string_plain,

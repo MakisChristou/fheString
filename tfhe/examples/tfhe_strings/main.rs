@@ -1,13 +1,11 @@
 use ciphertext::fheasciichar::FheAsciiChar;
-use clap::Parser;
 use string_method::StringMethod;
 use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
-use crate::args::Args;
+use crate::args::StringArgs;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
 use crate::server_key::MyServerKey;
-use crate::utils::StringArgs;
 use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
@@ -25,16 +23,10 @@ mod utils;
 use client_key::MyClientKey;
 
 fn main() {
-    // Argument parsing
-    let args = Args::parse();
-    let my_string_plain = args.string;
-    let pattern_plain = args.pattern;
-    let n_plain = args.n;
-    let from_plain = args.from;
-    let to_plain = args.to;
+    let string_args = StringArgs::from_args();
 
     assert!(
-        n_plain <= MAX_REPETITIONS,
+        string_args.n <= MAX_REPETITIONS,
         "Repeat method will not function correctly, increase MAX_REPETITIONS"
     );
 
@@ -105,14 +97,6 @@ fn main() {
         StringMethod::Eq,
         StringMethod::Ne,
     ];
-
-    let string_args = StringArgs::new(
-        my_string_plain,
-        pattern_plain,
-        from_plain,
-        to_plain,
-        n_plain,
-    );
 
     for method in methods_to_test {
         let start = Instant::now();
