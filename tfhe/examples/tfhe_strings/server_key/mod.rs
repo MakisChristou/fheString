@@ -65,6 +65,11 @@ impl MyServerKey {
         needle: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
+
+        if string.bytes.is_empty() && needle.is_empty() {
+            return FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+        }
+
         let mut result = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let end = string.bytes.len().checked_sub(needle.len());
