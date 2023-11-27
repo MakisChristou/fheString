@@ -157,7 +157,8 @@ mod test {
         let heistack_plain = "awesomezamaisawesome";
         let needle_plain = "zama";
 
-        let heistack = my_client_key.encrypt(heistack_plain, 3, &public_parameters);
+        let heistack =
+            my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.contains(&heistack, &needle, &public_parameters);
@@ -175,7 +176,8 @@ mod test {
         let heistack_plain = "hello world";
         let needle_plain = "zama";
 
-        let heistack = my_client_key.encrypt(heistack_plain, 3, &public_parameters);
+        let heistack =
+            my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.contains(&heistack, &needle, &public_parameters);
@@ -193,7 +195,12 @@ mod test {
         let heistack_plain = "hello world";
         let needle_plain = "zama";
 
-        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.ends_with(&heistack, &needle, STRING_PADDING, &public_parameters);
@@ -211,7 +218,12 @@ mod test {
         let heistack_plain = "hello world";
         let needle_plain = "hello";
 
-        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.starts_with(&heistack, &needle, &public_parameters);
@@ -229,7 +241,12 @@ mod test {
         let heistack_plain = "hello world";
         let needle_plain = "zama";
 
-        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.starts_with(&heistack, &needle, &public_parameters);
@@ -247,7 +264,12 @@ mod test {
         let heistack_plain = "hello world";
         let needle_plain = "world";
 
-        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.ends_with(&heistack, &needle, STRING_PADDING, &public_parameters);
@@ -264,7 +286,12 @@ mod test {
 
         let my_string_plain = "zama IS awesome";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let my_string_upper = my_server_key.to_upper(&my_string, &public_parameters);
 
         let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
@@ -280,7 +307,12 @@ mod test {
         let my_string_plain = "abc";
         let n_plain = 3u8;
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let n = my_client_key.encrypt_char(n_plain);
 
         let my_string_upper = my_server_key.repeat(&my_string, n, &public_parameters);
@@ -298,7 +330,12 @@ mod test {
         let from_plain = "world";
         let to_plain = "abc";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let from = my_client_key.encrypt_no_padding(from_plain);
         let to = my_client_key.encrypt_no_padding(to_plain);
 
@@ -318,7 +355,12 @@ mod test {
         let from_plain = "abc";
         let to_plain = "world";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let from = my_client_key.encrypt_no_padding(from_plain);
         let to = my_client_key.encrypt_no_padding(to_plain);
 
@@ -339,7 +381,12 @@ mod test {
         let to_plain = "world";
         let n_plain = 1u8;
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let from = my_client_key.encrypt_no_padding(from_plain);
         let to = my_client_key.encrypt_no_padding(to_plain);
         let n = my_client_key.encrypt_char(n_plain);
@@ -358,7 +405,12 @@ mod test {
 
         let my_string_plain = "zama IS awesome";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let my_string_upper = my_server_key.to_lower(&my_string, &public_parameters);
 
         let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
@@ -373,7 +425,12 @@ mod test {
 
         let my_string_plain = "ZA MA\n\t \r\x0C";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let my_string_upper = my_server_key.trim_end(&my_string, &public_parameters);
 
         let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
@@ -388,7 +445,12 @@ mod test {
 
         let my_string_plain = "\nZA MA";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let my_string_upper = my_server_key.trim_end(&my_string, &public_parameters);
 
         let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
@@ -403,7 +465,12 @@ mod test {
 
         let my_string_plain = "\nZA MA";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let my_string_upper = my_server_key.trim_start(&my_string, &public_parameters);
 
         let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
@@ -418,7 +485,12 @@ mod test {
 
         let my_string_plain = "\nZA MA\n";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let my_string_upper = my_server_key.trim(&my_string, &public_parameters);
 
         let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
@@ -432,7 +504,12 @@ mod test {
         let (my_client_key, my_server_key, public_parameters) = setup_test();
 
         let my_string_plain = "";
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
 
         let res = my_server_key.is_empty(&my_string, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
@@ -446,7 +523,12 @@ mod test {
         let (my_client_key, my_server_key, public_parameters) = setup_test();
 
         let my_string_plain = "hello";
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
 
         let res = my_server_key.is_empty(&my_string, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
@@ -461,7 +543,12 @@ mod test {
 
         let my_string_plain = "hello world";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
 
         let res = my_server_key.len(&my_string, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
@@ -478,7 +565,12 @@ mod test {
         let heistack_plain = "hello abc abc test";
         let needle_plain = "abc";
 
-        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.rfind(&heistack, &needle, &public_parameters);
@@ -496,7 +588,12 @@ mod test {
         let heistack_plain = "hello test";
         let needle_plain = "abc";
 
-        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.rfind(&heistack, &needle, &public_parameters);
@@ -517,7 +614,12 @@ mod test {
         let heistack_plain = "hello test".repeat(100);
         let needle_plain = "abc";
 
-        let heistack = my_client_key.encrypt(&heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            &heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let _ = my_server_key.rfind(&heistack, &needle, &public_parameters);
@@ -530,7 +632,12 @@ mod test {
         let heistack_plain = "hello test";
         let needle_plain = "test";
 
-        let heistack = my_client_key.encrypt(heistack_plain, STRING_PADDING, &public_parameters);
+        let heistack = my_client_key.encrypt(
+            heistack_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
         let res = my_server_key.find(&heistack, &needle, &public_parameters);
@@ -548,9 +655,18 @@ mod test {
         let heistack1_plain = "hello test";
         let heistack2_plain = "hello test";
 
-        let heistack1 = my_client_key.encrypt(heistack1_plain, STRING_PADDING, &public_parameters);
-        let heistack2 =
-            my_client_key.encrypt(heistack2_plain, STRING_PADDING + 20, &public_parameters);
+        let heistack1 = my_client_key.encrypt(
+            heistack1_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let heistack2 = my_client_key.encrypt(
+            heistack2_plain,
+            STRING_PADDING + 20,
+            &public_parameters,
+            &my_server_key.key,
+        );
 
         let res = my_server_key.eq(&heistack1, &heistack2, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
@@ -566,9 +682,18 @@ mod test {
         let heistack1_plain = "hello TEST";
         let heistack2_plain = "hello test";
 
-        let heistack1 = my_client_key.encrypt(heistack1_plain, STRING_PADDING, &public_parameters);
-        let heistack2 =
-            my_client_key.encrypt(heistack2_plain, STRING_PADDING + 20, &public_parameters);
+        let heistack1 = my_client_key.encrypt(
+            heistack1_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let heistack2 = my_client_key.encrypt(
+            heistack2_plain,
+            STRING_PADDING + 20,
+            &public_parameters,
+            &my_server_key.key,
+        );
 
         let res = my_server_key.eq_ignore_case(&heistack1, &heistack2, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
@@ -584,7 +709,12 @@ mod test {
         let my_string_plain = "HELLO test test HELLO";
         let pattern_plain = "HELLO";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
         let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern, &public_parameters);
 
@@ -602,8 +732,18 @@ mod test {
         let my_string_plain = "HELLO test test HELLO";
         let pattern_plain = "HELLO";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
-        let pattern = my_client_key.encrypt(pattern_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let pattern = my_client_key.encrypt(
+            pattern_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_parameters);
 
         let (actual, _) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
@@ -620,8 +760,14 @@ mod test {
         let my_string_plain = "HELLO test test HELLO";
         let pattern_plain = "WORLD";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
-        let pattern = my_client_key.encrypt(pattern_plain, 0, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let pattern =
+            my_client_key.encrypt(pattern_plain, 0, &public_parameters, &my_server_key.key);
         let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_parameters);
 
         let (_, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
@@ -641,8 +787,14 @@ mod test {
         let my_string_plain = "HELLO test test HELLO";
         let pattern_plain = "WORLD";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
-        let pattern = my_client_key.encrypt(pattern_plain, 0, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let pattern =
+            my_client_key.encrypt(pattern_plain, 0, &public_parameters, &my_server_key.key);
         let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern.bytes, &public_parameters);
 
         let (actual, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
@@ -662,10 +814,18 @@ mod test {
         let my_string1_plain = "Hello, ";
         let my_string2_plain = "World!";
 
-        let my_string1 =
-            my_client_key.encrypt(my_string1_plain, STRING_PADDING, &public_parameters);
-        let my_string2 =
-            my_client_key.encrypt(my_string2_plain, STRING_PADDING, &public_parameters);
+        let my_string1 = my_client_key.encrypt(
+            my_string1_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let my_string2 = my_client_key.encrypt(
+            my_string2_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let my_string_upper =
             my_server_key.concatenate(&my_string1, &my_string2, &public_parameters);
 
@@ -680,8 +840,18 @@ mod test {
         let my_string_plain1 = "aaa";
         let my_string_plain2 = "aaaa";
 
-        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_parameters);
-        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_parameters);
+        let heistack1 = my_client_key.encrypt(
+            my_string_plain1,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let heistack2 = my_client_key.encrypt(
+            my_string_plain2,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let actual = my_server_key.lt(&heistack1, &heistack2, &public_parameters);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
@@ -698,8 +868,18 @@ mod test {
         let my_string_plain1 = "aaa";
         let my_string_plain2 = "aaaa";
 
-        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_parameters);
-        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_parameters);
+        let heistack1 = my_client_key.encrypt(
+            my_string_plain1,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let heistack2 = my_client_key.encrypt(
+            my_string_plain2,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let actual = my_server_key.le(&heistack1, &heistack2, &public_parameters);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
@@ -716,8 +896,18 @@ mod test {
         let my_string_plain1 = "aaa";
         let my_string_plain2 = "aaaa";
 
-        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_parameters);
-        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_parameters);
+        let heistack1 = my_client_key.encrypt(
+            my_string_plain1,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let heistack2 = my_client_key.encrypt(
+            my_string_plain2,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let actual = my_server_key.gt(&heistack1, &heistack2, &public_parameters);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
@@ -734,8 +924,18 @@ mod test {
         let my_string_plain1 = "aaa";
         let my_string_plain2 = "aaaa";
 
-        let heistack1 = my_client_key.encrypt(my_string_plain1, STRING_PADDING, &public_parameters);
-        let heistack2 = my_client_key.encrypt(my_string_plain2, STRING_PADDING, &public_parameters);
+        let heistack1 = my_client_key.encrypt(
+            my_string_plain1,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
+        let heistack2 = my_client_key.encrypt(
+            my_string_plain2,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let actual = my_server_key.ge(&heistack1, &heistack2, &public_parameters);
 
         let deccrypted_actual: u8 = my_client_key.decrypt_char(&actual);
@@ -752,7 +952,12 @@ mod test {
         let my_string_plain = " Mary had a";
         let pattern_plain = " ";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
         let fhe_split = my_server_key.split(&my_string, &pattern, &public_parameters);
@@ -771,7 +976,12 @@ mod test {
         let my_string_plain = "Mary had a";
         let pattern_plain = " ";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
         let fhe_split = my_server_key.split_inclusive(&my_string, &pattern, &public_parameters);
@@ -790,7 +1000,12 @@ mod test {
         let my_string_plain = ".A.B.";
         let pattern_plain = ".";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
         let fhe_split = my_server_key.split_terminator(&my_string, &pattern, &public_parameters);
@@ -807,7 +1022,12 @@ mod test {
         let (my_client_key, my_server_key, public_parameters) = setup_test();
 
         let my_string_plain = " A\nB\t";
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
 
         let fhe_split = my_server_key.split_ascii_whitespace(&my_string, &public_parameters);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
@@ -826,9 +1046,14 @@ mod test {
         let pattern_plain = ".";
         let n_plain = 2u8;
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
-        let n = FheAsciiChar::encrypt_trivial(n_plain, &public_parameters);
+        let n = FheAsciiChar::encrypt_trivial(n_plain, &public_parameters, &my_server_key.key);
 
         let fhe_split = my_server_key.splitn(&my_string, &pattern, n, &public_parameters);
         let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
@@ -849,7 +1074,12 @@ mod test {
         let my_string_plain = ".A.B.C.";
         let pattern_plain = ".";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
         let fhe_split = my_server_key.rsplit(&my_string, &pattern, &public_parameters);
@@ -868,7 +1098,12 @@ mod test {
         let my_string_plain = ".A.B.C.";
         let pattern_plain = ".";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
         let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_parameters);
@@ -917,7 +1152,12 @@ mod test {
         let my_string_plain = "....A.B.C.";
         let pattern_plain = ".";
 
-        let my_string = my_client_key.encrypt(my_string_plain, STRING_PADDING, &public_parameters);
+        let my_string = my_client_key.encrypt(
+            my_string_plain,
+            STRING_PADDING,
+            &public_parameters,
+            &my_server_key.key,
+        );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
         let fhe_split = my_server_key.rsplit_terminator(&my_string, &pattern, &public_parameters);
