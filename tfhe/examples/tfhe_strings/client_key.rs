@@ -32,7 +32,6 @@ impl MyClientKey {
             .bytes()
             .map(|b| FheAsciiChar::encrypt(b, &self.client_key))
             .collect::<Vec<FheAsciiChar>>();
-        let cst = FheAsciiChar::encrypt(32u8, &self.client_key);
 
         FheString::from_vec(fhe_bytes, public_parameters, server_key)
     }
@@ -47,7 +46,6 @@ impl MyClientKey {
             .bytes()
             .map(|b| FheAsciiChar::encrypt(b, &self.client_key))
             .collect::<Vec<FheAsciiChar>>();
-        let cst = FheAsciiChar::encrypt(32u8, &self.client_key);
 
         fhe_bytes
     }

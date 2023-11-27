@@ -120,7 +120,7 @@ impl MyServerKey {
 
         // Handle Edge case
         // When pattern is an empty string we consider it to always match
-        if pattern.len() == 0 {
+        if pattern.is_empty() {
             return FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         }
 
@@ -128,12 +128,10 @@ impl MyServerKey {
             (Some(start_val), Some(end_val)) => {
                 // Safe to use start_val and end_val here
                 let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-                let mut j = 0;
 
-                for i in start_val..(end_val + 1) {
+                for (j, i) in (start_val..(end_val + 1)).enumerate() {
                     let eql = string.bytes[i].eq(&self.key, &pattern[j]);
                     result = result.bitand(&self.key, &eql);
-                    j += 1;
                 }
                 result
             }
@@ -339,7 +337,7 @@ impl MyServerKey {
         }
 
         // Handle edge case
-        if pattern.len() == 0 {
+        if pattern.is_empty() {
             let mut last_non_zero_position = zero.clone();
 
             // Find the last char position that is non \0
@@ -487,7 +485,7 @@ impl MyServerKey {
 
             // Handle spacial case where from is empty which means that it matches all characters
             // I know its ugly but it works
-            if from.len() == 0 {
+            if from.is_empty() {
                 if i % (to.len() + 1) == 0 {
                     pattern_found_flag = one.clone();
                 } else {

@@ -82,20 +82,6 @@ impl FheAsciiChar {
         FheAsciiChar::new(res)
     }
 
-    pub fn bitxor(
-        &self,
-        server_key: &tfhe::integer::ServerKey,
-        other: &FheAsciiChar,
-    ) -> FheAsciiChar {
-        let res = server_key.bitxor_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
-    }
-
-    pub fn bitnot(&self, server_key: &tfhe::integer::ServerKey) -> FheAsciiChar {
-        let res = server_key.bitnot_parallelized(&self.inner);
-        FheAsciiChar::new(res)
-    }
-
     pub fn sub(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.sub_parallelized(&self.inner, &other.inner);
         FheAsciiChar::new(res)
@@ -103,16 +89,6 @@ impl FheAsciiChar {
 
     pub fn add(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.add_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
-    }
-
-    pub fn mul(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
-        let res = server_key.mul_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
-    }
-
-    pub fn div(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
-        let res = server_key.div_parallelized(&self.inner, &other.inner);
         FheAsciiChar::new(res)
     }
 
@@ -182,42 +158,6 @@ impl FheAsciiChar {
         let res2 = self.le(server_key, &lowercase_z);
 
         res1.bitand(server_key, &res2)
-    }
-
-    pub fn is_alphabetic(
-        &self,
-        server_key: &tfhe::integer::ServerKey,
-        public_parameters: &PublicParameters,
-    ) -> FheAsciiChar {
-        let is_uppercase = self.is_uppercase(server_key, public_parameters);
-        let is_lowercase = self.is_lowercase(server_key, public_parameters);
-
-        is_uppercase.bitor(server_key, &is_lowercase)
-    }
-
-    pub fn is_number(
-        &self,
-        server_key: &tfhe::integer::ServerKey,
-        public_parameters: &PublicParameters,
-    ) -> FheAsciiChar {
-        let digit_0 = FheAsciiChar::encrypt_trivial(0x30u8, public_parameters, server_key); // '0'
-        let digit_9 = FheAsciiChar::encrypt_trivial(0x39u8, public_parameters, server_key); // '9'
-
-        let res1 = self.ge(server_key, &digit_0);
-        let res2 = self.le(server_key, &digit_9);
-
-        res1.bitand(server_key, &res2)
-    }
-
-    pub fn is_alphanumeric(
-        &self,
-        server_key: &tfhe::integer::ServerKey,
-        public_parameters: &PublicParameters,
-    ) -> FheAsciiChar {
-        let is_alphabetic = self.is_alphabetic(server_key, public_parameters);
-        let is_number = self.is_number(server_key, public_parameters);
-
-        is_alphabetic.bitor(server_key, &is_number)
     }
 
     // Input must be either 0 or 1

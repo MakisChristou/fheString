@@ -7,6 +7,7 @@ use crate::args::Args;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
 use crate::server_key::MyServerKey;
+use crate::utils::StringArgs;
 use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
@@ -26,11 +27,11 @@ use client_key::MyClientKey;
 fn main() {
     // Argument parsing
     let args = Args::parse();
-    let my_string_plain = &args.string;
-    let pattern_plain = &args.pattern;
+    let my_string_plain = args.string;
+    let pattern_plain = args.pattern;
     let n_plain = args.n;
-    let from_plain = &args.from;
-    let to_plain = &args.to;
+    let from_plain = args.from;
+    let to_plain = args.to;
 
     assert!(
         n_plain <= MAX_REPETITIONS,
@@ -105,6 +106,14 @@ fn main() {
         StringMethod::Ne,
     ];
 
+    let string_args = StringArgs::new(
+        my_string_plain,
+        pattern_plain,
+        from_plain,
+        to_plain,
+        n_plain,
+    );
+
     for method in methods_to_test {
         let start = Instant::now();
 
@@ -112,11 +121,7 @@ fn main() {
             &my_server_key,
             &my_client_key,
             &public_parameters,
-            &my_string_plain,
-            &pattern_plain,
-            n_plain,
-            from_plain,
-            to_plain,
+            &string_args,
             &method,
         );
 

@@ -62,23 +62,52 @@ fn compare_and_print<T: PartialEq + std::fmt::Debug>(expected: T, actual: T) {
     }
 }
 
+pub struct StringArgs {
+    my_string_plain: String,
+    pattern_plain: String,
+    from_plain: String,
+    to_plain: String,
+    n_plain: usize,
+}
+
+impl StringArgs {
+    pub fn new(
+        my_string_plain: String,
+        pattern_plain: String,
+        from_plain: String,
+        to_plain: String,
+        n_plain: usize,
+    ) -> Self {
+        Self {
+            my_string_plain,
+            pattern_plain,
+            from_plain,
+            to_plain,
+            n_plain,
+        }
+    }
+}
+
 pub fn run_fhe_str_method(
     my_server_key: &MyServerKey,
     my_client_key: &MyClientKey,
     public_parameters: &PublicParameters,
-    my_string_plain: &String,
-    pattern_plain: &String,
-    n_plain: usize,
-    from_plain: &String,
-    to_plain: &String,
+    string_args: &StringArgs,
     method: &StringMethod,
 ) {
+    let my_string_plain = &string_args.my_string_plain;
+    let pattern_plain = &string_args.pattern_plain;
+    let from_plain = &string_args.from_plain;
+    let to_plain = &string_args.to_plain;
+    let n_plain = string_args.n_plain;
+
     let my_string = my_client_key.encrypt(
         my_string_plain,
         STRING_PADDING,
-        &public_parameters,
+        public_parameters,
         &my_server_key.key,
     );
+
     let pattern = my_client_key.encrypt_no_padding(pattern_plain);
     let from = my_client_key.encrypt_no_padding(from_plain);
     let to = my_client_key.encrypt_no_padding(to_plain);
@@ -86,28 +115,28 @@ pub fn run_fhe_str_method(
 
     match method {
         StringMethod::ToUpper => {
-            let my_string_upper = my_server_key.to_upper(&my_string, &public_parameters);
+            let my_string_upper = my_server_key.to_upper(&my_string, public_parameters);
             let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
             let expected = my_string_plain.to_uppercase();
 
             compare_and_print(expected, actual);
         }
         StringMethod::ToLower => {
-            let my_string_upper = my_server_key.to_lower(&my_string, &public_parameters);
+            let my_string_upper = my_server_key.to_lower(&my_string, public_parameters);
             let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
             let expected = my_string_plain.to_lowercase();
 
             compare_and_print(expected, actual);
         }
         StringMethod::Contains => {
-            let res = my_server_key.contains(&my_string, &pattern, &public_parameters);
+            let res = my_server_key.contains(&my_string, &pattern, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.contains(pattern_plain);
 
             compare_and_print(expected as u8, actual);
         }
         StringMethod::ContainsClear => {
-            let res = my_server_key.contains_clear(&my_string, &pattern_plain, &public_parameters);
+            let res = my_server_key.contains_clear(&my_string, pattern_plain, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.contains(pattern_plain);
 
@@ -115,7 +144,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::EndsWith => {
             let res =
-                my_server_key.ends_with(&my_string, &pattern, STRING_PADDING, &public_parameters);
+                my_server_key.ends_with(&my_string, &pattern, STRING_PADDING, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.ends_with(pattern_plain);
 
@@ -124,9 +153,9 @@ pub fn run_fhe_str_method(
         StringMethod::EndsWithClear => {
             let res = my_server_key.ends_with_clear(
                 &my_string,
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
             );
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.ends_with(pattern_plain);
@@ -135,25 +164,25 @@ pub fn run_fhe_str_method(
         }
         StringMethod::EqIgnoreCase => {
             let heistack1 = my_client_key.encrypt(
-                &my_string_plain,
+                my_string_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
             let heistack2 = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
-            let res = my_server_key.eq_ignore_case(&heistack1, &heistack2, &public_parameters);
+            let res = my_server_key.eq_ignore_case(&heistack1, &heistack2, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
-            let expected = my_string_plain.eq_ignore_ascii_case(&pattern_plain);
+            let expected = my_string_plain.eq_ignore_ascii_case(pattern_plain);
 
             compare_and_print(expected as u8, actual);
         }
         StringMethod::Find => {
-            let res = my_server_key.find(&my_string, &pattern, &public_parameters);
+            let res = my_server_key.find(&my_string, &pattern, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.find(pattern_plain);
             let expected = if let Some(position) = expected {
@@ -165,7 +194,7 @@ pub fn run_fhe_str_method(
             compare_and_print(expected as u8, actual);
         }
         StringMethod::FindClear => {
-            let res = my_server_key.find_clear(&my_string, &pattern_plain, &public_parameters);
+            let res = my_server_key.find_clear(&my_string, pattern_plain, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.find(pattern_plain);
             let expected = if let Some(position) = expected {
@@ -177,14 +206,14 @@ pub fn run_fhe_str_method(
             compare_and_print(expected as u8, actual);
         }
         StringMethod::IsEmpty => {
-            let res = my_server_key.is_empty(&my_string, &public_parameters);
+            let res = my_server_key.is_empty(&my_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.is_empty();
 
             compare_and_print(expected as u8, actual);
         }
         StringMethod::Len => {
-            let res = my_server_key.len(&my_string, &public_parameters);
+            let res = my_server_key.len(&my_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.len();
 
@@ -192,22 +221,22 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Repeat => {
             let n = my_client_key.encrypt_char(n_plain as u8);
-            let my_string_upper = my_server_key.repeat(&my_string, n, &public_parameters);
+            let my_string_upper = my_server_key.repeat(&my_string, n, public_parameters);
             let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-            let expected = my_string_plain.repeat(n_plain.into());
+            let expected = my_string_plain.repeat(n_plain);
 
             compare_and_print(expected, actual);
         }
         StringMethod::RepeatClear => {
             let my_string_upper =
-                my_server_key.repeat_clear(&my_string, n_plain, &public_parameters);
+                my_server_key.repeat_clear(&my_string, n_plain, public_parameters);
             let actual = my_client_key.decrypt(my_string_upper, STRING_PADDING);
-            let expected = my_string_plain.repeat(n_plain.into());
+            let expected = my_string_plain.repeat(n_plain);
 
             compare_and_print(expected, actual);
         }
         StringMethod::Replace => {
-            let my_new_string = my_server_key.replace(&my_string, &from, &to, &public_parameters);
+            let my_new_string = my_server_key.replace(&my_string, &from, &to, public_parameters);
             let actual = my_client_key.decrypt(my_new_string, STRING_PADDING);
             let expected = my_string_plain.replace(from_plain, to_plain);
 
@@ -215,7 +244,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::ReplaceClear => {
             let my_new_string =
-                my_server_key.replace_clear(&my_string, &from_plain, &to_plain, &public_parameters);
+                my_server_key.replace_clear(&my_string, from_plain, to_plain, public_parameters);
             let actual = my_client_key.decrypt(my_new_string, STRING_PADDING);
             let expected = my_string_plain.replace(from_plain, to_plain);
 
@@ -223,28 +252,28 @@ pub fn run_fhe_str_method(
         }
         StringMethod::ReplaceN => {
             let my_new_string =
-                my_server_key.replacen(&my_string, &from, &to, n, &public_parameters);
+                my_server_key.replacen(&my_string, &from, &to, n, public_parameters);
             let actual = my_client_key.decrypt(my_new_string, STRING_PADDING);
-            let expected = my_string_plain.replacen(from_plain, to_plain, n_plain.into());
+            let expected = my_string_plain.replacen(from_plain, to_plain, n_plain);
 
             compare_and_print(expected, actual);
         }
         StringMethod::ReplaceNClear => {
             let my_new_string = my_server_key.replacen_clear(
                 &my_string,
-                &from_plain,
-                &to_plain,
+                from_plain,
+                to_plain,
                 n_plain as u8,
-                &public_parameters,
+                public_parameters,
             );
             let actual = my_client_key.decrypt(my_new_string, STRING_PADDING);
-            let expected = my_string_plain.replacen(from_plain, to_plain, n_plain.into());
+            let expected = my_string_plain.replacen(from_plain, to_plain, n_plain);
 
             compare_and_print(expected, actual);
         }
         StringMethod::Rfind => {
-            let needle = my_client_key.encrypt_no_padding(&pattern_plain);
-            let res = my_server_key.rfind(&my_string, &needle, &public_parameters);
+            let needle = my_client_key.encrypt_no_padding(pattern_plain);
+            let res = my_server_key.rfind(&my_string, &needle, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.rfind(pattern_plain);
             let expected = if let Some(position) = expected {
@@ -256,7 +285,7 @@ pub fn run_fhe_str_method(
             compare_and_print(expected as u8, actual);
         }
         StringMethod::RfindClear => {
-            let res = my_server_key.rfind_clear(&my_string, &pattern_plain, &public_parameters);
+            let res = my_server_key.rfind_clear(&my_string, pattern_plain, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.rfind(pattern_plain);
             let expected = if let Some(position) = expected {
@@ -268,8 +297,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected as u8, actual);
         }
         StringMethod::Rsplit => {
-            let fhe_split = my_server_key.rsplit(&my_string, &pattern, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.rsplit(&my_string, &pattern, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -279,8 +308,8 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitClear => {
             let fhe_split =
-                my_server_key.rsplit_clear(&my_string, &pattern_plain, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+                my_server_key.rsplit_clear(&my_string, pattern_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -289,8 +318,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::RsplitOnce => {
-            let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected = my_string_plain.rsplit_once(pattern_plain);
 
             match expected {
@@ -310,8 +339,8 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitOnceClear => {
             let fhe_split =
-                my_server_key.rsplit_once_clear(&my_string, &pattern_plain, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+                my_server_key.rsplit_once_clear(&my_string, pattern_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected = my_string_plain.rsplit_once(pattern_plain);
 
             match expected {
@@ -330,8 +359,8 @@ pub fn run_fhe_str_method(
             }
         }
         StringMethod::RsplitN => {
-            let fhe_split = my_server_key.rsplitn(&my_string, &pattern, n, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.rsplitn(&my_string, &pattern, n, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -340,13 +369,9 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::RsplitNClear => {
-            let fhe_split = my_server_key.rsplitn_clear(
-                &my_string,
-                &pattern_plain,
-                n_plain,
-                &public_parameters,
-            );
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split =
+                my_server_key.rsplitn_clear(&my_string, pattern_plain, n_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -356,8 +381,8 @@ pub fn run_fhe_str_method(
         }
         StringMethod::RsplitTerminator => {
             let fhe_split =
-                my_server_key.rsplit_terminator(&my_string, &pattern, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+                my_server_key.rsplit_terminator(&my_string, &pattern, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -366,12 +391,9 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::RsplitTerminatorClear => {
-            let fhe_split = my_server_key.rsplit_terminator_clear(
-                &my_string,
-                &pattern_plain,
-                &public_parameters,
-            );
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split =
+                my_server_key.rsplit_terminator_clear(&my_string, pattern_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -380,8 +402,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::Split => {
-            let fhe_split = my_server_key.split(&my_string, &pattern, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.split(&my_string, &pattern, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -390,9 +412,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::SplitClear => {
-            let fhe_split =
-                my_server_key.split_clear(&my_string, &pattern_plain, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.split_clear(&my_string, pattern_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -401,8 +422,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::SplitAsciiWhitespace => {
-            let fhe_split = my_server_key.split_ascii_whitespace(&my_string, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.split_ascii_whitespace(&my_string, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_ascii_whitespace().collect();
 
             let actual = trim_vector(plain_split.0);
@@ -411,8 +432,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::SplitInclusive => {
-            let fhe_split = my_server_key.split_inclusive(&my_string, &pattern, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.split_inclusive(&my_string, &pattern, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -422,8 +443,8 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitInclusiveClear => {
             let fhe_split =
-                my_server_key.split_inclusive_clear(&my_string, &pattern_plain, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+                my_server_key.split_inclusive_clear(&my_string, pattern_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_inclusive(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -432,9 +453,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::SplitTerminator => {
-            let fhe_split =
-                my_server_key.split_terminator(&my_string, &pattern, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.split_terminator(&my_string, &pattern, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -443,12 +463,9 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::SplitTerminatorClear => {
-            let fhe_split = my_server_key.split_terminator_clear(
-                &my_string,
-                &pattern_plain,
-                &public_parameters,
-            );
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split =
+                my_server_key.split_terminator_clear(&my_string, pattern_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.split_terminator(pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -457,8 +474,8 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::SplitN => {
-            let fhe_split = my_server_key.splitn(&my_string, &pattern, n, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+            let fhe_split = my_server_key.splitn(&my_string, &pattern, n, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -468,8 +485,8 @@ pub fn run_fhe_str_method(
         }
         StringMethod::SplitNClear => {
             let fhe_split =
-                my_server_key.splitn_clear(&my_string, &pattern_plain, n_plain, &public_parameters);
-            let plain_split = FheSplit::decrypt(fhe_split, &my_client_key, STRING_PADDING);
+                my_server_key.splitn_clear(&my_string, pattern_plain, n_plain, public_parameters);
+            let plain_split = FheSplit::decrypt(fhe_split, my_client_key, STRING_PADDING);
             let expected: Vec<&str> = my_string_plain.splitn(n_plain, pattern_plain).collect();
 
             let actual = trim_vector(plain_split.0);
@@ -478,26 +495,25 @@ pub fn run_fhe_str_method(
             compare_and_print(expected, actual);
         }
         StringMethod::StartsWith => {
-            let res = my_server_key.starts_with(&my_string, &pattern, &public_parameters);
+            let res = my_server_key.starts_with(&my_string, &pattern, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.starts_with(pattern_plain);
 
             compare_and_print(expected as u8, actual);
         }
         StringMethod::StartsWithClear => {
-            let res =
-                my_server_key.starts_with_clear(&my_string, &pattern_plain, &public_parameters);
+            let res = my_server_key.starts_with_clear(&my_string, pattern_plain, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.starts_with(pattern_plain);
 
             compare_and_print(expected as u8, actual);
         }
         StringMethod::StripPrefix => {
-            let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern, &public_parameters);
+            let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern, public_parameters);
             let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+                FheStrip::decrypt(fhe_strip, my_client_key, STRING_PADDING);
             let expected = my_string_plain.strip_prefix(pattern_plain);
-            let expected_pattern_found = if let Some(_) = expected { true } else { false };
+            let expected_pattern_found = expected.is_some();
 
             match expected {
                 Some(expected) => {
@@ -510,11 +526,11 @@ pub fn run_fhe_str_method(
         }
         StringMethod::StripPrefixClear => {
             let fhe_strip =
-                my_server_key.strip_prefix_clear(&my_string, &pattern_plain, &public_parameters);
+                my_server_key.strip_prefix_clear(&my_string, pattern_plain, public_parameters);
             let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+                FheStrip::decrypt(fhe_strip, my_client_key, STRING_PADDING);
             let expected = my_string_plain.strip_prefix(pattern_plain);
-            let expected_pattern_found = if let Some(_) = expected { true } else { false };
+            let expected_pattern_found = expected.is_some();
 
             match expected {
                 Some(expected) => {
@@ -528,17 +544,17 @@ pub fn run_fhe_str_method(
         StringMethod::StripSuffix => {
             // Limitation: Client needs to know the string padding
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
             let fhe_strip =
-                my_server_key.strip_suffix(&my_string, &pattern_string.bytes, &public_parameters);
+                my_server_key.strip_suffix(&my_string, &pattern_string.bytes, public_parameters);
             let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+                FheStrip::decrypt(fhe_strip, my_client_key, STRING_PADDING);
             let expected = my_string_plain.strip_suffix(pattern_plain);
-            let expected_pattern_found = if let Some(_) = expected { true } else { false };
+            let expected_pattern_found = expected.is_some();
 
             match expected {
                 // Pattern was found and stripped from original string
@@ -559,12 +575,12 @@ pub fn run_fhe_str_method(
             let fhe_strip = my_server_key.strip_suffix_clear(
                 &my_string,
                 &padded_pattern_plain,
-                &public_parameters,
+                public_parameters,
             );
             let (actual, actual_pattern_found) =
-                FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
+                FheStrip::decrypt(fhe_strip, my_client_key, STRING_PADDING);
             let expected = my_string_plain.strip_suffix(pattern_plain);
-            let expected_pattern_found = if let Some(_) = expected { true } else { false };
+            let expected_pattern_found = expected.is_some();
 
             match expected {
                 Some(expected) => {
@@ -576,21 +592,21 @@ pub fn run_fhe_str_method(
             }
         }
         StringMethod::Trim => {
-            let my_trimmed_string = my_server_key.trim(&my_string, &public_parameters);
+            let my_trimmed_string = my_server_key.trim(&my_string, public_parameters);
             let actual = my_client_key.decrypt(my_trimmed_string, STRING_PADDING);
             let expected = my_string_plain.trim();
 
             compare_and_print(expected, &actual);
         }
         StringMethod::TrimEnd => {
-            let my_trimmed_string = my_server_key.trim_end(&my_string, &public_parameters);
+            let my_trimmed_string = my_server_key.trim_end(&my_string, public_parameters);
             let actual = my_client_key.decrypt(my_trimmed_string, STRING_PADDING);
             let expected = my_string_plain.trim_end();
 
             compare_and_print(expected, &actual);
         }
         StringMethod::TrimStart => {
-            let my_trimmed_string = my_server_key.trim_start(&my_string, &public_parameters);
+            let my_trimmed_string = my_server_key.trim_start(&my_string, public_parameters);
             let actual = my_client_key.decrypt(my_trimmed_string, STRING_PADDING);
             let expected = my_string_plain.trim_start();
 
@@ -598,26 +614,26 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Concatenate => {
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
             let my_string_concatenated =
-                my_server_key.concatenate(&my_string, &pattern_string, &public_parameters);
+                my_server_key.concatenate(&my_string, &pattern_string, public_parameters);
             let actual = my_client_key.decrypt(my_string_concatenated, STRING_PADDING);
             let expected = format!("{}{}", my_string_plain, pattern_plain);
 
-            compare_and_print(expected, actual.into());
+            compare_and_print(expected, actual);
         }
         StringMethod::Lt => {
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
-            let actual = my_server_key.lt(&my_string, &pattern_string, &public_parameters);
+            let actual = my_server_key.lt(&my_string, &pattern_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain < pattern_plain) as u8;
 
@@ -625,12 +641,12 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Le => {
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
-            let actual = my_server_key.le(&my_string, &pattern_string, &public_parameters);
+            let actual = my_server_key.le(&my_string, &pattern_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain <= pattern_plain) as u8;
 
@@ -638,12 +654,12 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Gt => {
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
-            let actual = my_server_key.gt(&my_string, &pattern_string, &public_parameters);
+            let actual = my_server_key.gt(&my_string, &pattern_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain > pattern_plain) as u8;
 
@@ -651,12 +667,12 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Ge => {
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
-            let actual = my_server_key.ge(&my_string, &pattern_string, &public_parameters);
+            let actual = my_server_key.ge(&my_string, &pattern_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain >= pattern_plain) as u8;
 
@@ -664,12 +680,12 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Eq => {
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
-            let actual = my_server_key.eq(&my_string, &pattern_string, &public_parameters);
+            let actual = my_server_key.eq(&my_string, &pattern_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain == pattern_plain) as u8;
 
@@ -677,12 +693,12 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Ne => {
             let pattern_string = my_client_key.encrypt(
-                &pattern_plain,
+                pattern_plain,
                 STRING_PADDING,
-                &public_parameters,
+                public_parameters,
                 &my_server_key.key,
             );
-            let actual = my_server_key.ne(&my_string, &pattern_string, &public_parameters);
+            let actual = my_server_key.ne(&my_string, &pattern_string, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&actual);
             let expected = (my_string_plain != pattern_plain) as u8;
 
