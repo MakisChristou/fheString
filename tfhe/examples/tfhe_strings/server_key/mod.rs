@@ -425,8 +425,14 @@ impl MyServerKey {
         let mut result = bytes.clone();
 
         if from.len() <= result.len() {
+            let end_of_pattern = if result.len() - from.len() == 0 {
+                1
+            } else {
+                result.len() - from.len()
+            };
+
             // Replace from wih to
-            for i in 0..result.len() - from.len() {
+            for i in 0..end_of_pattern {
                 let mut pattern_found_flag = one.clone();
 
                 for j in 0..from.len() {
@@ -469,7 +475,20 @@ impl MyServerKey {
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, server_key);
         let size_difference = abs_difference(from.len(), to.len());
         let mut counter = FheAsciiChar::encrypt_trivial(0u8, public_parameters, server_key);
-        let max_possible_output_len = to.len() * bytes.len() + bytes.len();
+
+        let max_possible_output_len = if bytes.is_empty() {
+            to.len()
+        } else {
+            to.len() * bytes.len() + bytes.len()
+        };
+
+        // This implies that we match all characters
+        let max_possible_output_len = if from.is_empty() {
+            (bytes.len() + (bytes.len() + 1) * to.len()) + 1
+        } else {
+            max_possible_output_len
+        };
+
         let mut result = bytes.clone();
 
         for _ in 0..max_possible_output_len - bytes.len() {
@@ -543,8 +562,7 @@ impl MyServerKey {
         pattern: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-
-        // Edge case: If both are empty return found at position 0 
+        // Edge case: If both are empty return found at position 0
         if string.bytes.is_empty() && pattern.is_empty() {
             return FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         }
