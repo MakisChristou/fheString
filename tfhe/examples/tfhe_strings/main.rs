@@ -9,7 +9,7 @@ use crate::server_key::MyServerKey;
 use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
-const STRING_PADDING: usize = 3;
+const STRING_PADDING: usize = 0;
 const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 

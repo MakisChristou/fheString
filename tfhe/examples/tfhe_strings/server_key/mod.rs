@@ -65,7 +65,6 @@ impl MyServerKey {
         needle: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-
         if string.bytes.is_empty() && needle.is_empty() {
             return FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         }
@@ -236,16 +235,22 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheString {
         let mut result = string.bytes.clone();
+        let end = repetitions.checked_sub(1);
 
-        for _ in 0..repetitions - 1 {
-            result.append(&mut string.bytes.clone());
+        match end {
+            Some(end_of_pattern) => {
+                for _ in 0..end_of_pattern {
+                    result.append(&mut string.bytes.clone());
+                }
+
+                FheString::from_vec(
+                    utils::bubble_zeroes_left(result, &self.key, public_parameters),
+                    public_parameters,
+                    &self.key,
+                )
+            }
+            None => FheString::from_vec(vec![], public_parameters, &self.key),
         }
-
-        FheString::from_vec(
-            utils::bubble_zeroes_left(result, &self.key, public_parameters),
-            public_parameters,
-            &self.key,
-        )
     }
 
     pub fn repeat(
@@ -538,6 +543,12 @@ impl MyServerKey {
         pattern: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
+
+        // Edge case: If both are empty return found at position 0 
+        if string.bytes.is_empty() && pattern.is_empty() {
+            return FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        }
+
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let mut pattern_position =
             FheAsciiChar::encrypt_trivial(MAX_FIND_LENGTH as u8, public_parameters, &self.key);
