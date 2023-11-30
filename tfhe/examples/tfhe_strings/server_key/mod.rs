@@ -626,6 +626,10 @@ impl MyServerKey {
         let mut is_eq = one.clone();
         let min_length = usize::min(string.bytes.len(), other.bytes.len());
 
+        let len1 = self.len(string, public_parameters);
+        let len2 = self.len(other, public_parameters);
+        let are_lengths_not_eql = len1.ne(&self.key, &len2);
+
         for i in 0..min_length {
             let are_equal = string.bytes[i].eq(&self.key, &other.bytes[i]);
             let is_first_eq_zero = string.bytes[i].eq(&self.key, &zero);
@@ -636,8 +640,8 @@ impl MyServerKey {
 
             is_eq = is_eq.bitand(&self.key, &res);
         }
-
-        is_eq
+        // If strings have actual lengths that are not equal then they can never be equal
+        are_lengths_not_eql.if_then_else(&self.key, &zero, &is_eq)
     }
 
     pub fn ne(
@@ -766,22 +770,37 @@ impl MyServerKey {
     ) -> FheAsciiChar {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let min_length = usize::min(string.bytes.len(), other.bytes.len());
+        let mut min_length = usize::min(string.bytes.len(), other.bytes.len());
         let mut encountered_comparison = zero.clone();
         let mut has_flag_became_one = zero.clone();
         let two_five_five = FheAsciiChar::encrypt_trivial(255u8, public_parameters, &self.key);
 
         let mut ret = FheAsciiChar::encrypt_trivial(255u8, public_parameters, &self.key);
 
+        // We clone since we need to potentially pad the strings
+        let mut string_clone = string.clone();
+        let mut other_clone = other.clone();
+
+        // Edge case workaround, this happens if strings are unpadded
+        if min_length == 0 {
+            string_clone.bytes.push(zero.clone());
+            other_clone.bytes.push(zero.clone());
+            min_length = 1;
+        }
+
         for i in 0..min_length {
             let comparison_result = match operation {
-                Comparison::LessThan => string.bytes[i].lt(&self.key, &other.bytes[i]),
-                Comparison::LessEqual => string.bytes[i].le(&self.key, &other.bytes[i]),
-                Comparison::GreaterThan => string.bytes[i].gt(&self.key, &other.bytes[i]),
-                Comparison::GreaterEqual => string.bytes[i].ge(&self.key, &other.bytes[i]),
+                Comparison::LessThan => string_clone.bytes[i].lt(&self.key, &other_clone.bytes[i]),
+                Comparison::LessEqual => string_clone.bytes[i].le(&self.key, &other_clone.bytes[i]),
+                Comparison::GreaterThan => {
+                    string_clone.bytes[i].gt(&self.key, &other_clone.bytes[i])
+                }
+                Comparison::GreaterEqual => {
+                    string_clone.bytes[i].ge(&self.key, &other_clone.bytes[i])
+                }
             };
 
-            let is_ne = string.bytes[i].ne(&self.key, &other.bytes[i]);
+            let is_ne = string_clone.bytes[i].ne(&self.key, &other_clone.bytes[i]);
 
             encountered_comparison = encountered_comparison.bitor(&self.key, &is_ne); // skip when the prefix is common among strings
 
