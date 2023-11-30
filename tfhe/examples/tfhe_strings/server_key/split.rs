@@ -26,16 +26,31 @@ impl MyServerKey {
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
         let mut global_pattern_found = one.clone();
 
+        // Edge case flag, if n = 0 we ever copy anything
+        let mut allow_copying = zero.clone();
+
+        if n.is_some() {
+            let n_value = n.clone().unwrap();
+            allow_copying = n_value.ne(&self.key, &zero);
+        }
+
         for i in (0..(string.bytes.len())).rev() {
             // Copy ith character to the appropriate buffer
             for (j, result_item) in result.iter_mut().enumerate().take(max_no_buffers) {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters, &self.key);
-                let copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+                let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+
+                // Edge case, if n = 0 we ever copy anything
+                if n.is_some() {
+                    copy_flag = copy_flag.bitand(&self.key, &allow_copying);
+                }
+
                 result_item[i] =
                     copy_flag.if_then_else(&self.key, &string.bytes[i], &result_item[i]);
             }
 
             let mut pattern_found = one.clone();
+            // Avoid index out of bounds error
             if i + pattern.len() >= string.bytes.len() {
                 pattern_found = zero.clone();
             } else {
@@ -335,16 +350,53 @@ impl MyServerKey {
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
         let mut global_pattern_found = one.clone();
 
+        // Edge case flag, if n = 0 we ever copy anything
+        let mut allow_copying = zero.clone();
+
+        if n.is_some() {
+            let n_value = n.clone().unwrap();
+            allow_copying = n_value.ne(&self.key, &zero);
+        }
+
+        // Edge case flag, explanation below
+        let mut should_skip_first_buffer = zero.clone();
+
+        // Handle edge case when 1 < n <= string.len() and pattern is empty
+        // In this case we should leave an empty buffer effectively skipping the first one
+        // Example1:  "eeeeee".rsplitn(2, "") --> ["", "eeeeee"]
+        // Example2:  "eeeeee".rsplitn(3, "") --> ["", "e", "eeeee"]
+        if pattern.is_empty() && n.is_some() {
+            let n_value = n.clone().unwrap();
+            let enc_len = self.len(string, public_parameters);
+
+            should_skip_first_buffer = n_value
+                .gt(&self.key, &one)
+                .bitand(&self.key, &n_value.le(&self.key, &enc_len));
+
+            current_copy_buffer = should_skip_first_buffer.if_then_else(
+                &self.key,
+                &FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key),
+                &current_copy_buffer,
+            );
+        }
+
         for i in 0..(string.bytes.len()) {
             // Copy ith character to the appropriate buffer
             for (j, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters, &self.key);
-                let copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+                let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+
+                // Edge case, if n = 0 we ever copy anything
+                if n.is_some() {
+                    copy_flag = copy_flag.bitand(&self.key, &allow_copying);
+                }
+                
                 result_buffer[i] =
                     copy_flag.if_then_else(&self.key, &string.bytes[i], &result_buffer[i]);
             }
 
             let mut pattern_found = one.clone();
+            // To avoid underflow
             if (i as i64) < (pattern.len() as i64) - 1 {
                 pattern_found = zero.clone();
             } else {
@@ -402,6 +454,7 @@ impl MyServerKey {
                 let mut stop_replacing_pattern = zero.clone();
 
                 for (i, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
+                    // Check if we have reached the max allowed splits
                     let enc_i =
                         FheAsciiChar::encrypt_trivial(i as u8, public_parameters, &self.key);
                     stop_replacing_pattern = stop_replacing_pattern.bitor(
@@ -436,6 +489,8 @@ impl MyServerKey {
                 }
             }
             None => {
+                // If its not inclusive we have to remove the pattern
+                // We do that by replacing it with zeroes and bubble them to the end
                 if !is_inclusive {
                     let to: Vec<FheAsciiChar> = "\0"
                         .repeat(pattern.len())
