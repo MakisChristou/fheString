@@ -838,11 +838,21 @@ impl MyServerKey {
 
         let end = std::cmp::min(pattern.len(), result.len());
 
-        // Either string is empty, or pattern is empty
+        // If pattern is bigger than a padded string by definition it cannot be found
+        if pattern.len() > result.len() {
+            return FheStrip::new(result, zero);
+        }
+
+        // Special Case: Either string is empty, or pattern is empty, or both
         if end == 0 {
-            pattern_found_flag = zero.clone();
-        } else if pattern.is_empty() && string.is_empty() {
-            pattern_found_flag = one.clone();
+            // If pattern is "" then its considered always found even for an empty string
+            if pattern.is_empty() {
+                pattern_found_flag = one.clone();
+            }
+            // In this case the pattern is considered never found
+            else if !pattern.is_empty() && string.is_empty() {
+                pattern_found_flag = zero.clone();
+            }
         }
 
         for j in 0..end {
