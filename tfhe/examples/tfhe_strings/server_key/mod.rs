@@ -21,42 +21,43 @@ impl MyServerKey {
 
     pub fn to_upper(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
-        FheString {
-            bytes: string
-                .bytes
-                .iter()
-                .map(|b| {
-                    let is_not_lowercase = b
-                        .is_lowercase(&self.key, public_parameters)
-                        .flip(&self.key, public_parameters);
-                    b.sub(
-                        &self.key,
-                        &is_not_lowercase.if_then_else(&self.key, &zero, &string.cst),
-                    )
-                })
-                .collect::<Vec<FheAsciiChar>>(),
-            cst: string.cst.clone(),
-        }
+
+        let bytes = string
+            .iter()
+            .map(|b| {
+                let is_not_lowercase = b
+                    .is_lowercase(&self.key, public_parameters)
+                    .flip(&self.key, public_parameters);
+                b.sub(
+                    &self.key,
+                    &is_not_lowercase.if_then_else(&self.key, &zero, &string.get_cst()),
+                )
+            })
+            .collect::<Vec<FheAsciiChar>>();
+
+        let cst = string.get_cst();
+
+        FheString::new(bytes, cst)
     }
 
     pub fn to_lower(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
-        FheString {
-            bytes: string
-                .bytes
-                .iter()
-                .map(|b| {
-                    let is_not_uppercase = b
-                        .is_uppercase(&self.key, public_parameters)
-                        .flip(&self.key, public_parameters);
-                    b.add(
-                        &self.key,
-                        &is_not_uppercase.if_then_else(&self.key, &zero, &string.cst),
-                    )
-                })
-                .collect::<Vec<FheAsciiChar>>(),
-            cst: string.cst.clone(),
-        }
+
+        let bytes = string
+            .iter()
+            .map(|b| {
+                let is_not_uppercase = b
+                    .is_uppercase(&self.key, public_parameters)
+                    .flip(&self.key, public_parameters);
+                b.add(
+                    &self.key,
+                    &is_not_uppercase.if_then_else(&self.key, &zero, &string.get_cst()),
+                )
+            })
+            .collect::<Vec<FheAsciiChar>>();
+        let cst = string.get_cst();
+
+        FheString::new(bytes, cst)
     }
 
     pub fn contains(
@@ -65,20 +66,20 @@ impl MyServerKey {
         needle: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        if string.bytes.is_empty() && needle.is_empty() {
+        if string.is_empty() && needle.is_empty() {
             return FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         }
 
         let mut result = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let end = string.bytes.len().checked_sub(needle.len());
+        let end = string.len().checked_sub(needle.len());
 
         match end {
             Some(end_of_pattern) => {
                 for i in 0..end_of_pattern {
                     let mut current_result = one.clone();
                     for (j, needle_char) in needle.iter().enumerate() {
-                        let eql = string.bytes[i + j].eq(&self.key, needle_char);
+                        let eql = string[i + j].eq(&self.key, needle_char);
                         current_result = current_result.bitand(&self.key, &eql);
                     }
                     result = result.bitor(&self.key, &current_result);
@@ -111,7 +112,7 @@ impl MyServerKey {
         padding: usize,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let string_length = string.bytes.len();
+        let string_length = string.len();
         let pattern_length = pattern.len();
 
         let start = string_length
@@ -134,7 +135,7 @@ impl MyServerKey {
                 let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
 
                 for (j, i) in (start_val..(end_val + 1)).enumerate() {
-                    let eql = string.bytes[i].eq(&self.key, &pattern[j]);
+                    let eql = string[i].eq(&self.key, &pattern[j]);
                     result = result.bitand(&self.key, &eql);
                 }
                 result
@@ -165,9 +166,9 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let end_of_pattern = std::cmp::min(pattern.len(), string.bytes.len());
+        let end_of_pattern = std::cmp::min(pattern.len(), string.len());
 
-        for (string_char, pattern_char) in string.bytes.iter().take(end_of_pattern).zip(pattern) {
+        for (string_char, pattern_char) in string.iter().take(end_of_pattern).zip(pattern) {
             let eql = string_char.eq(&self.key, pattern_char);
             result = result.bitand(&self.key, &eql);
         }
@@ -197,14 +198,14 @@ impl MyServerKey {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
 
-        if string.bytes.is_empty() {
+        if string.is_empty() {
             return one;
         }
 
         let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
 
-        for i in 0..string.bytes.len() {
-            let eql = string.bytes[i].eq(&self.key, &zero);
+        for i in 0..string.len() {
+            let eql = string[i].eq(&self.key, &zero);
             result = result.bitand(&self.key, &eql);
         }
 
@@ -214,14 +215,14 @@ impl MyServerKey {
     pub fn len(&self, string: &FheString, public_parameters: &PublicParameters) -> FheAsciiChar {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
-        if string.bytes.is_empty() {
+        if string.is_empty() {
             return zero;
         }
 
         let mut result = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
-        for i in 0..string.bytes.len() {
-            let is_not_zero = string.bytes[i].ne(&self.key, &zero);
+        for i in 0..string.len() {
+            let is_not_zero = string[i].ne(&self.key, &zero);
             result = result.add(&self.key, &is_not_zero);
         }
 
@@ -234,21 +235,18 @@ impl MyServerKey {
         repetitions: usize,
         public_parameters: &PublicParameters,
     ) -> FheString {
-        let mut result = string.bytes.clone();
+        let mut result = string.clone();
         let end = repetitions.checked_sub(1);
 
         match end {
             Some(end_of_pattern) => {
                 for _ in 0..end_of_pattern {
-                    result.append(&mut string.bytes.clone());
+                    result.append(string.clone());
                 }
 
-                FheString::from_vec(
-                    utils::bubble_zeroes_left(result, &self.key, public_parameters),
-                    public_parameters,
-                    &self.key,
-                )
+                utils::bubble_zeroes_left(result, &self.key, public_parameters)
             }
+
             None => FheString::from_vec(vec![], public_parameters, &self.key),
         }
     }
@@ -260,24 +258,23 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
-        let mut result = vec![zero.clone(); MAX_REPETITIONS * string.bytes.len()];
-        let str_len = string.bytes.len();
+        let mut result = FheString::from_vec(
+            vec![zero.clone(); MAX_REPETITIONS * string.len()],
+            public_parameters,
+            &self.key,
+        );
+        let str_len = string.len();
 
         for i in 0..MAX_REPETITIONS {
             let enc_i = FheAsciiChar::encrypt_trivial(i as u8, public_parameters, &self.key);
             let copy_flag = enc_i.lt(&self.key, &repetitions);
 
             for j in 0..str_len {
-                result[i * str_len + j] =
-                    copy_flag.if_then_else(&self.key, &string.bytes[j], &zero);
+                result[i * str_len + j] = copy_flag.if_then_else(&self.key, &string[j], &zero);
             }
         }
 
-        FheString::from_vec(
-            utils::bubble_zeroes_left(result, &self.key, public_parameters),
-            public_parameters,
-            &self.key,
-        )
+        utils::bubble_zeroes_left(result, &self.key, public_parameters)
     }
 
     pub fn replace(
@@ -290,7 +287,7 @@ impl MyServerKey {
         let n = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         if from.len() >= to.len() {
             Self::handle_longer_from(
-                string.bytes.clone(),
+                string.clone(),
                 from.clone(),
                 to.clone(),
                 n,
@@ -300,7 +297,7 @@ impl MyServerKey {
             )
         } else {
             Self::handle_shorter_from(
-                string.bytes.clone(),
+                string.clone(),
                 from.clone(),
                 to.clone(),
                 n,
@@ -342,7 +339,7 @@ impl MyServerKey {
         let mut pattern_position =
             FheAsciiChar::encrypt_trivial(MAX_FIND_LENGTH as u8, public_parameters, &self.key);
 
-        if string.bytes.len() >= MAX_FIND_LENGTH + pattern.len() {
+        if string.len() >= MAX_FIND_LENGTH + pattern.len() {
             panic!("Maximum supported size for find reached");
         }
 
@@ -351,8 +348,8 @@ impl MyServerKey {
             let mut last_non_zero_position = zero.clone();
 
             // Find the last char position that is non \0
-            for i in 0..string.bytes.len() {
-                let is_not_zero = string.bytes[i].ne(&self.key, &zero);
+            for i in 0..string.len() {
+                let is_not_zero = string[i].ne(&self.key, &zero);
                 let enc_i =
                     FheAsciiChar::encrypt_trivial((i + 1) as u8, public_parameters, &self.key);
                 last_non_zero_position =
@@ -362,7 +359,7 @@ impl MyServerKey {
             return last_non_zero_position;
         }
 
-        let end = string.bytes.len().checked_sub(pattern.len());
+        let end = string.len().checked_sub(pattern.len());
 
         match end {
             Some(end_of_pattern) => {
@@ -373,7 +370,7 @@ impl MyServerKey {
                     // This is okay since pattern.len() <= string.bytes.len()
                     for (j, pattern_char) in pattern.iter().enumerate() {
                         pattern_found_flag = pattern_found_flag
-                            .bitand(&self.key, &pattern_char.eq(&self.key, &string.bytes[i + j]));
+                            .bitand(&self.key, &pattern_char.eq(&self.key, &string[i + j]));
                     }
 
                     let enc_i =
@@ -404,7 +401,7 @@ impl MyServerKey {
 
     // The "easy" case
     fn handle_longer_from(
-        bytes: Vec<FheAsciiChar>,
+        bytes: FheString,
         from: Vec<FheAsciiChar>,
         mut to: Vec<FheAsciiChar>,
         n: FheAsciiChar,
@@ -454,16 +451,12 @@ impl MyServerKey {
             }
         }
 
-        FheString::from_vec(
-            utils::bubble_zeroes_left(result, server_key, public_parameters),
-            public_parameters,
-            server_key,
-        )
+        utils::bubble_zeroes_left(result, server_key, public_parameters)
     }
 
     // The "hard" case
     fn handle_shorter_from(
-        bytes: Vec<FheAsciiChar>,
+        bytes: FheString,
         from: Vec<FheAsciiChar>,
         to: Vec<FheAsciiChar>,
         n: FheAsciiChar,
@@ -553,7 +546,7 @@ impl MyServerKey {
                 );
             }
         }
-        FheString::from_vec(result, public_parameters, server_key)
+        result
     }
 
     pub fn find(
@@ -563,7 +556,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         // Edge case: If both are empty return found at position 0
-        if string.bytes.is_empty() && pattern.is_empty() {
+        if string.is_empty() && pattern.is_empty() {
             return FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         }
 
@@ -571,11 +564,11 @@ impl MyServerKey {
         let mut pattern_position =
             FheAsciiChar::encrypt_trivial(MAX_FIND_LENGTH as u8, public_parameters, &self.key);
 
-        if string.bytes.len() >= MAX_FIND_LENGTH + pattern.len() {
+        if string.len() >= MAX_FIND_LENGTH + pattern.len() {
             panic!("Maximum supported size for find reached");
         }
 
-        let end = string.bytes.len().checked_sub(pattern.len());
+        let end = string.len().checked_sub(pattern.len());
 
         match end {
             Some(end_of_pattern) => {
@@ -586,7 +579,7 @@ impl MyServerKey {
                     // This is okay since the pattern here is <= string.bytes.len()
                     for j in (0..pattern.len()).rev() {
                         pattern_found_flag = pattern_found_flag
-                            .bitand(&self.key, &pattern[j].eq(&self.key, &string.bytes[i + j]));
+                            .bitand(&self.key, &pattern[j].eq(&self.key, &string[i + j]));
                     }
 
                     let enc_i =
@@ -624,16 +617,16 @@ impl MyServerKey {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let mut is_eq = one.clone();
-        let min_length = usize::min(string.bytes.len(), other.bytes.len());
+        let min_length = usize::min(string.len(), other.len());
 
         let len1 = self.len(string, public_parameters);
         let len2 = self.len(other, public_parameters);
         let are_lengths_not_eql = len1.ne(&self.key, &len2);
 
         for i in 0..min_length {
-            let are_equal = string.bytes[i].eq(&self.key, &other.bytes[i]);
-            let is_first_eq_zero = string.bytes[i].eq(&self.key, &zero);
-            let is_second_eq_zero = other.bytes[i].eq(&self.key, &zero);
+            let are_equal = string[i].eq(&self.key, &other[i]);
+            let is_first_eq_zero = string[i].eq(&self.key, &zero);
+            let is_second_eq_zero = other[i].eq(&self.key, &zero);
 
             let res = is_first_eq_zero.bitand(&self.key, &is_second_eq_zero);
             let res = res.bitor(&self.key, &are_equal);
@@ -674,7 +667,7 @@ impl MyServerKey {
     ) -> FheStrip {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let mut result = string.bytes.clone();
+        let mut result = string.clone();
         let mut pattern_found_flag = one.clone();
 
         let end = std::cmp::min(pattern.len(), result.len());
@@ -682,7 +675,7 @@ impl MyServerKey {
         // Either string is empty, or pattern is empty
         if end == 0 {
             pattern_found_flag = zero.clone();
-        } else if pattern.is_empty() && string.bytes.is_empty() {
+        } else if pattern.is_empty() && string.is_empty() {
             pattern_found_flag = one.clone();
         }
 
@@ -695,12 +688,7 @@ impl MyServerKey {
             *result_char = pattern_found_flag.if_then_else(&self.key, &zero, result_char);
         }
 
-        let string = FheString::from_vec(
-            utils::bubble_zeroes_left(result, &self.key, public_parameters),
-            public_parameters,
-            &self.key,
-        );
-
+        let string = utils::bubble_zeroes_left(result, &self.key, public_parameters);
         FheStrip::new(string, pattern_found_flag)
     }
 
@@ -712,7 +700,7 @@ impl MyServerKey {
     ) -> FheStrip {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let mut result = string.bytes.clone();
+        let mut result = string.clone();
         let mut pattern_found_flag = one.clone();
 
         let end_of_pattern = result.len();
@@ -731,9 +719,7 @@ impl MyServerKey {
                     result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
                 }
 
-                let string = FheString::from_vec(result, public_parameters, &self.key);
-
-                FheStrip::new(string, pattern_found_flag)
+                FheStrip::new(result, pattern_found_flag)
             }
             None => {
                 // Return unmodified string
@@ -777,7 +763,7 @@ impl MyServerKey {
     ) -> FheAsciiChar {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let mut min_length = usize::min(string.bytes.len(), other.bytes.len());
+        let mut min_length = usize::min(string.len(), other.len());
         let mut encountered_comparison = zero.clone();
         let mut has_flag_became_one = zero.clone();
         let two_five_five = FheAsciiChar::encrypt_trivial(255u8, public_parameters, &self.key);
@@ -790,24 +776,20 @@ impl MyServerKey {
 
         // Edge case workaround, this happens if strings are unpadded
         if min_length == 0 {
-            string_clone.bytes.push(zero.clone());
-            other_clone.bytes.push(zero.clone());
+            string_clone.push(zero.clone());
+            other_clone.push(zero.clone());
             min_length = 1;
         }
 
         for i in 0..min_length {
             let comparison_result = match operation {
-                Comparison::LessThan => string_clone.bytes[i].lt(&self.key, &other_clone.bytes[i]),
-                Comparison::LessEqual => string_clone.bytes[i].le(&self.key, &other_clone.bytes[i]),
-                Comparison::GreaterThan => {
-                    string_clone.bytes[i].gt(&self.key, &other_clone.bytes[i])
-                }
-                Comparison::GreaterEqual => {
-                    string_clone.bytes[i].ge(&self.key, &other_clone.bytes[i])
-                }
+                Comparison::LessThan => string_clone[i].lt(&self.key, &other_clone[i]),
+                Comparison::LessEqual => string_clone[i].le(&self.key, &other_clone[i]),
+                Comparison::GreaterThan => string_clone[i].gt(&self.key, &other_clone[i]),
+                Comparison::GreaterEqual => string_clone[i].ge(&self.key, &other_clone[i]),
             };
 
-            let is_ne = string_clone.bytes[i].ne(&self.key, &other_clone.bytes[i]);
+            let is_ne = string_clone[i].ne(&self.key, &other_clone[i]);
 
             encountered_comparison = encountered_comparison.bitor(&self.key, &is_ne); // skip when the prefix is common among strings
 
@@ -881,7 +863,7 @@ impl MyServerKey {
     ) -> FheString {
         if from.len() >= to.len() {
             Self::handle_longer_from(
-                string.bytes.clone(),
+                string.clone(),
                 from.clone(),
                 to.clone(),
                 n,
@@ -891,7 +873,7 @@ impl MyServerKey {
             )
         } else {
             Self::handle_shorter_from(
-                string.bytes.clone(),
+                string.clone(),
                 from.clone(),
                 to.clone(),
                 n,
@@ -924,7 +906,7 @@ impl MyServerKey {
 
         if from.len() >= to.len() {
             Self::handle_longer_from(
-                string.bytes.clone(),
+                string.clone(),
                 from.clone(),
                 to.clone(),
                 n,
@@ -934,7 +916,7 @@ impl MyServerKey {
             )
         } else {
             Self::handle_shorter_from(
-                string.bytes.clone(),
+                string.clone(),
                 from.clone(),
                 to.clone(),
                 n,
@@ -951,13 +933,10 @@ impl MyServerKey {
         other: &FheString,
         public_parameters: &PublicParameters,
     ) -> FheString {
-        let mut result = string.bytes.clone();
-        let mut clone_other = other.bytes.clone();
-        result.append(&mut clone_other);
-        FheString::from_vec(
-            utils::bubble_zeroes_left(result, &self.key, public_parameters),
-            public_parameters,
-            &self.key,
-        )
+        let mut result = string.clone();
+        let clone_other = other.clone();
+
+        result.append(clone_other);
+        utils::bubble_zeroes_left(result, &self.key, public_parameters)
     }
 }

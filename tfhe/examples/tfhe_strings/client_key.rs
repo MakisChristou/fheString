@@ -66,8 +66,8 @@ impl MyClientKey {
     }
 
     pub fn decrypt(&self, cipher_string: FheString, padding: usize) -> String {
-        let new_len = cipher_string.bytes.len().saturating_sub(padding);
-        let trimed_bytes: Vec<FheAsciiChar> = cipher_string.bytes.clone()[..new_len].to_vec();
+        let new_len = cipher_string.len().saturating_sub(padding);
+        let trimed_bytes: Vec<FheAsciiChar> = cipher_string.clone()[..new_len].to_vec();
 
         let ascii_bytes = trimed_bytes
             .iter()

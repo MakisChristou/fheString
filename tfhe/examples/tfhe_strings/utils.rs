@@ -1,6 +1,7 @@
 use crate::args::StringArgs;
 use crate::ciphertext::fheasciichar::FheAsciiChar;
 use crate::ciphertext::fhesplit::FheSplit;
+use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::fhestrip::FheStrip;
 use crate::client_key::MyClientKey;
 use crate::server_key::MyServerKey;
@@ -12,10 +13,10 @@ pub fn abs_difference(a: usize, b: usize) -> usize {
 }
 
 pub fn bubble_zeroes_left(
-    mut result: Vec<FheAsciiChar>,
+    mut result: FheString,
     server_key: &tfhe::integer::ServerKey,
     public_parameters: &PublicParameters,
-) -> Vec<FheAsciiChar> {
+) -> FheString {
     let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, server_key);
 
     // Bring non \0 characters in front O(n^2), essentially bubble sort
@@ -524,8 +525,11 @@ pub fn run_fhe_str_method(
                 public_parameters,
                 &my_server_key.key,
             );
-            let fhe_strip =
-                my_server_key.strip_suffix(&my_string, &pattern_string.bytes, public_parameters);
+            let fhe_strip = my_server_key.strip_suffix(
+                &my_string,
+                &pattern_string.get_bytes(),
+                public_parameters,
+            );
             let (actual, actual_pattern_found) =
                 FheStrip::decrypt(fhe_strip, my_client_key, STRING_PADDING);
             let expected = my_string_plain.strip_suffix(pattern_plain);

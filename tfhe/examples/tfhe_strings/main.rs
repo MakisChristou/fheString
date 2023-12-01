@@ -9,7 +9,7 @@ use crate::server_key::MyServerKey;
 use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
-const STRING_PADDING: usize = 0;
+const STRING_PADDING: usize = 1;
 const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 
@@ -733,7 +733,8 @@ mod test {
             &public_parameters,
             &my_server_key.key,
         );
-        let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_parameters);
+        let fhe_strip =
+            my_server_key.strip_suffix(&my_string, &pattern.get_bytes(), &public_parameters);
 
         let (actual, _) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
 
@@ -757,7 +758,8 @@ mod test {
         );
         let pattern =
             my_client_key.encrypt(pattern_plain, 0, &public_parameters, &my_server_key.key);
-        let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern.bytes, &public_parameters);
+        let fhe_strip =
+            my_server_key.strip_suffix(&my_string, &pattern.get_bytes(), &public_parameters);
 
         let (_, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
 
@@ -784,7 +786,8 @@ mod test {
         );
         let pattern =
             my_client_key.encrypt(pattern_plain, 0, &public_parameters, &my_server_key.key);
-        let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern.bytes, &public_parameters);
+        let fhe_strip =
+            my_server_key.strip_prefix(&my_string, &pattern.get_bytes(), &public_parameters);
 
         let (actual, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key, STRING_PADDING);
 
