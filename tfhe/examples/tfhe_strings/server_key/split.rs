@@ -354,9 +354,6 @@ impl MyServerKey {
             allow_copying = n_value.ne(&self.key, &zero);
         }
 
-        // Edge case flag, explanation below
-        let mut should_skip_first_buffer = zero.clone();
-
         // Handle edge case when 1 < n <= string.len() and pattern is empty
         // In this case we should leave an empty buffer effectively skipping the first one
         // Example1:  "eeeeee".rsplitn(2, "") --> ["", "eeeeee"]
@@ -365,7 +362,7 @@ impl MyServerKey {
             let n_value = n.clone().unwrap();
             let enc_len = self.len(string, public_parameters);
 
-            should_skip_first_buffer = n_value
+            let should_skip_first_buffer = n_value
                 .gt(&self.key, &one)
                 .bitand(&self.key, &n_value.le(&self.key, &enc_len));
 

@@ -116,10 +116,11 @@ fn main() {
 
 #[cfg(test)]
 mod test {
+    use crate::ciphertext::fhesplit::FheSplit;
+    use crate::ciphertext::fhestrip::FheStrip;
     use crate::utils::{trim_str_vector, trim_vector};
     use crate::{
-        ciphertext::fhesplit::FheSplit, ciphertext::fhestrip::FheStrip, FheAsciiChar, MyClientKey,
-        MyServerKey, PublicParameters, MAX_FIND_LENGTH, STRING_PADDING,
+        FheAsciiChar, MyClientKey, MyServerKey, PublicParameters, MAX_FIND_LENGTH, STRING_PADDING,
     };
     use tfhe::integer::gen_keys_radix;
     use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;

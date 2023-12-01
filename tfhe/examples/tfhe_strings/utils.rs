@@ -548,7 +548,9 @@ pub fn run_fhe_str_method(
         }
         StringMethod::StripSuffixClear => {
             // Limitation: Client needs to know the string padding
+            #[allow(clippy::repeat_once)]
             let null_bytes = "\0".repeat(STRING_PADDING);
+
             let padded_pattern_plain = format!("{}{}", pattern_plain, null_bytes);
 
             let fhe_strip = my_server_key.strip_suffix_clear(

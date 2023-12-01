@@ -38,18 +38,8 @@ impl FheString {
         self.bytes.is_empty()
     }
 
-    // Accesses a character by index (immutable)
-    pub fn get(&self, index: usize) -> Option<&FheAsciiChar> {
-        self.bytes.get(index)
-    }
-
     pub fn get_bytes(&self) -> Vec<FheAsciiChar> {
         self.bytes.clone()
-    }
-
-    // Accesses a character by index (mutable)
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut FheAsciiChar> {
-        self.bytes.get_mut(index)
     }
 
     pub fn append(&mut self, other: FheString) {
