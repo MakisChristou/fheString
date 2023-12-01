@@ -230,6 +230,16 @@ impl MyServerKey {
         let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let end_of_pattern = std::cmp::min(pattern.len(), string.len());
 
+        if pattern.len() > string.len() {
+            return FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        }
+
+        if string.is_empty() && pattern.is_empty() {
+            return FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+        } else if string.is_empty() && !pattern.is_empty() {
+            return FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        }
+
         for (string_char, pattern_char) in string.iter().take(end_of_pattern).zip(pattern) {
             let eql = string_char.eq(&self.key, pattern_char);
             result = result.bitand(&self.key, &eql);
