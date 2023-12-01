@@ -5,9 +5,7 @@ use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 use crate::args::StringArgs;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
-use crate::server_key::MyServerKey;
 use std::time::Instant;
-use tfhe::integer::{gen_keys_radix, PublicKey};
 
 const STRING_PADDING: usize = 1;
 const MAX_REPETITIONS: usize = 8;
@@ -30,15 +28,12 @@ fn main() {
         "Repeat method will not function correctly, increase MAX_REPETITIONS"
     );
 
-    // Generate tfhe-rs keys based on the default parameters
     let num_blocks = 4;
-    let (client_key, server_key) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
-    let public_key = PublicKey::new(&client_key);
-    let public_parameters = PublicParameters::new(public_key, num_blocks);
 
-    // Construct custom key types from tfhe-rs keys
-    let my_client_key = MyClientKey::new(client_key);
-    let my_server_key = MyServerKey::new(server_key);
+    // Construct custom key types from tfhe-rs keys, based on the default parameters
+    let my_client_key = MyClientKey::from_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
+    let my_server_key = my_client_key.get_server_key();
+    let public_parameters = my_client_key.get_public_parameters();
 
     let methods_to_test = [
         StringMethod::ToUpper,
@@ -118,24 +113,19 @@ fn main() {
 mod test {
     use crate::ciphertext::fhesplit::FheSplit;
     use crate::ciphertext::fhestrip::FheStrip;
+    use crate::server_key::MyServerKey;
     use crate::utils::{trim_str_vector, trim_vector};
-    use crate::{
-        FheAsciiChar, MyClientKey, MyServerKey, PublicParameters, MAX_FIND_LENGTH, STRING_PADDING,
-    };
+    use crate::{FheAsciiChar, MyClientKey, PublicParameters, MAX_FIND_LENGTH, STRING_PADDING};
     use tfhe::integer::gen_keys_radix;
     use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
     fn setup_test() -> (MyClientKey, MyServerKey, PublicParameters) {
-        // We generate a set of client/server keys, using the default parameters:
         let num_blocks = 4;
-        let (client_key, server_key) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
 
-        //We generate the public key from the secret client key:
-        let public_key = tfhe::integer::PublicKey::new(&client_key);
-        let public_parameters = PublicParameters::new(public_key, num_blocks);
-
-        let my_client_key = MyClientKey::new(client_key);
-        let my_server_key = MyServerKey::new(server_key);
+        // Construct custom key types from tfhe-rs keys, based on the default parameters
+        let my_client_key = MyClientKey::from_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
+        let my_server_key = my_client_key.get_server_key();
+        let public_parameters = my_client_key.get_public_parameters();
 
         (my_client_key, my_server_key, public_parameters)
     }

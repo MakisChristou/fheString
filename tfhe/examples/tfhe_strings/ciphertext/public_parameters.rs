@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use tfhe::integer::PublicKey;
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PublicParameters {
     pub public_key: PublicKey,
     pub num_blocks: usize,

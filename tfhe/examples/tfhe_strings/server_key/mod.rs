@@ -2,6 +2,7 @@ use crate::ciphertext::fheasciichar::FheAsciiChar;
 use crate::ciphertext::fhestring::{Comparison, FheString};
 use crate::ciphertext::fhestrip::FheStrip;
 use crate::ciphertext::public_parameters::PublicParameters;
+use crate::client_key::MyClientKey;
 use crate::utils::{self, abs_difference};
 use crate::{MAX_FIND_LENGTH, MAX_REPETITIONS};
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,10 @@ impl MyServerKey {
     /// `MyServerKey` - A new `MyServerKey` instance.
     pub fn new(server_key: tfhe::integer::ServerKey) -> Self {
         MyServerKey { key: server_key }
+    }
+
+    pub fn _from_client_key(my_client_key: MyClientKey) -> Self {
+        my_client_key.get_server_key()
     }
 
     /// Converts all lowercase characters in a given `FheString` to uppercase.

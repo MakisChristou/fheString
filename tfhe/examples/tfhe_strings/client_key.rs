@@ -1,24 +1,45 @@
 use crate::ciphertext::fheasciichar::FheAsciiChar;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
+use crate::server_key::MyServerKey;
 use serde::{Deserialize, Serialize};
-use tfhe::integer::{gen_keys_radix, RadixClientKey};
+use tfhe::integer::{gen_keys_radix, PublicKey, RadixClientKey};
 use tfhe::shortint::ClassicPBSParameters;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MyClientKey {
     client_key: RadixClientKey,
+    server_key: tfhe::integer::ServerKey,
+    public_paramters: PublicParameters,
 }
 
 impl MyClientKey {
-    pub fn new(client_key: RadixClientKey) -> Self {
-        MyClientKey { client_key }
+    pub fn new(
+        client_key: RadixClientKey,
+        server_key: tfhe::integer::ServerKey,
+        public_paramters: PublicParameters,
+    ) -> Self {
+        MyClientKey {
+            client_key,
+            server_key,
+            public_paramters,
+        }
     }
 
     // Requirement to create key from params or directtly
-    pub fn _from_params(params: ClassicPBSParameters, num_blocks: usize) -> Self {
-        let (client_key, _) = gen_keys_radix(params, num_blocks);
-        MyClientKey::new(client_key)
+    pub fn from_params(params: ClassicPBSParameters, num_blocks: usize) -> Self {
+        let (client_key, server_key) = gen_keys_radix(params, num_blocks);
+        let public_key = PublicKey::new(&client_key);
+        let public_parameters = PublicParameters::new(public_key, num_blocks);
+        MyClientKey::new(client_key, server_key, public_parameters)
+    }
+
+    pub fn get_server_key(&self) -> MyServerKey {
+        MyServerKey::new(self.server_key.clone())
+    }
+
+    pub fn get_public_parameters(&self) -> PublicParameters {
+        self.public_paramters.clone()
     }
 
     pub fn encrypt(
