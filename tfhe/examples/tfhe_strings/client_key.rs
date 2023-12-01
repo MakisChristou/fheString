@@ -2,7 +2,8 @@ use crate::ciphertext::fheasciichar::FheAsciiChar;
 use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
 use serde::{Deserialize, Serialize};
-use tfhe::integer::RadixClientKey;
+use tfhe::integer::{gen_keys_radix, RadixClientKey};
+use tfhe::shortint::ClassicPBSParameters;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MyClientKey {
@@ -12,6 +13,12 @@ pub struct MyClientKey {
 impl MyClientKey {
     pub fn new(client_key: RadixClientKey) -> Self {
         MyClientKey { client_key }
+    }
+
+    // Requirement to create key from params or directtly
+    pub fn _from_params(params: ClassicPBSParameters, num_blocks: usize) -> Self {
+        let (client_key, _) = gen_keys_radix(params, num_blocks);
+        MyClientKey::new(client_key)
     }
 
     pub fn encrypt(
