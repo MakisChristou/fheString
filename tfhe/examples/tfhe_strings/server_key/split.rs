@@ -390,7 +390,7 @@ impl MyServerKey {
                 if n.is_some() {
                     copy_flag = copy_flag.bitand(&self.key, &allow_copying);
                 }
-                
+
                 result_buffer[i] =
                     copy_flag.if_then_else(&self.key, &string.bytes[i], &result_buffer[i]);
             }

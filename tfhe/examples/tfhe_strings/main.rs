@@ -9,7 +9,7 @@ use crate::server_key::MyServerKey;
 use std::time::Instant;
 use tfhe::integer::{gen_keys_radix, PublicKey};
 
-const STRING_PADDING: usize = 1;
+const STRING_PADDING: usize = 0;
 const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 
@@ -118,12 +118,11 @@ fn main() {
 mod test {
     use crate::utils::{trim_str_vector, trim_vector};
     use crate::{
-        FheAsciiChar, FheSplit, FheString, FheStrip, MyClientKey, MyServerKey, PublicParameters,
-        MAX_FIND_LENGTH, STRING_PADDING,
+        ciphertext::fhesplit::FheSplit, ciphertext::fhestrip::FheStrip, FheAsciiChar, MyClientKey,
+        MyServerKey, PublicParameters, MAX_FIND_LENGTH, STRING_PADDING,
     };
     use tfhe::integer::gen_keys_radix;
     use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
-    use tfhe::{generate_keys, set_server_key, PublicKey};
 
     fn setup_test() -> (MyClientKey, MyServerKey, PublicParameters) {
         // We generate a set of client/server keys, using the default parameters:

@@ -679,6 +679,13 @@ impl MyServerKey {
 
         let end = std::cmp::min(pattern.len(), result.len());
 
+        // Either string is empty, or pattern is empty
+        if end == 0 {
+            pattern_found_flag = zero.clone();
+        } else if pattern.is_empty() && string.bytes.is_empty() {
+            pattern_found_flag = one.clone();
+        }
+
         for j in 0..end {
             pattern_found_flag =
                 pattern_found_flag.bitand(&self.key, &pattern[j].eq(&self.key, &result[j]));
