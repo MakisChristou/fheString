@@ -6,6 +6,17 @@ use crate::utils;
 use super::MyServerKey;
 
 impl MyServerKey {
+    /// Trims trailing whitespace from a `FheString`.
+    ///
+    /// This method removes any trailing whitespace characters from the provided `FheString`.
+    /// Whitespace is defined as any character for which the `is_whitespace` method returns true.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string from which trailing whitespace will be trimmed.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - A new `FheString` with trailing whitespace removed.
     pub fn trim_end(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -29,6 +40,17 @@ impl MyServerKey {
         FheString::from_vec(result, public_parameters, &self.key)
     }
 
+    /// Trims leading whitespace from a `FheString`.
+    ///
+    /// This method removes any leading whitespace characters from the provided `FheString`.
+    /// Whitespace is defined as any character for which the `is_whitespace` method returns true.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string from which leading whitespace will be trimmed.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - A new `FheString` with leading whitespace removed.
     pub fn trim_start(
         &self,
         string: &FheString,
@@ -60,6 +82,19 @@ impl MyServerKey {
         utils::bubble_zeroes_left(result, &self.key, public_parameters)
     }
 
+    /// Trims both leading and trailing whitespace from a `FheString`.
+    ///
+    /// This method removes both leading and trailing whitespace characters from the provided
+    /// `FheString`. It first trims the trailing whitespace using `trim_end` and then trims the
+    /// leading whitespace using `trim_start`.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string from which both leading and trailing whitespace will be
+    /// trimmed.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - A new `FheString` with both leading and trailing whitespace removed.
     pub fn trim(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let result = self.trim_end(string, public_parameters);
         self.trim_start(&result, public_parameters)

@@ -15,10 +15,25 @@ pub struct MyServerKey {
 }
 
 impl MyServerKey {
+    /// Creates a new `MyServerKey` instance from a given `ServerKey`.
+    ///
+    /// # Arguments
+    /// * `server_key`: tfhe::integer::ServerKey - The server key to be used in FHE operations.
+    ///
+    /// # Returns
+    /// `MyServerKey` - A new `MyServerKey` instance.
     pub fn new(server_key: tfhe::integer::ServerKey) -> Self {
         MyServerKey { key: server_key }
     }
 
+    /// Converts all lowercase characters in a given `FheString` to uppercase.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The FheString to be converted.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - An uppercase version of the input string.
     pub fn to_upper(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -40,6 +55,14 @@ impl MyServerKey {
         FheString::new(bytes, cst)
     }
 
+    /// Converts all uppercase characters in a given `FheString` to lowercase.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The FheString to be converted.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - A lowercase version of the input string.
     pub fn to_lower(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -60,6 +83,15 @@ impl MyServerKey {
         FheString::new(bytes, cst)
     }
 
+    /// Checks if a given `FheString` contains a specified pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to search within.
+    /// * `needle`: &Vec<FheAsciiChar> - The unpadded pattern to search for.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - Encrypted 1 if the pattern is found, otherwise encrypted 0.
     pub fn contains(
         &self,
         string: &FheString,
@@ -90,6 +122,9 @@ impl MyServerKey {
         }
     }
 
+    /// Checks if a given `FheString` contains a specified plaintext pattern.
+    ///
+    /// Same as `contains` but with plaintext pattern.
     pub fn contains_clear(
         &self,
         string: &FheString,
@@ -105,6 +140,16 @@ impl MyServerKey {
         self.contains(string, &needle, public_parameters)
     }
 
+    /// Checks if a given `FheString` ends with a specified pattern, considering padding.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to check.
+    /// * `pattern`: &Vec<FheAsciiChar> - The unpadded pattern to compare against.
+    /// * `padding`: usize - The padding size to consider at the end of the string.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - Encrypted 1 if the string ends with the pattern, otherwise encrypted 0.
     pub fn ends_with(
         &self,
         string: &FheString,
@@ -144,6 +189,9 @@ impl MyServerKey {
         }
     }
 
+    /// Checks if a given `FheString` ends with a specified plaintext pattern, considering padding.
+    ///
+    /// Same as `ends_with` but with plaintext pattern  .
     pub fn ends_with_clear(
         &self,
         string: &FheString,
@@ -159,6 +207,15 @@ impl MyServerKey {
         self.ends_with(string, &pattern, padding, public_parameters)
     }
 
+    /// Checks if a given `FheString` starts with a specified pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to check.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to compare against.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - Encrypted 1 if the string starts with the pattern, otherwise encrypted 0.
     pub fn starts_with(
         &self,
         string: &FheString,
@@ -176,6 +233,9 @@ impl MyServerKey {
         result
     }
 
+    /// Checks if a given `FheString` starts with a specified plaintext pattern.
+    ///
+    /// Same as `starts_with` but with plaintext pattern.
     pub fn starts_with_clear(
         &self,
         string: &FheString,
@@ -190,6 +250,14 @@ impl MyServerKey {
         self.starts_with(string, &pattern, public_parameters)
     }
 
+    /// Checks if a given `FheString` is empty.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to check.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - Encrypted 1 if the string is empty, otherwise encrypted 0.
     pub fn is_empty(
         &self,
         string: &FheString,
@@ -212,6 +280,14 @@ impl MyServerKey {
         result
     }
 
+    /// Computes the length of a given `FheString`.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string whose length is to be computed.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - The encrypted length of the string, without the padding
     pub fn len(&self, string: &FheString, public_parameters: &PublicParameters) -> FheAsciiChar {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -229,6 +305,10 @@ impl MyServerKey {
         result
     }
 
+    /// Repeats a given `FheString` a specified number of times for a max number
+    /// of MAX_REPETITIONS.
+    ///
+    /// Same as `repeat` but with plaintext repetitions.
     pub fn repeat_clear(
         &self,
         string: &FheString,
@@ -251,6 +331,16 @@ impl MyServerKey {
         }
     }
 
+    /// Repeats a given `FheString` a specified number of times for a max number
+    /// of MAX_REPETITIONS.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be repeated.
+    /// * `repetitions`: FheAsciiChar - Encrypted number of times to repeat the string.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - The repeated string.
     pub fn repeat(
         &self,
         string: &FheString,
@@ -277,6 +367,16 @@ impl MyServerKey {
         utils::bubble_zeroes_left(result, &self.key, public_parameters)
     }
 
+    /// Replaces occurrences of a pattern in a given `FheString` with another pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string in which replacements are to be made.
+    /// * `from`: &Vec<FheAsciiChar> - The unpadded pattern to be replaced.
+    /// * `to`: &Vec<FheAsciiChar> - The unpadded pattern to replace with.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - The string with replacements made.
     pub fn replace(
         &self,
         string: &FheString,
@@ -308,6 +408,10 @@ impl MyServerKey {
         }
     }
 
+    /// Replaces occurrences of a plaintext pattern in a given `FheString` with another plaintext
+    /// pattern.
+    ///
+    /// Same as `replace` but with plaintext patterns.
     pub fn replace_clear(
         &self,
         string: &FheString,
@@ -328,6 +432,16 @@ impl MyServerKey {
         self.replace(string, &from, &to, public_parameters)
     }
 
+    /// Finds the last occurrence of a pattern in a given `FheString`.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to search.
+    /// * `pattern`: &Vec<FheAsciiChar> - The unpadded pattern to find.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - The encrypted position of the last occurrence of the pattern,
+    /// or encrypted MAX_FIND_LENGTH if not found
     pub fn rfind(
         &self,
         string: &FheString,
@@ -385,6 +499,9 @@ impl MyServerKey {
         }
     }
 
+    /// Finds the last occurrence of a plaintext pattern in a given `FheString`.
+    ///
+    /// Same as `rfind` but with a plaintext pattern.
     pub fn rfind_clear(
         &self,
         string: &FheString,
@@ -549,6 +666,16 @@ impl MyServerKey {
         result
     }
 
+    /// Finds the first occurrence of a pattern in a given `FheString`.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to search.
+    /// * `pattern`: &Vec<FheAsciiChar> - The unpadded pattern to find.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - The encrypted position of the first occurrence of the pattern,
+    ///  or encrypted MAX_FIND_LENGTH if not found
     pub fn find(
         &self,
         string: &FheString,
@@ -594,6 +721,9 @@ impl MyServerKey {
         }
     }
 
+    /// Finds the first occurrence of a plaintext pattern in a given `FheString`.
+    ///
+    /// Same as `find` but with a plaintext pattern.
     pub fn find_clear(
         &self,
         string: &FheString,
@@ -608,6 +738,15 @@ impl MyServerKey {
         self.find(string, &pattern, public_parameters)
     }
 
+    /// Checks if two `FheString` instances are equal.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The first string to compare.
+    /// * `other`: &FheString - The second string to compare.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - Encrypted 1 if strings are equal, otherwise encrypted 0.
     pub fn eq(
         &self,
         string: &FheString,
@@ -637,6 +776,9 @@ impl MyServerKey {
         are_lengths_not_eql.if_then_else(&self.key, &zero, &is_eq)
     }
 
+    /// Checks if two `FheString` instances are not equal.
+    ///
+    /// Same as `eq` but returns true if strings are not equal.
     pub fn ne(
         &self,
         string: &FheString,
@@ -647,6 +789,15 @@ impl MyServerKey {
         res.flip(&self.key, public_parameters)
     }
 
+    /// Checks if two `FheString` instances are equal, ignoring case.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The first string to compare.
+    /// * `other`: &FheString - The second string to compare.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - Encrypted 1 if strings are equal ignoring case, otherwise encrypted 0.
     pub fn eq_ignore_case(
         &self,
         string: &FheString,
@@ -659,6 +810,16 @@ impl MyServerKey {
         self.eq(&self_lowercase, &other_lowercase, public_parameters)
     }
 
+    /// Strips a specified pattern from the beginning of a `FheString`.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to modify.
+    /// * `pattern`: &Vec<FheAsciiChar> - The unpadded pattern to strip.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheStrip` - A struct containing the new `FheString` with the pattern stripped from the
+    /// beginning if found, and a boolean flag indicating whether the pattern was found or not.
     pub fn strip_prefix(
         &self,
         string: &FheString,
@@ -692,6 +853,16 @@ impl MyServerKey {
         FheStrip::new(string, pattern_found_flag)
     }
 
+    /// Strips a specified pattern from the end of a `FheString`.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to modify.
+    /// * `pattern`: &Vec<FheAsciiChar> - The unpadded pattern to strip.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheStrip` - A struct containing the new `FheString` with the pattern stripped from the
+    /// ending if found, and a boolean flag indicating whether the pattern was found or not.
     pub fn strip_suffix(
         &self,
         string: &FheString,
@@ -728,6 +899,9 @@ impl MyServerKey {
         }
     }
 
+    /// Strips a plaintext pattern from the beginning of a `FheString`.
+    ///
+    /// Same as `strip_prefix` but with a plaintext pattern.
     pub fn strip_prefix_clear(
         &self,
         string: &FheString,
@@ -741,6 +915,9 @@ impl MyServerKey {
         self.strip_prefix(string, &pattern, public_parameters)
     }
 
+    /// Strips a plaintext pattern from the end of a `FheString`.
+    ///
+    /// Same as `strip_suffix` but with a plaintext pattern.
     pub fn strip_suffix_clear(
         &self,
         string: &FheString,
@@ -817,6 +994,16 @@ impl MyServerKey {
         ret
     }
 
+    /// Checks if the first `FheString` is less than the second `FheString`.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The first string to compare.
+    /// * `other`: &FheString - The second string to compare.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheAsciiChar` - Encrypted 1 if the first string is less than the second, otherwise
+    /// encrypted 0.
     pub fn lt(
         &self,
         string: &FheString,
@@ -826,6 +1013,9 @@ impl MyServerKey {
         self.comparison(string, other, Comparison::LessThan, public_parameters)
     }
 
+    /// Checks if the first `FheString` is less than or equal to the second `FheString`.
+    ///
+    /// Same as `lt` but checks for less than or equal to.
     pub fn le(
         &self,
         string: &FheString,
@@ -835,6 +1025,9 @@ impl MyServerKey {
         self.comparison(string, other, Comparison::LessEqual, public_parameters)
     }
 
+    /// Checks if the first `FheString` is greater than the second `FheString`.
+    ///
+    /// Same as `lt` but checks for greater than.
     pub fn gt(
         &self,
         string: &FheString,
@@ -844,6 +1037,9 @@ impl MyServerKey {
         self.comparison(string, other, Comparison::GreaterThan, public_parameters)
     }
 
+    /// Checks if the first `FheString` is greater than or equal to the second `FheString`.
+    ///
+    /// Same as `lt` but checks for greater than or equal to.
     pub fn ge(
         &self,
         string: &FheString,
@@ -853,6 +1049,18 @@ impl MyServerKey {
         self.comparison(string, other, Comparison::GreaterEqual, public_parameters)
     }
 
+    /// Replaces occurrences of a pattern in a given `FheString` with another pattern, up to `n`
+    /// times.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string in which replacements are to be made.
+    /// * `from`: &Vec<FheAsciiChar> - The unpadded pattern to be replaced.
+    /// * `to`: &Vec<FheAsciiChar> - The unpadded pattern to replace with.
+    /// * `n`: FheAsciiChar - The encrypted maximum number of replacements.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - The string with replacements made up to `n` times.
     pub fn replacen(
         &self,
         string: &FheString,
@@ -884,6 +1092,10 @@ impl MyServerKey {
         }
     }
 
+    /// Replaces occurrences of a plaintext pattern in a given `FheString` with another plaintext
+    /// pattern, up to `n` times in plaintext.
+    ///
+    /// Same as `replacen` but with plaintext patterns and plaintext count.
     pub fn replacen_clear(
         &self,
         string: &FheString,
@@ -927,6 +1139,15 @@ impl MyServerKey {
         }
     }
 
+    /// Concatenates two `FheString` instances into one.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The first string to concatenate.
+    /// * `other`: &FheString - The second string to concatenate.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheString` - The concatenated result of the two strings.
     pub fn concatenate(
         &self,
         string: &FheString,

@@ -206,6 +206,16 @@ impl MyServerKey {
         FheSplit::new(result, global_pattern_found, public_parameters, &self.key)
     }
 
+    /// Splits a given `FheString` into multiple parts from the right, based on a specified pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn rsplit(
         &self,
         string: &FheString,
@@ -222,6 +232,10 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into multiple parts from the right, based on a specified
+    ///  plaintext pattern.
+    ///
+    /// Same as `rsplit` but with a plaintext pattern.
     pub fn rsplit_clear(
         &self,
         string: &FheString,
@@ -235,6 +249,18 @@ impl MyServerKey {
         self.rsplit(string, &pattern, public_parameters)
     }
 
+    /// Splits a given `FheString` into a limited number of parts from the right, based on
+    /// a specified pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `n`: FheAsciiChar - The encrypted number of splits to perform.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn rsplitn(
         &self,
         string: &FheString,
@@ -252,6 +278,10 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into a limited number of parts from the right, based on a
+    ///  specified plaintext pattern and plaintext count.
+    ///
+    /// Same as `rsplitn` but with plaintext pattern and count.
     pub fn rsplitn_clear(
         &self,
         string: &FheString,
@@ -267,6 +297,17 @@ impl MyServerKey {
         self._rsplit(string, pattern, false, false, Some(n), public_parameters)
     }
 
+    /// Splits a given `FheString` into two parts from the right, based on a specified
+    /// pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn rsplit_once(
         &self,
         string: &FheString,
@@ -284,6 +325,10 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into two parts from the right, based on a specified plaintext
+    /// pattern.
+    ///
+    /// Same as `rsplit_once` but with a plaintext pattern.
     pub fn rsplit_once_clear(
         &self,
         string: &FheString,
@@ -298,6 +343,17 @@ impl MyServerKey {
         self._rsplit(string, pattern, false, false, Some(n), public_parameters)
     }
 
+    /// Splits a given `FheString` into multiple parts from the right, based on a specified pattern,
+    /// excluding the trailing empty string if any.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn rsplit_terminator(
         &self,
         string: &FheString,
@@ -314,6 +370,10 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into multiple parts from the right, based on a specified
+    /// plaintext pattern, excluding the trailing empty string if any.
+    ///
+    /// Same as `rsplit_terminator` but with a plaintext pattern.
     pub fn rsplit_terminator_clear(
         &self,
         string: &FheString,
@@ -550,6 +610,16 @@ impl MyServerKey {
         FheSplit::new(result, global_pattern_found, public_parameters, &self.key)
     }
 
+    /// Splits a given `FheString` into multiple parts based on a specified pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn split(
         &self,
         string: &FheString,
@@ -566,6 +636,9 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into multiple parts based on a specified plaintext pattern.
+    ///
+    /// Same as `split` but with a plaintext pattern.
     pub fn split_clear(
         &self,
         string: &FheString,
@@ -579,6 +652,17 @@ impl MyServerKey {
         self.split(string, &pattern, public_parameters)
     }
 
+    /// Splits a given `FheString` into multiple parts based on a specified pattern,
+    /// including the pattern in the split parts.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn split_inclusive(
         &self,
         string: &FheString,
@@ -595,6 +679,10 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into multiple parts based on a specified plaintext pattern,
+    /// including the pattern in the split parts.
+    ///
+    /// Same as `split_inclusive` but with a plaintext pattern.
     pub fn split_inclusive_clear(
         &self,
         string: &FheString,
@@ -608,6 +696,17 @@ impl MyServerKey {
         self.split_inclusive(string, &pattern, public_parameters)
     }
 
+    /// Splits a given `FheString` into multiple parts based on a specified pattern,
+    /// excluding the trailing empty string if any.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn split_terminator(
         &self,
         string: &FheString,
@@ -624,6 +723,10 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into multiple parts based on a specified plaintext pattern,
+    /// excluding the trailing empty string if any.
+    ///
+    /// Same as `split_terminator` but with a plaintext pattern.
     pub fn split_terminator_clear(
         &self,
         string: &FheString,
@@ -644,6 +747,15 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into multiple parts based on ASCII whitespace characters.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn split_ascii_whitespace(
         &self,
         string: &FheString,
@@ -716,6 +828,17 @@ impl MyServerKey {
         FheSplit::new(result, global_pattern_found, public_parameters, &self.key)
     }
 
+    /// Splits a given `FheString` into a limited number of parts based on a specified pattern.
+    ///
+    /// # Arguments
+    /// * `string`: &FheString - The string to be split.
+    /// * `pattern`: &[FheAsciiChar] - The unpadded pattern to split on.
+    /// * `n`: FheAsciiChar - The encrypted number of splits to perform.
+    /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Returns
+    /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
+    /// indicating whether a split was made.
     pub fn splitn(
         &self,
         string: &FheString,
@@ -733,6 +856,10 @@ impl MyServerKey {
         )
     }
 
+    /// Splits a given `FheString` into a limited number of parts based on a specified
+    /// plaintext pattern and plaintext count.
+    ///
+    /// Same as `splitn` but with plaintext pattern and count.
     pub fn splitn_clear(
         &self,
         string: &FheString,
