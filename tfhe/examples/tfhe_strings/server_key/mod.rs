@@ -97,6 +97,19 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheAsciiChar` - Encrypted 1 if the pattern is found, otherwise encrypted 0.
+    ///
+    /// # Example
+    /// ```
+    /// let heistack_plain = "awesome zama is awesome";
+    /// let needle_plain = "zama";
+    /// let heistack =
+    ///    my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);
+    /// let needle = my_client_key.encrypt_no_padding(needle_plain);
+    ///
+    /// let res = my_server_key.contains(&heistack, &needle, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn contains(
         &self,
         string: &FheString,
@@ -113,6 +126,10 @@ impl MyServerKey {
 
         match end {
             Some(end_of_pattern) => {
+                // If pattern and string have the same size and are equal
+                // this is needed to actually iterate the loop
+                let end_of_pattern = utils::adjust_end_of_pattern(end_of_pattern);
+
                 for i in 0..end_of_pattern {
                     let mut current_result = one.clone();
                     for (j, needle_char) in needle.iter().enumerate() {
@@ -492,6 +509,10 @@ impl MyServerKey {
 
         match end {
             Some(end_of_pattern) => {
+                // If pattern and string have the same size and are equal
+                // this is needed to actually iterate the loop
+                let end_of_pattern = utils::adjust_end_of_pattern(end_of_pattern);
+
                 // Search for pattern
                 for i in 0..end_of_pattern {
                     let mut pattern_found_flag = one.clone();
@@ -554,11 +575,9 @@ impl MyServerKey {
         let mut result = bytes.clone();
 
         if from.len() <= result.len() {
-            let end_of_pattern = if result.len() - from.len() == 0 {
-                1
-            } else {
-                result.len() - from.len()
-            };
+            // If pattern and string have the same size and are equal
+            // this is needed to actually iterate the loop
+            let end_of_pattern = utils::adjust_end_of_pattern(result.len() - from.len());
 
             // Replace from wih to
             for i in 0..end_of_pattern {
@@ -714,6 +733,14 @@ impl MyServerKey {
 
         match end {
             Some(end_of_pattern) => {
+                // If pattern and string have the same size and are equal
+                // this is needed to actually iterate the loop
+                let end_of_pattern = if end_of_pattern == 0 {
+                    1
+                } else {
+                    end_of_pattern
+                };
+
                 // Search for pattern
                 for i in (0..end_of_pattern).rev() {
                     let mut pattern_found_flag = one.clone();

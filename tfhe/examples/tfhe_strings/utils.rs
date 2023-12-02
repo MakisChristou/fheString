@@ -56,6 +56,14 @@ pub fn trim_str_vector(mut vec: Vec<&str>) -> Vec<String> {
     vec.into_iter().map(|s| s.to_string()).collect()
 }
 
+pub fn adjust_end_of_pattern(end_of_pattern: usize) -> usize {
+    if end_of_pattern == 0 {
+        1
+    } else {
+        end_of_pattern
+    }
+}
+
 fn compare_and_print<T: PartialEq + std::fmt::Debug>(expected: T, actual: T) {
     if expected == actual {
         print!("Test Passed: OK, ");
