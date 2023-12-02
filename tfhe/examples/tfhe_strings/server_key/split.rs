@@ -9,18 +9,22 @@ use super::MyServerKey;
 impl MyServerKey {
     fn _rsplit(
         &self,
-        string: &FheString,
+        mut string: FheString,
         pattern: Vec<FheAsciiChar>,
         is_inclusive: bool,
         is_terminator: bool,
         n: Option<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheSplit {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+
+        // Pad the string to avoid edge cases
+        string.push(zero.clone());
+
         let max_buffer_size = string.len(); // when a single buffer holds the whole input
         let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
-        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
-        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
@@ -40,7 +44,7 @@ impl MyServerKey {
                 let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters, &self.key);
                 let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
 
-                // Edge case, if n = 0 we ever copy anything
+                // Edge case, if n = 0 we never copy anything
                 if n.is_some() {
                     copy_flag = copy_flag.bitand(&self.key, &allow_copying);
                 }
@@ -223,7 +227,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheSplit {
         self._rsplit(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             false,
@@ -269,7 +273,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheSplit {
         self._rsplit(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             false,
@@ -294,7 +298,14 @@ impl MyServerKey {
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
         let n = FheAsciiChar::encrypt_trivial(clear_n as u8, public_parameters, &self.key);
-        self._rsplit(string, pattern, false, false, Some(n), public_parameters)
+        self._rsplit(
+            string.clone(),
+            pattern,
+            false,
+            false,
+            Some(n),
+            public_parameters,
+        )
     }
 
     /// Splits a given `FheString` into two parts from the right, based on a specified
@@ -314,9 +325,9 @@ impl MyServerKey {
         pattern: &[FheAsciiChar],
         public_parameters: &PublicParameters,
     ) -> FheSplit {
-        let n = FheAsciiChar::encrypt_trivial(2u8, public_parameters, &self.key);
+        let mut n = FheAsciiChar::encrypt_trivial(2u8, public_parameters, &self.key);
         self._rsplit(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             false,
@@ -340,7 +351,14 @@ impl MyServerKey {
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
         let n = FheAsciiChar::encrypt_trivial(2u8, public_parameters, &self.key);
-        self._rsplit(string, pattern, false, false, Some(n), public_parameters)
+        self._rsplit(
+            string.clone(),
+            pattern,
+            false,
+            false,
+            Some(n),
+            public_parameters,
+        )
     }
 
     /// Splits a given `FheString` into multiple parts from the right, based on a specified pattern,
@@ -361,7 +379,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheSplit {
         self._rsplit(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             true,
@@ -384,23 +402,34 @@ impl MyServerKey {
             .bytes()
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
-        self._rsplit(string, pattern, false, true, None, public_parameters)
+        self._rsplit(
+            string.clone(),
+            pattern,
+            false,
+            true,
+            None,
+            public_parameters,
+        )
     }
 
     fn _split(
         &self,
-        string: &FheString,
+        mut string: FheString,
         pattern: Vec<FheAsciiChar>,
         is_inclusive: bool,
         is_terminator: bool,
         n: Option<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheSplit {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+
+        // Pad the string to avoid edge cases
+        string.push(zero.clone());
+
         let max_buffer_size = string.len(); // when a single buffer holds the whole input
         let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
-        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
-        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
@@ -420,7 +449,7 @@ impl MyServerKey {
         // Example2:  "eeeeee".rsplitn(3, "") --> ["", "e", "eeeee"]
         if pattern.is_empty() && n.is_some() {
             let n_value = n.clone().unwrap();
-            let enc_len = self.len(string, public_parameters);
+            let enc_len = self.len(&string, public_parameters);
 
             let should_skip_first_buffer = n_value
                 .gt(&self.key, &one)
@@ -627,7 +656,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheSplit {
         self._split(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             false,
@@ -670,7 +699,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheSplit {
         self._split(
-            string,
+            string.clone(),
             pattern.to_owned(),
             true,
             false,
@@ -714,7 +743,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheSplit {
         self._split(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             true,
@@ -738,7 +767,7 @@ impl MyServerKey {
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
         self._split(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             true,
@@ -847,7 +876,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheSplit {
         self._split(
-            string,
+            string.clone(),
             pattern.to_owned(),
             false,
             false,
@@ -872,6 +901,13 @@ impl MyServerKey {
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
         let n = FheAsciiChar::encrypt_trivial(clear_n as u8, public_parameters, &self.key);
-        self._split(string, pattern, false, false, Some(n), public_parameters)
+        self._split(
+            string.clone(),
+            pattern,
+            false,
+            false,
+            Some(n),
+            public_parameters,
+        )
     }
 }
