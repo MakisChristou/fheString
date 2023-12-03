@@ -501,6 +501,7 @@ pub fn run_fhe_str_method(
             match expected {
                 Some(expected) => {
                     compare_and_print(expected, &actual);
+                    compare_and_print(expected_pattern_found as u8, actual_pattern_found);
                 }
                 None => {
                     compare_and_print(expected_pattern_found as u8, actual_pattern_found);
@@ -517,6 +518,7 @@ pub fn run_fhe_str_method(
             match expected {
                 Some(expected) => {
                     compare_and_print(expected, &actual);
+                    compare_and_print(expected_pattern_found as u8, actual_pattern_found);
                 }
                 None => {
                     compare_and_print(expected_pattern_found as u8, actual_pattern_found);
@@ -544,6 +546,7 @@ pub fn run_fhe_str_method(
                 // Pattern was found and stripped from original string
                 Some(expected) => {
                     compare_and_print(expected, &actual);
+                    compare_and_print(expected_pattern_found as u8, actual_pattern_found);
                 }
                 // Pattern not found
                 None => {
@@ -570,6 +573,7 @@ pub fn run_fhe_str_method(
             match expected {
                 Some(expected) => {
                     compare_and_print(expected, &actual);
+                    compare_and_print(expected_pattern_found as u8, actual_pattern_found);
                 }
                 None => {
                     compare_and_print(expected_pattern_found as u8, actual_pattern_found);

@@ -17,6 +17,22 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - A new `FheString` with trailing whitespace removed.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "ZAMA\n\t \r\x0C";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string_upper = my_server_key.trim_end(&my_string, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "ZAMA");
+    /// ```
     pub fn trim_end(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -51,6 +67,22 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - A new `FheString` with leading whitespace removed.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "ZAMA\n\t \r\x0C";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string_upper = my_server_key.trim_end(&my_string, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "ZAMA");
+    /// ```
     pub fn trim_start(
         &self,
         string: &FheString,
@@ -95,6 +127,22 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - A new `FheString` with both leading and trailing whitespace removed.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "\nZAMA\n\t";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string_upper = my_server_key.trim(&my_string, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "ZAMA");
+    /// ```
     pub fn trim(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let result = self.trim_end(string, public_parameters);
         self.trim_start(&result, public_parameters)

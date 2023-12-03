@@ -63,7 +63,7 @@ impl MyServerKey {
                 }
             }
 
-            global_pattern_found = global_pattern_found.bitand(&self.key, &pattern_found);
+            global_pattern_found = global_pattern_found.bitor(&self.key, &pattern_found);
 
             // If its splitn stop after n splits
             match &n {
@@ -220,6 +220,40 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    /// let fhe_split = my_server_key.rsplit(&my_string, &pattern, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "C".to_owned(),
+    ///             "B".to_owned(),
+    ///             "A".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplit(
         &self,
         string: &FheString,
@@ -240,6 +274,39 @@ impl MyServerKey {
     ///  plaintext pattern.
     ///
     /// Same as `rsplit` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let fhe_split = my_server_key.rsplit_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "C".to_owned(),
+    ///             "B".to_owned(),
+    ///             "A".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplit_clear(
         &self,
         string: &FheString,
@@ -265,6 +332,42 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    /// let n_plain = 3u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    /// let n = FheAsciiChar::encrypt_trivial(n_plain, &public_parameters, &my_server_key.key);
+    /// let fhe_split = my_server_key.rsplitn(&my_string, &pattern, n, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "C".to_owned(),
+    ///             ".A.B".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplitn(
         &self,
         string: &FheString,
@@ -286,6 +389,46 @@ impl MyServerKey {
     ///  specified plaintext pattern and plaintext count.
     ///
     /// Same as `rsplitn` but with plaintext pattern and count.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    /// let n_plain = 3u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let fhe_split = my_server_key.rsplitn_clear(
+    ///     &my_string,
+    ///     &pattern_plain,
+    ///     n_plain.into(),
+    ///     &public_parameters,
+    /// );
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "C".to_owned(),
+    ///             ".A.B".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplitn_clear(
         &self,
         string: &FheString,
@@ -319,6 +462,40 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    /// let fhe_split = my_server_key.rsplit_once(&my_string, &pattern, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             ".A.B.C".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplit_once(
         &self,
         string: &FheString,
@@ -340,6 +517,41 @@ impl MyServerKey {
     /// pattern.
     ///
     /// Same as `rsplit_once` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let fhe_split =
+    ///     my_server_key.rsplit_once_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             ".A.B.C".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplit_once_clear(
         &self,
         string: &FheString,
@@ -372,6 +584,44 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "....A.B.C.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    ///
+    /// let fhe_split = my_server_key.rsplit_terminator(&my_string, &pattern, &public_parameters);
+    /// let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "C".to_owned(),
+    ///             "B".to_owned(),
+    ///             "A".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplit_terminator(
         &self,
         string: &FheString,
@@ -392,6 +642,43 @@ impl MyServerKey {
     /// plaintext pattern, excluding the trailing empty string if any.
     ///
     /// Same as `rsplit_terminator` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "....A.B.C.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let fhe_split =
+    ///     my_server_key.rsplit_terminator_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "C".to_owned(),
+    ///             "B".to_owned(),
+    ///             "A".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn rsplit_terminator_clear(
         &self,
         string: &FheString,
@@ -488,7 +775,7 @@ impl MyServerKey {
                 }
             }
 
-            global_pattern_found = global_pattern_found.bitand(&self.key, &pattern_found);
+            global_pattern_found = global_pattern_found.bitor(&self.key, &pattern_found);
 
             // If its splitn stop after n splits
             match &n {
@@ -649,6 +936,44 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = " Mary had a";
+    /// let pattern_plain = " ";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    /// let fhe_split = my_server_key.split(&my_string, &pattern, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "Mary".to_owned(),
+    ///             "had".to_owned(),
+    ///             "a".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn split(
         &self,
         string: &FheString,
@@ -668,6 +993,43 @@ impl MyServerKey {
     /// Splits a given `FheString` into multiple parts based on a specified plaintext pattern.
     ///
     /// Same as `split` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = " Mary had a";
+    /// let pattern_plain = " ";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let fhe_split = my_server_key.split_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "Mary".to_owned(),
+    ///             "had".to_owned(),
+    ///             "a".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn split_clear(
         &self,
         string: &FheString,
@@ -692,6 +1054,43 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "Mary had a";
+    /// let pattern_plain = " ";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    ///
+    /// let fhe_split = my_server_key.split_inclusive(&my_string, &pattern, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "Mary ".to_owned(),
+    ///             "had ".to_owned(),
+    ///             "a".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn split_inclusive(
         &self,
         string: &FheString,
@@ -712,6 +1111,42 @@ impl MyServerKey {
     /// including the pattern in the split parts.
     ///
     /// Same as `split_inclusive` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "Mary had a";
+    /// let pattern_plain = " ";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let fhe_split =
+    ///     my_server_key.split_inclusive_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "Mary ".to_owned(),
+    ///             "had ".to_owned(),
+    ///             "a".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn split_inclusive_clear(
         &self,
         string: &FheString,
@@ -736,6 +1171,38 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    ///
+    /// let fhe_split = my_server_key.split_terminator(&my_string, &pattern, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "A".to_owned(),
+    ///             "B".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn split_terminator(
         &self,
         string: &FheString,
@@ -756,6 +1223,38 @@ impl MyServerKey {
     /// excluding the trailing empty string if any.
     ///
     /// Same as `split_terminator` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.";
+    /// let pattern_plain = ".";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let fhe_split =
+    ///     my_server_key.split_terminator_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "A".to_owned(),
+    ///             "B".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn split_terminator_clear(
         &self,
         string: &FheString,
@@ -785,6 +1284,35 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = " A\nB\t";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let fhe_split = my_server_key.split_ascii_whitespace(&my_string, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "A".to_owned(),
+    ///             "B".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn split_ascii_whitespace(
         &self,
         string: &FheString,
@@ -803,7 +1331,7 @@ impl MyServerKey {
 
         for i in 0..(string.len()) {
             let pattern_found = string[i].is_whitespace(&self.key, public_parameters);
-            global_pattern_found = global_pattern_found.bitand(&self.key, &pattern_found);
+            global_pattern_found = global_pattern_found.bitor(&self.key, &pattern_found);
 
             let should_increment_buffer = pattern_found.bitand(
                 &self.key,
@@ -868,6 +1396,43 @@ impl MyServerKey {
     /// # Returns
     /// `FheSplit` - A struct containing the split parts of the string and a boolean flag
     /// indicating whether a split was made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    /// let n_plain = 2u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    /// let n = FheAsciiChar::encrypt_trivial(n_plain, &public_parameters, &my_server_key.key);
+    ///
+    /// let fhe_split = my_server_key.splitn(&my_string, &pattern, n, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "A.B.C.".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
     pub fn splitn(
         &self,
         string: &FheString,
@@ -889,6 +1454,42 @@ impl MyServerKey {
     /// plaintext pattern and plaintext count.
     ///
     /// Same as `splitn` but with plaintext pattern and count.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = ".A.B.C.";
+    /// let pattern_plain = ".";
+    /// let n_plain = 2u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let fhe_split =
+    ///     my_server_key.splitn_clear(&my_string, &pattern_plain, n_plain, &public_parameters);
+    /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+    ///
+    /// assert_eq!(
+    ///     plain_split,
+    ///     (
+    ///         vec![
+    ///             "".to_owned(),
+    ///             "A.B.C.".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///             "".to_owned(),
+    ///         ],
+    ///         1u8
+    ///     )
+    /// );
+    /// ```
+
     pub fn splitn_clear(
         &self,
         string: &FheString,

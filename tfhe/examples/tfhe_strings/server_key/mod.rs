@@ -27,6 +27,13 @@ impl MyServerKey {
         MyServerKey { key: server_key }
     }
 
+    /// Creates a new `MyServerKey` instance from a given `MyClientKey`.
+    ///
+    /// # Arguments
+    /// * `my_client_key`: MyClientKey - The client key used to extract the server key.
+    ///
+    /// # Returns
+    /// `MyServerKey` - A new `MyServerKey` instance constructed from the server key derived from `my_client_key`.
     pub fn _from_client_key(my_client_key: MyClientKey) -> Self {
         my_client_key.get_server_key()
     }
@@ -39,6 +46,21 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - An uppercase version of the input string.
+    /// Example:
+    ///
+    /// ```
+    /// let my_string_plain = "zama IS awesome";
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string_upper = my_server_key.to_upper(&my_string, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "ZAMA IS AWESOME");
+    /// ```
     pub fn to_upper(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -68,6 +90,22 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - A lowercase version of the input string.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "zama IS awesome";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string_upper = my_server_key.to_lower(&my_string, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "zama is awesome");
+    /// ```
     pub fn to_lower(&self, string: &FheString, public_parameters: &PublicParameters) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -147,6 +185,20 @@ impl MyServerKey {
     /// Checks if a given `FheString` contains a specified plaintext pattern.
     ///
     /// Same as `contains` but with plaintext pattern.
+    /// # Example
+    /// ```
+    /// let (my_client_key, my_server_key, public_parameters) = setup_test();
+    ///
+    /// let heistack_plain = "awesome zama is awesome";
+    /// let needle_plain = "zama";
+    ///
+    /// let heistack =
+    ///  my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);   
+    ///
+    /// let res = my_server_key.contains_clear(&heistack, &needle_plain, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn contains_clear(
         &self,
         string: &FheString,
@@ -172,6 +224,24 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheAsciiChar` - Encrypted 1 if the string ends with the pattern, otherwise encrypted 0.
+    /// # Example
+    /// ```
+    /// let heistack_plain = "hello world";
+    /// let needle_plain = "world";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let needle = my_client_key.encrypt_no_padding(needle_plain);
+    ///
+    /// let res = my_server_key.ends_with(&heistack, &needle, STRING_PADDING, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn ends_with(
         &self,
         string: &FheString,
@@ -214,6 +284,28 @@ impl MyServerKey {
     /// Checks if a given `FheString` ends with a specified plaintext pattern, considering padding.
     ///
     /// Same as `ends_with` but with plaintext pattern  .
+    /// Example:
+    /// ```
+    /// let heistack_plain = "hello world";
+    /// let needle_plain = "world";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.ends_with_clear(
+    ///     &heistack,
+    ///     &needle_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    /// );
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn ends_with_clear(
         &self,
         string: &FheString,
@@ -238,6 +330,24 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheAsciiChar` - Encrypted 1 if the string starts with the pattern, otherwise encrypted 0.
+    ///
+    /// # Example
+    /// ```
+    /// let heistack_plain = "hello world";
+    /// let needle_plain = "hello";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///    heistack_plain,
+    ///    STRING_PADDING,
+    ///    &public_parameters,
+    ///    &my_server_key.key,
+    /// );
+    /// let needle = my_client_key.encrypt_no_padding(needle_plain);
+    /// let res = my_server_key.starts_with(&heistack, &needle, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```    
     pub fn starts_with(
         &self,
         string: &FheString,
@@ -268,6 +378,24 @@ impl MyServerKey {
     /// Checks if a given `FheString` starts with a specified plaintext pattern.
     ///
     /// Same as `starts_with` but with plaintext pattern.
+    ///
+    /// # Example
+    /// ```
+    /// let heistack_plain = "hello world";
+    /// let needle_plain = "hello";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///    heistack_plain,
+    ///    STRING_PADDING,
+    ///    &public_parameters,
+    ///    &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.starts_with_clear(&heistack, &needle_plain, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```    
     pub fn starts_with_clear(
         &self,
         string: &FheString,
@@ -290,6 +418,23 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheAsciiChar` - Encrypted 1 if the string is empty, otherwise encrypted 0.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.is_empty(&my_string, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn is_empty(
         &self,
         string: &FheString,
@@ -320,6 +465,23 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheAsciiChar` - The encrypted length of the string, without the padding
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "hello world";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.len(&my_string, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 11u8);
+    /// ```
     pub fn len(&self, string: &FheString, public_parameters: &PublicParameters) -> FheAsciiChar {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
 
@@ -341,6 +503,24 @@ impl MyServerKey {
     /// of MAX_REPETITIONS.
     ///
     /// Same as `repeat` but with plaintext repetitions.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "abc";
+    /// let n_plain = 3u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string_upper =
+    ///     my_server_key.repeat_clear(&my_string, n_plain.into(), &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "abcabcabc");
+    /// ```
     pub fn repeat_clear(
         &self,
         string: &FheString,
@@ -373,6 +553,24 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - The repeated string.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "abc";
+    /// let n_plain = 3u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let n = my_client_key.encrypt_char(n_plain);
+    /// let my_string_upper = my_server_key.repeat(&my_string, n, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "abcabcabc");
+    /// ```
     pub fn repeat(
         &self,
         string: &FheString,
@@ -409,6 +607,27 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - The string with replacements made.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "hello world world test";
+    /// let from_plain = "world";
+    /// let to_plain = "abc";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let from = my_client_key.encrypt_no_padding(from_plain);
+    /// let to = my_client_key.encrypt_no_padding(to_plain);
+    ///
+    /// let my_new_string = my_server_key.replace(&my_string, &from, &to, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_new_string);
+    ///
+    /// assert_eq!(actual, "hello abc abc test");
+    /// ```
     pub fn replace(
         &self,
         string: &FheString,
@@ -444,6 +663,26 @@ impl MyServerKey {
     /// pattern.
     ///
     /// Same as `replace` but with plaintext patterns.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "hello world world test";
+    /// let from_plain = "world";
+    /// let to_plain = "abc";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let my_new_string =
+    ///     my_server_key.replace_clear(&my_string, &from_plain, &to_plain, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_new_string);
+    ///
+    /// assert_eq!(actual, "hello abc abc test");
+    /// ```
     pub fn replace_clear(
         &self,
         string: &FheString,
@@ -474,6 +713,24 @@ impl MyServerKey {
     /// # Returns
     /// `FheAsciiChar` - The encrypted position of the last occurrence of the pattern,
     /// or encrypted MAX_FIND_LENGTH if not found
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack_plain = "hello abc abc test";
+    /// let needle_plain = "abc";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let needle = my_client_key.encrypt_no_padding(needle_plain);
+    /// let res = my_server_key.rfind(&heistack, &needle, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 10u8);
+    /// ```
     pub fn rfind(
         &self,
         string: &FheString,
@@ -538,6 +795,24 @@ impl MyServerKey {
     /// Finds the last occurrence of a plaintext pattern in a given `FheString`.
     ///
     /// Same as `rfind` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack_plain = "hello abc abc test";
+    /// let needle_plain = "abc";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.rfind_clear(&heistack, &needle_plain, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 10u8);
+    /// ```
     pub fn rfind_clear(
         &self,
         string: &FheString,
@@ -710,6 +985,24 @@ impl MyServerKey {
     /// # Returns
     /// `FheAsciiChar` - The encrypted position of the first occurrence of the pattern,
     ///  or encrypted MAX_FIND_LENGTH if not found
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack_plain = "hello test";
+    /// let needle_plain = "test";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let needle = my_client_key.encrypt_no_padding(needle_plain);
+    /// let res = my_server_key.find(&heistack, &needle, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 6u8);
+    /// ```
     pub fn find(
         &self,
         string: &FheString,
@@ -766,6 +1059,23 @@ impl MyServerKey {
     /// Finds the first occurrence of a plaintext pattern in a given `FheString`.
     ///
     /// Same as `find` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack_plain = "hello test";
+    /// let needle_plain = "test";
+    ///
+    /// let heistack = my_client_key.encrypt(
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let res = my_server_key.find_clear(&heistack, &needle_plain, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 6u8);
+    /// ```
     pub fn find_clear(
         &self,
         string: &FheString,
@@ -789,6 +1099,30 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheAsciiChar` - Encrypted 1 if strings are equal, otherwise encrypted 0.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack1_plain = "hello test";
+    /// let heistack2_plain = "hello test";
+    ///
+    /// let heistack1 = my_client_key.encrypt(
+    ///     heistack1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let heistack2 = my_client_key.encrypt(
+    ///     heistack2_plain,
+    ///     STRING_PADDING + 20,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.eq(&heistack1, &heistack2, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn eq(
         &self,
         string: &FheString,
@@ -821,6 +1155,30 @@ impl MyServerKey {
     /// Checks if two `FheString` instances are not equal.
     ///
     /// Same as `eq` but returns true if strings are not equal.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack1_plain = "hello test";
+    /// let heistack2_plain = "hello test";
+    ///
+    /// let heistack1 = my_client_key.encrypt(
+    ///     heistack1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let heistack2 = my_client_key.encrypt(
+    ///     heistack2_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.ne(&heistack1, &heistack2, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 0u8);
+    /// ```
     pub fn ne(
         &self,
         string: &FheString,
@@ -840,6 +1198,30 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheAsciiChar` - Encrypted 1 if strings are equal ignoring case, otherwise encrypted 0.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack1_plain = "hello TEST";
+    /// let heistack2_plain = "hello test";
+    ///
+    /// let heistack1 = my_client_key.encrypt(
+    ///     heistack1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let heistack2 = my_client_key.encrypt(
+    ///     heistack2_plain,
+    ///     STRING_PADDING + 20,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.eq_ignore_case(&heistack1, &heistack2, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn eq_ignore_case(
         &self,
         string: &FheString,
@@ -862,6 +1244,24 @@ impl MyServerKey {
     /// # Returns
     /// `FheStrip` - A struct containing the new `FheString` with the pattern stripped from the
     /// beginning if found, and a boolean flag indicating whether the pattern was found or not.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "HELLO test test HELLO";
+    /// let pattern_plain = "HELLO";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    /// let fhe_strip = my_server_key.strip_prefix(&my_string, &pattern, &public_parameters);
+    /// let (actual, _) = FheStrip::decrypt(fhe_strip, &my_client_key);
+    ///
+    /// assert_eq!(actual, " test test HELLO");
+    /// ```
     pub fn strip_prefix(
         &self,
         string: &FheString,
@@ -909,12 +1309,42 @@ impl MyServerKey {
     ///
     /// # Arguments
     /// * `string`: &FheString - The string to modify.
-    /// * `pattern`: &Vec<FheAsciiChar> - The unpadded pattern to strip.
+    /// * `pattern`: &Vec<FheAsciiChar> - The padded pattern to strip.
     /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
+    ///
+    /// # Notes
+    /// This algorithms has a limitation where it requires the user to know the string
+    /// padding
     ///
     /// # Returns
     /// `FheStrip` - A struct containing the new `FheString` with the pattern stripped from the
     /// ending if found, and a boolean flag indicating whether the pattern was found or not.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "HELLO test test HELLO";
+    /// let pattern_plain = "HELLO";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let pattern = my_client_key.encrypt(
+    ///     pattern_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let fhe_strip =
+    ///     my_server_key.strip_suffix(&my_string, &pattern.get_bytes(), &public_parameters);
+    ///
+    /// let (actual, flag) = FheStrip::decrypt(fhe_strip, &my_client_key);
+    ///
+    /// assert_eq!(actual, "HELLO test test ");
+    /// assert_eq!(flag, 1u8);
+    /// ```
     pub fn strip_suffix(
         &self,
         string: &FheString,
@@ -954,6 +1384,26 @@ impl MyServerKey {
     /// Strips a plaintext pattern from the beginning of a `FheString`.
     ///
     /// Same as `strip_prefix` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "HELLO test test HELLO";
+    /// let pattern_plain = "HELLO";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let fhe_strip =
+    ///     my_server_key.strip_prefix_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let (actual, flag) = FheStrip::decrypt(fhe_strip, &my_client_key);
+    ///
+    /// assert_eq!(actual, " test test HELLO");
+    /// assert_eq!(flag, 1u8);
+    /// ```
     pub fn strip_prefix_clear(
         &self,
         string: &FheString,
@@ -970,6 +1420,29 @@ impl MyServerKey {
     /// Strips a plaintext pattern from the end of a `FheString`.
     ///
     /// Same as `strip_suffix` but with a plaintext pattern.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "HELLO test test HELLO";
+    /// let pattern_plain = "HELLO";
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let null_bytes = "\0".repeat(STRING_PADDING);
+    /// let padded_pattern_plain = format!("{}{}", pattern_plain, null_bytes);
+    ///
+    /// let fhe_strip =
+    ///     my_server_key.strip_suffix_clear(&my_string, &padded_pattern_plain, &public_parameters);
+    /// let (actual, flag) = FheStrip::decrypt(fhe_strip, &my_client_key);
+    ///
+    /// assert_eq!(actual, "HELLO test test ");
+    /// assert_eq!(flag, 1u8);
+    /// ```
     pub fn strip_suffix_clear(
         &self,
         string: &FheString,
@@ -1056,6 +1529,30 @@ impl MyServerKey {
     /// # Returns
     /// `FheAsciiChar` - Encrypted 1 if the first string is less than the second, otherwise
     /// encrypted 0.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack1_plain = "hello test";
+    /// let heistack2_plain = "hello test";
+    ///
+    /// let heistack1 = my_client_key.encrypt(
+    ///     heistack1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let heistack2 = my_client_key.encrypt(
+    ///     heistack2_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.lt(&heistack1, &heistack2, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 0u8);
+    /// ```
     pub fn lt(
         &self,
         string: &FheString,
@@ -1068,6 +1565,30 @@ impl MyServerKey {
     /// Checks if the first `FheString` is less than or equal to the second `FheString`.
     ///
     /// Same as `lt` but checks for less than or equal to.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack1_plain = "hello test";
+    /// let heistack2_plain = "hello test";
+    ///
+    /// let heistack1 = my_client_key.encrypt(
+    ///     heistack1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let heistack2 = my_client_key.encrypt(
+    ///     heistack2_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.le(&heistack1, &heistack2, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn le(
         &self,
         string: &FheString,
@@ -1080,6 +1601,30 @@ impl MyServerKey {
     /// Checks if the first `FheString` is greater than the second `FheString`.
     ///
     /// Same as `lt` but checks for greater than.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack1_plain = "hello test";
+    /// let heistack2_plain = "hello test";
+    ///
+    /// let heistack1 = my_client_key.encrypt(
+    ///     heistack1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let heistack2 = my_client_key.encrypt(
+    ///     heistack2_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.gt(&heistack1, &heistack2, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 0u8);
+    /// ```
     pub fn gt(
         &self,
         string: &FheString,
@@ -1092,6 +1637,30 @@ impl MyServerKey {
     /// Checks if the first `FheString` is greater than or equal to the second `FheString`.
     ///
     /// Same as `lt` but checks for greater than or equal to.
+    ///
+    /// # Example:
+    /// ```
+    /// let heistack1_plain = "hello test";
+    /// let heistack2_plain = "hello test";
+    ///
+    /// let heistack1 = my_client_key.encrypt(
+    ///     heistack1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let heistack2 = my_client_key.encrypt(
+    ///     heistack2_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let res = my_server_key.ge(&heistack1, &heistack2, &public_parameters);
+    /// let dec: u8 = my_client_key.decrypt_char(&res);
+    ///
+    /// assert_eq!(dec, 1u8);
+    /// ```
     pub fn ge(
         &self,
         string: &FheString,
@@ -1113,6 +1682,29 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - The string with replacements made up to `n` times.
+    /// Example:
+    ///
+    /// ```
+    /// let my_string_plain = "hello abc abc test";
+    /// let from_plain = "abc";
+    /// let to_plain = "world";
+    /// let n_plain = 1u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let from = my_client_key.encrypt_no_padding(from_plain);
+    /// let to = my_client_key.encrypt_no_padding(to_plain);
+    /// let n = my_client_key.encrypt_char(n_plain);
+    ///
+    /// let my_new_string = my_server_key.replacen(&my_string, &from, &to, n, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_new_string);
+    ///
+    /// assert_eq!(actual, "hello world abc test");
+    /// ```
     pub fn replacen(
         &self,
         string: &FheString,
@@ -1148,6 +1740,31 @@ impl MyServerKey {
     /// pattern, up to `n` times in plaintext.
     ///
     /// Same as `replacen` but with plaintext patterns and plaintext count.
+    /// # Example:
+    /// ```
+    /// let my_string_plain = "hello abc abc test";
+    /// let from_plain = "abc";
+    /// let to_plain = "world";
+    /// let n_plain = 1u8;
+    ///
+    /// let my_string = my_client_key.encrypt(
+    ///     my_string_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    ///
+    /// let my_new_string = my_server_key.replacen_clear(
+    ///     &my_string,
+    ///     &from_plain,
+    ///     &to_plain,
+    ///     n_plain,
+    ///     &public_parameters,
+    /// );
+    /// let actual = my_client_key.decrypt(my_new_string);
+    ///
+    /// assert_eq!(actual, "hello world abc test");
+    /// ```
     pub fn replacen_clear(
         &self,
         string: &FheString,
@@ -1200,6 +1817,30 @@ impl MyServerKey {
     ///
     /// # Returns
     /// `FheString` - The concatenated result of the two strings.
+    ///
+    /// # Example:
+    /// ```
+    /// let my_string1_plain = "Hello, ";
+    /// let my_string2_plain = "World!";
+    ///
+    /// let my_string1 = my_client_key.encrypt(
+    ///     my_string1_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string2 = my_client_key.encrypt(
+    ///     my_string2_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
+    /// );
+    /// let my_string_upper =
+    ///     my_server_key.concatenate(&my_string1, &my_string2, &public_parameters);
+    /// let actual = my_client_key.decrypt(my_string_upper);
+    ///
+    /// assert_eq!(actual, "Hello, World!");
+    /// ```
     pub fn concatenate(
         &self,
         string: &FheString,
