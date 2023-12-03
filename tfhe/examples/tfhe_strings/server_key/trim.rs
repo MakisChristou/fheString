@@ -111,7 +111,7 @@ impl MyServerKey {
             *result_char = stop_trim_flag.if_then_else(&self.key, &string[i], &zero)
         }
 
-        utils::bubble_zeroes_left(result, &self.key, public_parameters)
+        utils::bubble_zeroes_right(result, &self.key, public_parameters)
     }
 
     /// Trims both leading and trailing whitespace from a `FheString`.

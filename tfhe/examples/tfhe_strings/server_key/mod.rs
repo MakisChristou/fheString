@@ -536,7 +536,7 @@ impl MyServerKey {
                     result.append(string.clone());
                 }
 
-                utils::bubble_zeroes_left(result, &self.key, public_parameters)
+                utils::bubble_zeroes_right(result, &self.key, public_parameters)
             }
 
             None => FheString::from_vec(vec![], public_parameters, &self.key),
@@ -594,7 +594,7 @@ impl MyServerKey {
             }
         }
 
-        utils::bubble_zeroes_left(result, &self.key, public_parameters)
+        utils::bubble_zeroes_right(result, &self.key, public_parameters)
     }
 
     /// Replaces occurrences of a pattern in a given `FheString` with another pattern.
@@ -877,7 +877,7 @@ impl MyServerKey {
             }
         }
 
-        utils::bubble_zeroes_left(result, server_key, public_parameters)
+        utils::bubble_zeroes_right(result, server_key, public_parameters)
     }
 
     // The "hard" case
@@ -1301,7 +1301,7 @@ impl MyServerKey {
             *result_char = pattern_found_flag.if_then_else(&self.key, &zero, result_char);
         }
 
-        let string = utils::bubble_zeroes_left(result, &self.key, public_parameters);
+        let string = utils::bubble_zeroes_right(result, &self.key, public_parameters);
         FheStrip::new(string, pattern_found_flag)
     }
 
@@ -1851,6 +1851,6 @@ impl MyServerKey {
         let clone_other = other.clone();
 
         result.append(clone_other);
-        utils::bubble_zeroes_left(result, &self.key, public_parameters)
+        utils::bubble_zeroes_right(result, &self.key, public_parameters)
     }
 }

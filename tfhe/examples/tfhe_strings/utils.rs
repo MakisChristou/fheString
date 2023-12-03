@@ -12,7 +12,20 @@ pub fn abs_difference(a: usize, b: usize) -> usize {
     a.checked_sub(b).unwrap_or(b - a)
 }
 
-pub fn bubble_zeroes_left(
+/// Bubbles zero ASCII characters to the right in a `FheString`.
+///
+/// This method modifies the provided `FheString` by moving all zero ASCII characters (`\0`) to the end,
+/// using a bubble sort-like algorithm. It is useful for situations where zero ASCII characters
+/// need to be segregated from non-zero characters in encrypted string operations.
+///
+/// # Arguments
+/// * `result`: FheString - A mutable `FheString` instance where zero ASCII characters will be bubbled to the right.
+/// * `server_key`: &tfhe::integer::ServerKey - A reference to the server key used for Fully Homomorphic Encryption (FHE) operations.
+/// * `public_parameters`: &PublicParameters - A reference to the public parameters used for FHE operations.
+///
+/// # Returns
+/// `FheString` - The modified `FheString` with zero ASCII characters moved to the end.
+pub fn bubble_zeroes_right(
     mut result: FheString,
     server_key: &tfhe::integer::ServerKey,
     public_parameters: &PublicParameters,
@@ -32,6 +45,17 @@ pub fn bubble_zeroes_left(
     result
 }
 
+/// Trims empty strings from both ends of a `Vec<String>`.
+///
+/// This method removes all empty strings (`""`) from the beginning and end of the provided vector.
+/// It iterates over the vector and removes any empty string elements found at both ends.
+/// The operation stops when a non-empty string is encountered at either end.
+///
+/// # Arguments
+/// * `vec`: Vec<String> - A mutable vector of `String` from which empty strings will be trimmed.
+///
+/// # Returns
+/// `Vec<String>` - A new vector with empty strings removed from both ends.
 pub fn trim_vector(mut vec: Vec<String>) -> Vec<String> {
     while vec.first() == Some(&"".to_string()) {
         vec.remove(0);
@@ -44,6 +68,16 @@ pub fn trim_vector(mut vec: Vec<String>) -> Vec<String> {
     vec
 }
 
+/// Trims empty string slices from both ends of a `Vec<&str>` and converts it to `Vec<String>`.
+///
+/// This method removes all empty string slices (`""`) from the beginning and end of the provided vector.
+/// After trimming, it converts the vector of string slices (`&str`) into a vector of owned `String` objects.
+///
+/// # Arguments
+/// * `vec`: Vec<&str> - A mutable vector of string slices from which empty strings will be trimmed.
+///
+/// # Returns
+/// `Vec<String>` - A new vector of `String` with empty strings removed from both ends.
 pub fn trim_str_vector(mut vec: Vec<&str>) -> Vec<String> {
     while vec.first() == Some(&"") {
         vec.remove(0);
@@ -56,6 +90,17 @@ pub fn trim_str_vector(mut vec: Vec<&str>) -> Vec<String> {
     vec.into_iter().map(|s| s.to_string()).collect()
 }
 
+/// Adjusts the end position of a pattern, ensuring it is never zero.
+///
+/// This function checks the provided end position of a pattern. If it is zero, the function
+/// adjusts it to one, ensuring that the end position is always non-zero. This is useful in scenarios
+/// where a zero end position may cause issues in pattern processing or matching algorithms.
+///
+/// # Arguments
+/// * `end_of_pattern`: usize - The original end position of a pattern.
+///
+/// # Returns
+/// `usize` - The adjusted end position of the pattern, guaranteed to be at least one.
 pub fn adjust_end_of_pattern(end_of_pattern: usize) -> usize {
     if end_of_pattern == 0 {
         1

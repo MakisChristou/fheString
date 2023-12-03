@@ -120,7 +120,7 @@ impl MyServerKey {
                     let current_string =
                         FheString::from_vec(result_buffer.clone(), public_parameters, &self.key);
                     let current_string =
-                        utils::bubble_zeroes_left(current_string, &self.key, public_parameters);
+                        utils::bubble_zeroes_right(current_string, &self.key, public_parameters);
                     let replacement_string =
                         self.replace(&current_string, &pattern, &to, public_parameters);
 
@@ -159,7 +159,7 @@ impl MyServerKey {
                     }
                 } else {
                     for result_buffer in result.iter_mut().take(max_no_buffers) {
-                        let new_buf = utils::bubble_zeroes_left(
+                        let new_buf = utils::bubble_zeroes_right(
                             FheString::from_vec(
                                 result_buffer.clone(),
                                 public_parameters,
@@ -502,7 +502,7 @@ impl MyServerKey {
         pattern: &[FheAsciiChar],
         public_parameters: &PublicParameters,
     ) -> FheSplit {
-        let mut n = FheAsciiChar::encrypt_trivial(2u8, public_parameters, &self.key);
+        let n = FheAsciiChar::encrypt_trivial(2u8, public_parameters, &self.key);
         self._rsplit(
             string.clone(),
             pattern.to_owned(),
@@ -833,7 +833,7 @@ impl MyServerKey {
                     let current_string =
                         FheString::from_vec(result_buffer.clone(), public_parameters, &self.key);
                     let current_string =
-                        utils::bubble_zeroes_left(current_string, &self.key, public_parameters);
+                        utils::bubble_zeroes_right(current_string, &self.key, public_parameters);
                     let replacement_string =
                         self.replace(&current_string, &pattern, &to, public_parameters);
 
@@ -874,7 +874,7 @@ impl MyServerKey {
                     }
                 } else {
                     for result_buffer in result.iter_mut().take(max_no_buffers) {
-                        let new_buf = utils::bubble_zeroes_left(
+                        let new_buf = utils::bubble_zeroes_right(
                             FheString::from_vec(
                                 result_buffer.clone(),
                                 public_parameters,
@@ -1374,7 +1374,7 @@ impl MyServerKey {
         }
 
         for result_buffer in result.iter_mut().take(max_no_buffers) {
-            let new_buf = utils::bubble_zeroes_left(
+            let new_buf = utils::bubble_zeroes_right(
                 FheString::from_vec(result_buffer.clone(), public_parameters, &self.key),
                 &self.key,
                 public_parameters,
