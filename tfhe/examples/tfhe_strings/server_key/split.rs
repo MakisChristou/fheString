@@ -530,8 +530,7 @@ impl MyServerKey {
     ///     &my_server_key.key,
     /// );
     ///
-    /// let fhe_split =
-    ///     my_server_key.rsplit_once_clear(&my_string, &pattern_plain, &public_parameters);
+    /// let fhe_split = my_server_key.rsplit_once_clear(&my_string, &pattern_plain, &public_parameters);
     /// let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
     ///
     /// assert_eq!(

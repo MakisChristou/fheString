@@ -33,7 +33,8 @@ impl MyServerKey {
     /// * `my_client_key`: MyClientKey - The client key used to extract the server key.
     ///
     /// # Returns
-    /// `MyServerKey` - A new `MyServerKey` instance constructed from the server key derived from `my_client_key`.
+    /// `MyServerKey` - A new `MyServerKey` instance constructed from the server key derived from
+    ///  `my_client_key`.
     pub fn _from_client_key(my_client_key: MyClientKey) -> Self {
         my_client_key.get_server_key()
     }
@@ -140,8 +141,7 @@ impl MyServerKey {
     /// ```
     /// let heistack_plain = "awesome zama is awesome";
     /// let needle_plain = "zama";
-    /// let heistack =
-    ///    my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);
+    /// let heistack = my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);
     /// let needle = my_client_key.encrypt_no_padding(needle_plain);
     ///
     /// let res = my_server_key.contains(&heistack, &needle, &public_parameters);
@@ -191,10 +191,7 @@ impl MyServerKey {
     ///
     /// let heistack_plain = "awesome zama is awesome";
     /// let needle_plain = "zama";
-    ///
-    /// let heistack =
-    ///  my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);   
-    ///
+    /// let heistack = my_client_key.encrypt(heistack_plain, 3, &public_parameters, &my_server_key.key);
     /// let res = my_server_key.contains_clear(&heistack, &needle_plain, &public_parameters);
     /// let dec: u8 = my_client_key.decrypt_char(&res);
     /// assert_eq!(dec, 1u8);
@@ -296,12 +293,8 @@ impl MyServerKey {
     ///     &my_server_key.key,
     /// );
     ///
-    /// let res = my_server_key.ends_with_clear(
-    ///     &heistack,
-    ///     &needle_plain,
-    ///     STRING_PADDING,
-    ///     &public_parameters,
-    /// );
+    /// let res =
+    ///     my_server_key.ends_with_clear(&heistack, &needle_plain, STRING_PADDING, &public_parameters);
     /// let dec: u8 = my_client_key.decrypt_char(&res);
     ///
     /// assert_eq!(dec, 1u8);
@@ -337,10 +330,10 @@ impl MyServerKey {
     /// let needle_plain = "hello";
     ///
     /// let heistack = my_client_key.encrypt(
-    ///    heistack_plain,
-    ///    STRING_PADDING,
-    ///    &public_parameters,
-    ///    &my_server_key.key,
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
     /// );
     /// let needle = my_client_key.encrypt_no_padding(needle_plain);
     /// let res = my_server_key.starts_with(&heistack, &needle, &public_parameters);
@@ -385,10 +378,10 @@ impl MyServerKey {
     /// let needle_plain = "hello";
     ///
     /// let heistack = my_client_key.encrypt(
-    ///    heistack_plain,
-    ///    STRING_PADDING,
-    ///    &public_parameters,
-    ///    &my_server_key.key,
+    ///     heistack_plain,
+    ///     STRING_PADDING,
+    ///     &public_parameters,
+    ///     &my_server_key.key,
     /// );
     ///
     /// let res = my_server_key.starts_with_clear(&heistack, &needle_plain, &public_parameters);
@@ -1835,8 +1828,7 @@ impl MyServerKey {
     ///     &public_parameters,
     ///     &my_server_key.key,
     /// );
-    /// let my_string_upper =
-    ///     my_server_key.concatenate(&my_string1, &my_string2, &public_parameters);
+    /// let my_string_upper = my_server_key.concatenate(&my_string1, &my_string2, &public_parameters);
     /// let actual = my_client_key.decrypt(my_string_upper);
     ///
     /// assert_eq!(actual, "Hello, World!");
