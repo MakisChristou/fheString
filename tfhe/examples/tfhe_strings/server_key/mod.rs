@@ -726,12 +726,16 @@ impl MyServerKey {
     /// ```
     pub fn rfind(
         &self,
-        string: &FheString,
+        mut string: FheString,
         pattern: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+
+        // Quick solution to fix a no padding issue
+        string.push(zero.clone());
+
         let mut pattern_position =
             FheAsciiChar::encrypt_trivial(MAX_FIND_LENGTH as u8, public_parameters, &self.key);
 
@@ -817,7 +821,7 @@ impl MyServerKey {
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
 
-        self.rfind(string, &pattern, public_parameters)
+        self.rfind(string.clone(), &pattern, public_parameters)
     }
 
     // The "easy" case
