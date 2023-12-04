@@ -822,7 +822,7 @@ impl MyServerKey {
 
     // The "easy" case
     fn handle_longer_from(
-        bytes: FheString,
+        mut bytes: FheString,
         from: Vec<FheAsciiChar>,
         mut to: Vec<FheAsciiChar>,
         n: FheAsciiChar,
@@ -832,6 +832,10 @@ impl MyServerKey {
     ) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, server_key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, server_key);
+
+        // Quick solution to fix a no padding issue
+        bytes.push(zero.clone());
+
         let size_difference = abs_difference(from.len(), to.len());
         let mut counter = FheAsciiChar::encrypt_trivial(0u8, public_parameters, server_key);
 
@@ -875,7 +879,7 @@ impl MyServerKey {
 
     // The "hard" case
     fn handle_shorter_from(
-        bytes: FheString,
+        mut bytes: FheString,
         from: Vec<FheAsciiChar>,
         to: Vec<FheAsciiChar>,
         n: FheAsciiChar,
@@ -885,6 +889,10 @@ impl MyServerKey {
     ) -> FheString {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, server_key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, server_key);
+
+        // Quick solution to fix a no padding issue
+        bytes.push(zero.clone());
+
         let size_difference = abs_difference(from.len(), to.len());
         let mut counter = FheAsciiChar::encrypt_trivial(0u8, public_parameters, server_key);
 
