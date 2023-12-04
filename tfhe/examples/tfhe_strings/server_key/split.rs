@@ -28,11 +28,16 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
-        let mut global_pattern_found = one.clone();
+        let mut global_pattern_found = zero.clone();
 
         // Edge case flag, if n = 0 we ever copy anything
         let mut allow_copying = zero.clone();
+        // Mask that stops overlapping patterns to match
+        // for example string = "aaaa" and pattern = "aa"
+        // without this flag the pattern would match more times than it should
+        let mut ignore_pattern_mask = vec![one.clone(); max_buffer_size];
 
+        // Edge case, if n = 0 we never copy anything
         if n.is_some() {
             let n_value = n.clone().unwrap();
             allow_copying = n_value.ne(&self.key, &zero);
@@ -53,13 +58,52 @@ impl MyServerKey {
             }
 
             let mut pattern_found = one.clone();
-            // Avoid index out of bounds error
-            if i + pattern.len() >= string.len() {
+
+            // This is needed when we are using an empty pattern and we have padding.
+            // In such case we should not match the pattern to the padding
+            // But the exception apparently is the last padding character before the
+            // real string starts 🤔
+            if pattern.is_empty() {
+                // if current char is \0 do not match empty pattern
+                let is_current_char_padding = string[i].eq(&self.key, &zero);
+                // Avoid out of bounds exceptions
+                if i >= 1 {
+                    let is_previous_char_non_padding = string[i - 1].ne(&self.key, &zero);
+                    let should_match_end_of_string =
+                        is_previous_char_non_padding.bitand(&self.key, &is_current_char_padding);
+
+                    // Match the last \0 before the string
+                    pattern_found = should_match_end_of_string.if_then_else(&self.key, &one, &zero);
+                    pattern_found = pattern_found.bitor(
+                        &self.key,
+                        &is_current_char_padding.if_then_else(&self.key, &zero, &one),
+                    );
+                } else {
+                    pattern_found = is_current_char_padding.if_then_else(&self.key, &zero, &one);
+                }
+            }
+            // if pattern is larger than the string or
+            // if searching the pattern would case index out of bounds then
+            // assume pattern is not found
+            else if pattern.len() > string.len() || i + pattern.len() >= string.len() {
                 pattern_found = zero.clone();
-            } else {
+            }
+            // Actually search for pattern
+            else {
                 for (j, pattern_char) in pattern.iter().enumerate() {
                     let eql = string[i + j].eq(&self.key, pattern_char);
                     pattern_found = pattern_found.bitand(&self.key, &eql);
+                    pattern_found = pattern_found.bitand(&self.key, &ignore_pattern_mask[i + j]);
+                }
+            }
+
+            // Where this pattern matched in the string we are not allowed to match again
+            for j in 0..pattern.len() {
+                if i + j < max_buffer_size {
+                    ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
+                        &self.key,
+                        &pattern_found.if_then_else(&self.key, &zero, &one),
+                    );
                 }
             }
 
@@ -719,11 +763,17 @@ impl MyServerKey {
         let mut current_copy_buffer = zero.clone();
         let mut stop_counter_increment = zero.clone();
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
-        let mut global_pattern_found = one.clone();
+        let mut global_pattern_found = zero.clone();
 
         // Edge case flag, if n = 0 we ever copy anything
         let mut allow_copying = zero.clone();
 
+        // Mask that stops overlapping patterns to match
+        // for example string = "aaaa" and pattern = "aa"
+        // without this flag the pattern would match more times than it should
+        let mut ignore_pattern_mask = vec![one.clone(); max_buffer_size];
+
+        // Edge case, if n = 0 we ever copy anything
         if n.is_some() {
             let n_value = n.clone().unwrap();
             allow_copying = n_value.ne(&self.key, &zero);
@@ -731,8 +781,8 @@ impl MyServerKey {
 
         // Handle edge case when 1 < n <= string.len() and pattern is empty
         // In this case we should leave an empty buffer effectively skipping the first one
-        // Example1:  "eeeeee".rsplitn(2, "") --> ["", "eeeeee"]
-        // Example2:  "eeeeee".rsplitn(3, "") --> ["", "e", "eeeee"]
+        // Example1:  "eeeeee".splitn(2, "") --> ["", "eeeeee"]
+        // Example2:  "eeeeee".splitn(3, "") --> ["", "e", "eeeee"]
         if pattern.is_empty() && n.is_some() {
             let n_value = n.clone().unwrap();
             let enc_len = self.len(&string, public_parameters);
@@ -763,14 +813,30 @@ impl MyServerKey {
             }
 
             let mut pattern_found = one.clone();
-            // To avoid underflow
-            if (i as i64) < (pattern.len() as i64) - 1 {
+            // If pattern is larger than the string or
+            // if searching for the pattern would cause underflow then
+            // assume pattern is not found
+            if pattern.len() > string.len() || (i as i64) < (pattern.len() as i64) - 1 {
                 pattern_found = zero.clone();
-            } else {
+            }
+            // Actually search for pattern
+            else {
                 for (j, pattern_char) in pattern.iter().enumerate() {
                     let string_index = i - pattern.len() + 1 + j;
                     let eql = string[string_index].eq(&self.key, pattern_char);
                     pattern_found = pattern_found.bitand(&self.key, &eql);
+                    pattern_found =
+                        pattern_found.bitand(&self.key, &ignore_pattern_mask[string_index]);
+                }
+            }
+
+            // Where this pattern matched in the string we are not allowed to match again
+            for j in 0..pattern.len() {
+                if i + j < max_buffer_size {
+                    ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
+                        &self.key,
+                        &pattern_found.if_then_else(&self.key, &zero, &one),
+                    );
                 }
             }
 
@@ -1326,7 +1392,7 @@ impl MyServerKey {
         let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
         let mut previous_was_whitespace =
             FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let mut global_pattern_found = one.clone();
+        let mut global_pattern_found = zero.clone();
 
         for i in 0..(string.len()) {
             let pattern_found = string[i].is_whitespace(&self.key, public_parameters);

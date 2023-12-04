@@ -936,7 +936,6 @@ impl MyServerKey {
 
             // Stop replacing after n encounters of from
             if use_counter {
-                // println!("use_counter!");
                 counter = counter.add(server_key, &pattern_found_flag);
                 let keep_replacing = n.ge(server_key, &counter);
                 pattern_found_flag = pattern_found_flag.bitand(server_key, &keep_replacing);
