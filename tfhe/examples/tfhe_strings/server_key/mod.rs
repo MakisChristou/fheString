@@ -1473,7 +1473,6 @@ impl MyServerKey {
         let mut encountered_comparison = zero.clone();
         let mut has_flag_became_one = zero.clone();
         let two_five_five = FheAsciiChar::encrypt_trivial(255u8, public_parameters, &self.key);
-
         let mut ret = FheAsciiChar::encrypt_trivial(255u8, public_parameters, &self.key);
 
         // We clone since we need to potentially pad the strings
@@ -1509,16 +1508,27 @@ impl MyServerKey {
 
         // if ret = 255u8 it means that we never compared anything, which means the 2 strings are
         // equal
-        let are_strings_equal = ret.eq(&self.key, &two_five_five);
+        let are_substrings_equal = ret.eq(&self.key, &two_five_five);
 
-        match operation {
-            Comparison::GreaterEqual | Comparison::LessEqual => {
-                ret = are_strings_equal.if_then_else(&self.key, &one, &ret)
-            }
-            Comparison::GreaterThan | Comparison::LessThan => {
-                ret = are_strings_equal.if_then_else(&self.key, &zero, &ret)
-            }
-        }
+        let len1 = self.len(&string_clone, public_parameters);
+        let len2 = self.len(&other_clone, public_parameters);
+
+        let is_length_equal = len1.eq(&self.key, &len2);
+        let is_length_greater_than = len1.gt(&self.key, &len2);
+        let is_length_less_than = len1.lt(&self.key, &len2);
+
+        let length_based_comparison = match operation {
+            Comparison::GreaterEqual => is_length_equal.bitor(&self.key, &is_length_greater_than),
+            Comparison::LessEqual => is_length_equal.bitor(&self.key, &is_length_less_than),
+            Comparison::GreaterThan => is_length_greater_than,
+            Comparison::LessThan => is_length_less_than,
+        };
+
+        // If we have 2 strings like so  "aaaa" and "aa"
+        // They will appear equal as we are comparing only the first 2 elements of both
+        // So to make sure they are actually equal we are also doing a length based
+        // comparison at the end
+        ret = are_substrings_equal.if_then_else(&self.key, &length_based_comparison, &ret);
 
         ret
     }
