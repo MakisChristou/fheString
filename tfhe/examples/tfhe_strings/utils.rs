@@ -304,7 +304,7 @@ pub fn run_fhe_str_method(
         }
         StringMethod::Rfind => {
             let needle = my_client_key.encrypt_no_padding(pattern_plain);
-            let res = my_server_key.rfind(&my_string, &needle, public_parameters);
+            let res = my_server_key.rfind(my_string.clone(), &needle, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.rfind(pattern_plain);
             let expected = if let Some(position) = expected {

@@ -7,141 +7,192 @@ use crate::utils;
 use super::MyServerKey;
 
 impl MyServerKey {
-    fn _rsplit(
+    fn rsplit_pattern_matching(
         &self,
-        mut string: FheString,
-        pattern: Vec<FheAsciiChar>,
-        is_inclusive: bool,
-        is_terminator: bool,
-        n: Option<FheAsciiChar>,
-        public_parameters: &PublicParameters,
-    ) -> FheSplit {
-        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
-        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+        i: usize,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        ignore_pattern_mask: &mut Vec<FheAsciiChar>,
+        zero: &FheAsciiChar,
+        one: &FheAsciiChar,
+    ) -> FheAsciiChar {
+        let mut pattern_found = one.clone();
 
-        // Pad the string to avoid edge cases
-        string.push(zero.clone());
+        // This is needed when we are using an empty pattern and we have padding.
+        // In such case we should not match the pattern to the padding
+        // But the exception apparently is the last padding character before the
+        // real string starts 🤔
+        if pattern.is_empty() {
+            // if current char is \0 do not match empty pattern
+            let is_current_char_padding = string[i].eq(&self.key, &zero);
+            // Avoid out of bounds exceptions
+            if i >= 1 {
+                let is_previous_char_non_padding = string[i - 1].ne(&self.key, &zero);
+                let should_match_end_of_string =
+                    is_previous_char_non_padding.bitand(&self.key, &is_current_char_padding);
 
+                // Match the last \0 before the string
+                pattern_found = should_match_end_of_string.if_then_else(&self.key, &one, &zero);
+                pattern_found = pattern_found.bitor(
+                    &self.key,
+                    &is_current_char_padding.if_then_else(&self.key, &zero, &one),
+                );
+            } else {
+                pattern_found = is_current_char_padding.if_then_else(&self.key, &zero, &one);
+            }
+        }
+        // if pattern is larger than the string or
+        // if searching the pattern would case index out of bounds then
+        // assume pattern is not found
+        else if pattern.len() > string.len() || i + pattern.len() >= string.len() {
+            pattern_found = zero.clone();
+        }
+        // Actually search for pattern
+        else {
+            for (j, pattern_char) in pattern.iter().enumerate() {
+                let eql = string[i + j].eq(&self.key, pattern_char);
+                pattern_found = pattern_found.bitand(&self.key, &eql);
+                pattern_found = pattern_found.bitand(&self.key, &ignore_pattern_mask[i + j]);
+            }
+        }
+
+        // Where this pattern matched in the string we are not allowed to match again
+        for j in 0..pattern.len() {
+            if i + j < string.len() {
+                ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
+                    &self.key,
+                    &pattern_found.if_then_else(&self.key, &zero, &one),
+                );
+            }
+        }
+
+        pattern_found
+    }
+
+    fn split_pattern_matching(
+        &self,
+        i: usize,
+        string: &FheString,
+        pattern: &Vec<FheAsciiChar>,
+        ignore_pattern_mask: &mut Vec<FheAsciiChar>,
+        zero: &FheAsciiChar,
+        one: &FheAsciiChar,
+    ) -> FheAsciiChar {
         let max_buffer_size = string.len(); // when a single buffer holds the whole input
         let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
-        let mut current_copy_buffer = zero.clone();
-        let mut stop_counter_increment = zero.clone();
-        let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
-        let mut global_pattern_found = zero.clone();
-
-        // Edge case flag, if n = 0 we ever copy anything
-        let mut allow_copying = zero.clone();
-        // Mask that stops overlapping patterns to match
-        // for example string = "aaaa" and pattern = "aa"
-        // without this flag the pattern would match more times than it should
-        let mut ignore_pattern_mask = vec![one.clone(); max_buffer_size];
-
-        // Edge case, if n = 0 we never copy anything
-        if n.is_some() {
-            let n_value = n.clone().unwrap();
-            allow_copying = n_value.ne(&self.key, &zero);
+        let mut pattern_found = one.clone();
+        // If pattern is larger than the string or
+        // if searching for the pattern would cause underflow then
+        // assume pattern is not found
+        if pattern.len() > string.len() || (i as i64) < (pattern.len() as i64) - 1 {
+            pattern_found = zero.clone();
+        }
+        // Actually search for pattern
+        else {
+            for (j, pattern_char) in pattern.iter().enumerate() {
+                let string_index = i - pattern.len() + 1 + j;
+                let eql = string[string_index].eq(&self.key, pattern_char);
+                pattern_found = pattern_found.bitand(&self.key, &eql);
+                pattern_found = pattern_found.bitand(&self.key, &ignore_pattern_mask[string_index]);
+            }
         }
 
-        for i in (0..(string.len())).rev() {
-            // Copy ith character to the appropriate buffer
-            for (j, result_item) in result.iter_mut().enumerate().take(max_no_buffers) {
-                let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters, &self.key);
-                let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
-
-                // Edge case, if n = 0 we never copy anything
-                if n.is_some() {
-                    copy_flag = copy_flag.bitand(&self.key, &allow_copying);
-                }
-
-                result_item[i] = copy_flag.if_then_else(&self.key, &string[i], &result_item[i]);
+        // Where this pattern matched in the string we are not allowed to match again
+        for j in 0..pattern.len() {
+            if i + j < max_buffer_size {
+                ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
+                    &self.key,
+                    &pattern_found.if_then_else(&self.key, &zero, &one),
+                );
             }
-
-            let mut pattern_found = one.clone();
-
-            // This is needed when we are using an empty pattern and we have padding.
-            // In such case we should not match the pattern to the padding
-            // But the exception apparently is the last padding character before the
-            // real string starts 🤔
-            if pattern.is_empty() {
-                // if current char is \0 do not match empty pattern
-                let is_current_char_padding = string[i].eq(&self.key, &zero);
-                // Avoid out of bounds exceptions
-                if i >= 1 {
-                    let is_previous_char_non_padding = string[i - 1].ne(&self.key, &zero);
-                    let should_match_end_of_string =
-                        is_previous_char_non_padding.bitand(&self.key, &is_current_char_padding);
-
-                    // Match the last \0 before the string
-                    pattern_found = should_match_end_of_string.if_then_else(&self.key, &one, &zero);
-                    pattern_found = pattern_found.bitor(
-                        &self.key,
-                        &is_current_char_padding.if_then_else(&self.key, &zero, &one),
-                    );
-                } else {
-                    pattern_found = is_current_char_padding.if_then_else(&self.key, &zero, &one);
-                }
-            }
-            // if pattern is larger than the string or
-            // if searching the pattern would case index out of bounds then
-            // assume pattern is not found
-            else if pattern.len() > string.len() || i + pattern.len() >= string.len() {
-                pattern_found = zero.clone();
-            }
-            // Actually search for pattern
-            else {
-                for (j, pattern_char) in pattern.iter().enumerate() {
-                    let eql = string[i + j].eq(&self.key, pattern_char);
-                    pattern_found = pattern_found.bitand(&self.key, &eql);
-                    pattern_found = pattern_found.bitand(&self.key, &ignore_pattern_mask[i + j]);
-                }
-            }
-
-            // Where this pattern matched in the string we are not allowed to match again
-            for j in 0..pattern.len() {
-                if i + j < max_buffer_size {
-                    ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
-                        &self.key,
-                        &pattern_found.if_then_else(&self.key, &zero, &one),
-                    );
-                }
-            }
-
-            global_pattern_found = global_pattern_found.bitor(&self.key, &pattern_found);
-
-            // If its splitn stop after n splits
-            match &n {
-                None => {
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying
-                    // to new one
-                    current_copy_buffer = pattern_found.if_then_else(
-                        &self.key,
-                        &current_copy_buffer.add(&self.key, &one),
-                        &current_copy_buffer,
-                    );
-                }
-                Some(max_splits) => {
-                    stop_counter_increment = stop_counter_increment.bitor(
-                        &self.key,
-                        &current_copy_buffer.eq(&self.key, &max_splits.sub(&self.key, &one)),
-                    );
-
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying
-                    // to new one
-                    current_copy_buffer = (pattern_found.bitand(
-                        &self.key,
-                        &stop_counter_increment.flip(&self.key, public_parameters),
-                    ))
-                    .if_then_else(
-                        &self.key,
-                        &current_copy_buffer.add(&self.key, &one),
-                        &current_copy_buffer,
-                    );
-                }
-            };
         }
+        pattern_found
+    }
+
+    fn copy_logic(
+        &self,
+        i: usize,
+        n: &Option<FheAsciiChar>,
+        string: &FheString,
+        result: &mut Vec<Vec<FheAsciiChar>>,
+        public_parameters: &PublicParameters,
+        allow_copying: &FheAsciiChar,
+        current_copy_buffer: &FheAsciiChar,
+    ) {
+        let max_buffer_size = string.len(); // when a single buffer holds the whole input
+        let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
+
+        // Copy ith character to the appropriate buffer
+        for (j, result_item) in result.iter_mut().enumerate().take(max_no_buffers) {
+            let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters, &self.key);
+            let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+
+            // Edge case, if n = 0 we never copy anything
+            if n.is_some() {
+                copy_flag = copy_flag.bitand(&self.key, &allow_copying);
+            }
+
+            result_item[i] = copy_flag.if_then_else(&self.key, &string[i], &result_item[i]);
+        }
+    }
+
+    fn handle_n_case(
+        &self,
+        pattern_found: &FheAsciiChar,
+        n: &Option<FheAsciiChar>,
+        current_copy_buffer: &mut FheAsciiChar,
+        stop_counter_increment: &mut FheAsciiChar,
+        one: &FheAsciiChar,
+        public_parameters: &PublicParameters,
+    ) {
+        // If its splitn stop after n splits
+        match &n {
+            None => {
+                // Here we know if the pattern is found for position i
+                // If its found we need to switch from copying to old buffer and start copying
+                // to new one
+                *current_copy_buffer = pattern_found.if_then_else(
+                    &self.key,
+                    &current_copy_buffer.add(&self.key, &one),
+                    &current_copy_buffer,
+                );
+            }
+            Some(max_splits) => {
+                *stop_counter_increment = stop_counter_increment.bitor(
+                    &self.key,
+                    &current_copy_buffer.eq(&self.key, &max_splits.sub(&self.key, &one)),
+                );
+
+                // Here we know if the pattern is found for position i
+                // If its found we need to switch from copying to old buffer and start copying
+                // to new one
+                *current_copy_buffer = (pattern_found.bitand(
+                    &self.key,
+                    &stop_counter_increment.flip(&self.key, public_parameters),
+                ))
+                .if_then_else(
+                    &self.key,
+                    &current_copy_buffer.add(&self.key, &one),
+                    &current_copy_buffer,
+                );
+            }
+        };
+    }
+
+    fn clear_pattern_from_result(
+        &self,
+        n: &Option<FheAsciiChar>,
+        result: &mut Vec<Vec<FheAsciiChar>>,
+        pattern: &Vec<FheAsciiChar>,
+        public_parameters: &PublicParameters,
+        zero: &FheAsciiChar,
+        one: &FheAsciiChar,
+        is_inclusive: bool,
+        is_terminator: bool,
+    ) {
+        let max_buffer_size = result.len(); // when a single buffer holds the whole input
+        let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
         match &n {
             Some(max_splits) => {
@@ -250,6 +301,93 @@ impl MyServerKey {
                 }
             }
         }
+    }
+
+    fn _rsplit(
+        &self,
+        mut string: FheString,
+        pattern: Vec<FheAsciiChar>,
+        is_inclusive: bool,
+        is_terminator: bool,
+        n: Option<FheAsciiChar>,
+        public_parameters: &PublicParameters,
+    ) -> FheSplit {
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+
+        // Pad the string to avoid edge cases
+        string.push(zero.clone());
+
+        let max_buffer_size = string.len(); // when a single buffer holds the whole input
+        let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
+
+        let mut current_copy_buffer = zero.clone();
+        let mut stop_counter_increment = zero.clone();
+        let mut result = vec![vec![zero.clone(); max_buffer_size]; max_no_buffers];
+        let mut global_pattern_found = zero.clone();
+
+        // Edge case flag, if n = 0 we ever copy anything
+        let mut allow_copying = zero.clone();
+        // Mask that stops overlapping patterns to match
+        // for example string = "aaaa" and pattern = "aa"
+        // without this flag the pattern would match more times than it should
+        let mut ignore_pattern_mask = vec![one.clone(); max_buffer_size];
+
+        // Edge case, if n = 0 we never copy anything
+        if n.is_some() {
+            let n_value = n.clone().unwrap();
+            allow_copying = n_value.ne(&self.key, &zero);
+        }
+
+        for i in (0..(string.len())).rev() {
+            // Modify result buffers by copying the apropriate character to the
+            // apropriate buffer
+            self.copy_logic(
+                i,
+                &n,
+                &string,
+                &mut result,
+                public_parameters,
+                &allow_copying,
+                &current_copy_buffer,
+            );
+
+            // Pattern matching logic
+            let pattern_found = self.rsplit_pattern_matching(
+                i,
+                &string,
+                &pattern,
+                &mut ignore_pattern_mask,
+                &zero,
+                &one,
+            );
+
+            global_pattern_found = global_pattern_found.bitor(&self.key, &pattern_found);
+
+            // Ignore pattern founds if we reached the apropriate number of splits in
+            // the n case
+            self.handle_n_case(
+                &pattern_found,
+                &n,
+                &mut current_copy_buffer,
+                &mut stop_counter_increment,
+                &one,
+                public_parameters,
+            );
+        }
+
+        // After we are done with copying, we delete the pattern from the copy buffers
+        // depending on the rsplit flavour and move all non \0 chars to the start of the string
+        self.clear_pattern_from_result(
+            &n,
+            &mut result,
+            &pattern,
+            public_parameters,
+            &zero,
+            &one,
+            is_inclusive,
+            is_terminator,
+        );
 
         FheSplit::new(result, global_pattern_found, public_parameters, &self.key)
     }
@@ -799,194 +937,47 @@ impl MyServerKey {
         }
 
         for i in 0..(string.len()) {
-            // Copy ith character to the appropriate buffer
-            for (j, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
-                let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters, &self.key);
-                let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+            self.copy_logic(
+                i,
+                &n,
+                &string,
+                &mut result,
+                public_parameters,
+                &allow_copying,
+                &current_copy_buffer,
+            );
 
-                // Edge case, if n = 0 we ever copy anything
-                if n.is_some() {
-                    copy_flag = copy_flag.bitand(&self.key, &allow_copying);
-                }
-
-                result_buffer[i] = copy_flag.if_then_else(&self.key, &string[i], &result_buffer[i]);
-            }
-
-            let mut pattern_found = one.clone();
-            // If pattern is larger than the string or
-            // if searching for the pattern would cause underflow then
-            // assume pattern is not found
-            if pattern.len() > string.len() || (i as i64) < (pattern.len() as i64) - 1 {
-                pattern_found = zero.clone();
-            }
-            // Actually search for pattern
-            else {
-                for (j, pattern_char) in pattern.iter().enumerate() {
-                    let string_index = i - pattern.len() + 1 + j;
-                    let eql = string[string_index].eq(&self.key, pattern_char);
-                    pattern_found = pattern_found.bitand(&self.key, &eql);
-                    pattern_found =
-                        pattern_found.bitand(&self.key, &ignore_pattern_mask[string_index]);
-                }
-            }
-
-            // Where this pattern matched in the string we are not allowed to match again
-            for j in 0..pattern.len() {
-                if i + j < max_buffer_size {
-                    ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
-                        &self.key,
-                        &pattern_found.if_then_else(&self.key, &zero, &one),
-                    );
-                }
-            }
+            let pattern_found = self.split_pattern_matching(
+                i,
+                &string,
+                &pattern,
+                &mut ignore_pattern_mask,
+                &zero,
+                &one,
+            );
 
             global_pattern_found = global_pattern_found.bitor(&self.key, &pattern_found);
 
-            // If its splitn stop after n splits
-            match &n {
-                None => {
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying
-                    // to new one
-                    current_copy_buffer = pattern_found.if_then_else(
-                        &self.key,
-                        &current_copy_buffer.add(&self.key, &one),
-                        &current_copy_buffer,
-                    );
-                }
-                Some(max_splits) => {
-                    stop_counter_increment = stop_counter_increment.bitor(
-                        &self.key,
-                        &current_copy_buffer.eq(&self.key, &max_splits.sub(&self.key, &one)),
-                    );
-
-                    // Here we know if the pattern is found for position i
-                    // If its found we need to switch from copying to old buffer and start copying
-                    // to new one
-                    current_copy_buffer = (pattern_found.bitand(
-                        &self.key,
-                        &stop_counter_increment.flip(&self.key, public_parameters),
-                    ))
-                    .if_then_else(
-                        &self.key,
-                        &current_copy_buffer.add(&self.key, &one),
-                        &current_copy_buffer,
-                    );
-                }
-            };
+            self.handle_n_case(
+                &pattern_found,
+                &n,
+                &mut current_copy_buffer,
+                &mut stop_counter_increment,
+                &one,
+                public_parameters,
+            );
         }
 
-        match &n {
-            Some(max_splits) => {
-                let to: Vec<FheAsciiChar> = "\0"
-                    .repeat(pattern.len())
-                    .as_bytes()
-                    .iter()
-                    .map(|b| FheAsciiChar::encrypt_trivial(*b, public_parameters, &self.key))
-                    .collect();
-                let mut stop_replacing_pattern = zero.clone();
-
-                for (i, result_buffer) in result.iter_mut().enumerate().take(max_no_buffers) {
-                    // Check if we have reached the max allowed splits
-                    let enc_i =
-                        FheAsciiChar::encrypt_trivial(i as u8, public_parameters, &self.key);
-                    stop_replacing_pattern = stop_replacing_pattern.bitor(
-                        &self.key,
-                        &max_splits.eq(&self.key, &enc_i.add(&self.key, &one)),
-                    );
-
-                    let current_string =
-                        FheString::from_vec(result_buffer.clone(), public_parameters, &self.key);
-                    let current_string =
-                        utils::bubble_zeroes_right(current_string, &self.key, public_parameters);
-                    let replacement_string =
-                        self.replace(&current_string, &pattern, &to, public_parameters);
-
-                    // Don't remove pattern from (n-1)th buffer
-                    for (j, result_buffer_char) in
-                        result_buffer.iter_mut().enumerate().take(max_buffer_size)
-                    {
-                        *result_buffer_char = stop_replacing_pattern.if_then_else(
-                            &self.key,
-                            &current_string[j],
-                            &replacement_string[j],
-                        );
-                    }
-                }
-            }
-            None => {
-                // If its not inclusive we have to remove the pattern
-                // We do that by replacing it with zeroes and bubble them to the end
-                if !is_inclusive {
-                    let to: Vec<FheAsciiChar> = "\0"
-                        .repeat(pattern.len())
-                        .as_bytes()
-                        .iter()
-                        .map(|b| FheAsciiChar::encrypt_trivial(*b, public_parameters, &self.key))
-                        .collect();
-
-                    // Since the pattern is also copied at the end of each buffer go through them
-                    // and delete it
-                    for result_buffer in result.iter_mut().take(max_no_buffers) {
-                        let current_string = FheString::from_vec(
-                            result_buffer.clone(),
-                            public_parameters,
-                            &self.key,
-                        );
-                        let replacement_string =
-                            self.replace(&current_string, &pattern, &to, public_parameters);
-                        *result_buffer = replacement_string.get_bytes();
-                    }
-                } else {
-                    for result_buffer in result.iter_mut().take(max_no_buffers) {
-                        let new_buf = utils::bubble_zeroes_right(
-                            FheString::from_vec(
-                                result_buffer.clone(),
-                                public_parameters,
-                                &self.key,
-                            ),
-                            &self.key,
-                            public_parameters,
-                        );
-                        *result_buffer = new_buf.get_bytes();
-                    }
-                }
-
-                // Zero out the last populated buffer if it starts with the pattern
-                if is_terminator {
-                    let mut non_zero_buffer_found = zero.clone();
-                    for i in (0..max_no_buffers).rev() {
-                        let mut is_buff_zero = one.clone();
-
-                        for j in 0..max_buffer_size {
-                            is_buff_zero =
-                                is_buff_zero.bitand(&self.key, &result[i][j].eq(&self.key, &zero));
-                        }
-
-                        // Here we know if the current buffer is non-empty
-                        // Now we have to check if it starts with the pattern
-                        let starts_with_pattern = self.starts_with(
-                            &FheString::from_vec(result[i].clone(), public_parameters, &self.key),
-                            &pattern,
-                            public_parameters,
-                        );
-                        let should_delete =
-                            starts_with_pattern.bitand(&self.key, &is_buff_zero).bitand(
-                                &self.key,
-                                &non_zero_buffer_found.flip(&self.key, public_parameters),
-                            );
-
-                        for j in 0..max_buffer_size {
-                            result[i][j] =
-                                should_delete.if_then_else(&self.key, &zero, &result[i][j]);
-                        }
-
-                        non_zero_buffer_found = non_zero_buffer_found
-                            .bitor(&self.key, &is_buff_zero.flip(&self.key, public_parameters));
-                    }
-                }
-            }
-        }
+        self.clear_pattern_from_result(
+            &n,
+            &mut result,
+            &pattern,
+            public_parameters,
+            &zero,
+            &one,
+            is_inclusive,
+            is_terminator,
+        );
 
         FheSplit::new(result, global_pattern_found, public_parameters, &self.key)
     }
