@@ -11,7 +11,10 @@ pub struct FheAsciiChar {
 
 impl FheAsciiChar {
     pub fn new(value: BaseRadixCiphertext<Ciphertext>) -> Self {
-        FheAsciiChar { inner: value, num_blocks: 4}
+        FheAsciiChar {
+            inner: value,
+            num_blocks: 4,
+        }
     }
 
     pub fn encrypt_trivial(
@@ -54,7 +57,7 @@ impl FheAsciiChar {
     }
 
     pub fn ge(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
-        let res =server_key.ge_parallelized(&self.inner, &other.inner);
+        let res = server_key.ge_parallelized(&self.inner, &other.inner);
         FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
     }
 
@@ -98,12 +101,9 @@ impl FheAsciiChar {
         false_value: &FheAsciiChar,
     ) -> FheAsciiChar {
         let condition = server_key.scalar_ne_parallelized(&self.inner, 0);
-        
-        let res = server_key.if_then_else_parallelized(
-            &condition,
-            &true_value.inner,
-            &false_value.inner,
-        );
+
+        let res =
+            server_key.if_then_else_parallelized(&condition, &true_value.inner, &false_value.inner);
         FheAsciiChar::new(res)
     }
 

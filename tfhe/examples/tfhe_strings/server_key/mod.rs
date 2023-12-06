@@ -1468,7 +1468,7 @@ impl MyServerKey {
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
-        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+
         let mut min_length = usize::min(string.len(), other.len());
         let mut encountered_comparison = zero.clone();
         let mut has_flag_became_one = zero.clone();

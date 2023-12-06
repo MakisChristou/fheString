@@ -12,7 +12,7 @@ impl MyServerKey {
         i: usize,
         string: &FheString,
         pattern: &Vec<FheAsciiChar>,
-        ignore_pattern_mask: &mut Vec<FheAsciiChar>,
+        ignore_pattern_mask: &mut [FheAsciiChar],
         zero: &FheAsciiChar,
         one: &FheAsciiChar,
     ) -> FheAsciiChar {
@@ -24,21 +24,21 @@ impl MyServerKey {
         // real string starts 🤔
         if pattern.is_empty() {
             // if current char is \0 do not match empty pattern
-            let is_current_char_padding = string[i].eq(&self.key, &zero);
+            let is_current_char_padding = string[i].eq(&self.key, zero);
             // Avoid out of bounds exceptions
             if i >= 1 {
-                let is_previous_char_non_padding = string[i - 1].ne(&self.key, &zero);
+                let is_previous_char_non_padding = string[i - 1].ne(&self.key, zero);
                 let should_match_end_of_string =
                     is_previous_char_non_padding.bitand(&self.key, &is_current_char_padding);
 
                 // Match the last \0 before the string
-                pattern_found = should_match_end_of_string.if_then_else(&self.key, &one, &zero);
+                pattern_found = should_match_end_of_string.if_then_else(&self.key, one, zero);
                 pattern_found = pattern_found.bitor(
                     &self.key,
-                    &is_current_char_padding.if_then_else(&self.key, &zero, &one),
+                    &is_current_char_padding.if_then_else(&self.key, zero, one),
                 );
             } else {
-                pattern_found = is_current_char_padding.if_then_else(&self.key, &zero, &one);
+                pattern_found = is_current_char_padding.if_then_else(&self.key, zero, one);
             }
         }
         // if pattern is larger than the string or
@@ -59,10 +59,8 @@ impl MyServerKey {
         // Where this pattern matched in the string we are not allowed to match again
         for j in 0..pattern.len() {
             if i + j < string.len() {
-                ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
-                    &self.key,
-                    &pattern_found.if_then_else(&self.key, &zero, &one),
-                );
+                ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j]
+                    .bitand(&self.key, &pattern_found.if_then_else(&self.key, zero, one));
             }
         }
 
@@ -74,12 +72,11 @@ impl MyServerKey {
         i: usize,
         string: &FheString,
         pattern: &Vec<FheAsciiChar>,
-        ignore_pattern_mask: &mut Vec<FheAsciiChar>,
+        ignore_pattern_mask: &mut [FheAsciiChar],
         zero: &FheAsciiChar,
         one: &FheAsciiChar,
     ) -> FheAsciiChar {
         let max_buffer_size = string.len(); // when a single buffer holds the whole input
-        let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
         let mut pattern_found = one.clone();
         // If pattern is larger than the string or
@@ -101,10 +98,8 @@ impl MyServerKey {
         // Where this pattern matched in the string we are not allowed to match again
         for j in 0..pattern.len() {
             if i + j < max_buffer_size {
-                ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j].bitand(
-                    &self.key,
-                    &pattern_found.if_then_else(&self.key, &zero, &one),
-                );
+                ignore_pattern_mask[i + j] = ignore_pattern_mask[i + j]
+                    .bitand(&self.key, &pattern_found.if_then_else(&self.key, zero, one));
             }
         }
         pattern_found
@@ -115,22 +110,24 @@ impl MyServerKey {
         i: usize,
         n: &Option<FheAsciiChar>,
         string: &FheString,
-        result: &mut Vec<Vec<FheAsciiChar>>,
+        result: &mut [Vec<FheAsciiChar>],
         public_parameters: &PublicParameters,
-        allow_copying: &FheAsciiChar,
-        current_copy_buffer: &FheAsciiChar,
+        flags: (&FheAsciiChar, &FheAsciiChar),
     ) {
+        let allow_copying = &flags.0;
+        let current_copy_buffer = &flags.1;
+
         let max_buffer_size = string.len(); // when a single buffer holds the whole input
         let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
         // Copy ith character to the appropriate buffer
         for (j, result_item) in result.iter_mut().enumerate().take(max_no_buffers) {
             let enc_j = FheAsciiChar::encrypt_trivial(j as u8, public_parameters, &self.key);
-            let mut copy_flag = enc_j.eq(&self.key, &current_copy_buffer);
+            let mut copy_flag = enc_j.eq(&self.key, current_copy_buffer);
 
             // Edge case, if n = 0 we never copy anything
             if n.is_some() {
-                copy_flag = copy_flag.bitand(&self.key, &allow_copying);
+                copy_flag = copy_flag.bitand(&self.key, allow_copying);
             }
 
             result_item[i] = copy_flag.if_then_else(&self.key, &string[i], &result_item[i]);
@@ -154,14 +151,14 @@ impl MyServerKey {
                 // to new one
                 *current_copy_buffer = pattern_found.if_then_else(
                     &self.key,
-                    &current_copy_buffer.add(&self.key, &one),
-                    &current_copy_buffer,
+                    &current_copy_buffer.add(&self.key, one),
+                    current_copy_buffer,
                 );
             }
             Some(max_splits) => {
                 *stop_counter_increment = stop_counter_increment.bitor(
                     &self.key,
-                    &current_copy_buffer.eq(&self.key, &max_splits.sub(&self.key, &one)),
+                    &current_copy_buffer.eq(&self.key, &max_splits.sub(&self.key, one)),
                 );
 
                 // Here we know if the pattern is found for position i
@@ -173,8 +170,8 @@ impl MyServerKey {
                 ))
                 .if_then_else(
                     &self.key,
-                    &current_copy_buffer.add(&self.key, &one),
-                    &current_copy_buffer,
+                    &current_copy_buffer.add(&self.key, one),
+                    current_copy_buffer,
                 );
             }
         };
@@ -186,11 +183,15 @@ impl MyServerKey {
         result: &mut Vec<Vec<FheAsciiChar>>,
         pattern: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
-        zero: &FheAsciiChar,
-        one: &FheAsciiChar,
-        is_inclusive: bool,
-        is_terminator: bool,
+        constants: (&FheAsciiChar, &FheAsciiChar),
+        flags: (bool, bool),
     ) {
+        let zero = constants.0;
+        let one = constants.1;
+
+        let is_inclusive = flags.0;
+        let is_terminator = flags.1;
+
         let max_buffer_size = result.len(); // when a single buffer holds the whole input
         let max_no_buffers = max_buffer_size; // when all buffers hold an empty value
 
@@ -209,7 +210,7 @@ impl MyServerKey {
                         FheAsciiChar::encrypt_trivial(i as u8, public_parameters, &self.key);
                     stop_replacing_pattern = stop_replacing_pattern.bitor(
                         &self.key,
-                        &max_splits.eq(&self.key, &enc_i.add(&self.key, &one)),
+                        &max_splits.eq(&self.key, &enc_i.add(&self.key, one)),
                     );
 
                     let current_string =
@@ -217,7 +218,7 @@ impl MyServerKey {
                     let current_string =
                         utils::bubble_zeroes_right(current_string, &self.key, public_parameters);
                     let replacement_string =
-                        self.replace(&current_string, &pattern, &to, public_parameters);
+                        self.replace(&current_string, pattern, &to, public_parameters);
 
                     // Don't remove pattern from (n-1)th buffer
                     for (j, result_buffer_char) in
@@ -249,7 +250,7 @@ impl MyServerKey {
                             &self.key,
                         );
                         let replacement_string =
-                            self.replace(&current_string, &pattern, &to, public_parameters);
+                            self.replace(&current_string, pattern, &to, public_parameters);
                         *result_buffer = replacement_string.get_bytes();
                     }
                 } else {
@@ -275,14 +276,14 @@ impl MyServerKey {
 
                         for j in 0..max_buffer_size {
                             is_buff_zero =
-                                is_buff_zero.bitand(&self.key, &result[i][j].eq(&self.key, &zero));
+                                is_buff_zero.bitand(&self.key, &result[i][j].eq(&self.key, zero));
                         }
 
                         // Here we know if the current buffer is non-empty
                         // Now we have to check if it starts with the pattern
                         let starts_with_pattern = self.starts_with(
                             &FheString::from_vec(result[i].clone(), public_parameters, &self.key),
-                            &pattern,
+                            pattern,
                             public_parameters,
                         );
                         let should_delete =
@@ -293,7 +294,7 @@ impl MyServerKey {
 
                         for j in 0..max_buffer_size {
                             result[i][j] =
-                                should_delete.if_then_else(&self.key, &zero, &result[i][j])
+                                should_delete.if_then_else(&self.key, zero, &result[i][j])
                         }
                         non_zero_buffer_found = non_zero_buffer_found
                             .bitor(&self.key, &is_buff_zero.flip(&self.key, public_parameters));
@@ -312,6 +313,7 @@ impl MyServerKey {
         n: Option<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheSplit {
+        // Compute constants
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
 
@@ -348,8 +350,7 @@ impl MyServerKey {
                 &string,
                 &mut result,
                 public_parameters,
-                &allow_copying,
-                &current_copy_buffer,
+                (&allow_copying, &current_copy_buffer),
             );
 
             // Pattern matching logic
@@ -378,15 +379,14 @@ impl MyServerKey {
 
         // After we are done with copying, we delete the pattern from the copy buffers
         // depending on the rsplit flavour and move all non \0 chars to the start of the string
+        // This is the slowest part of the process
         self.clear_pattern_from_result(
             &n,
             &mut result,
             &pattern,
             public_parameters,
-            &zero,
-            &one,
-            is_inclusive,
-            is_terminator,
+            (&zero, &one),
+            (is_inclusive, is_terminator),
         );
 
         FheSplit::new(result, global_pattern_found, public_parameters, &self.key)
@@ -889,6 +889,7 @@ impl MyServerKey {
         n: Option<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheSplit {
+        // Compute constants
         let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
 
@@ -937,14 +938,15 @@ impl MyServerKey {
         }
 
         for i in 0..(string.len()) {
+            // Modify result buffers by copying the apropriate character to the
+            // apropriate buffer
             self.copy_logic(
                 i,
                 &n,
                 &string,
                 &mut result,
                 public_parameters,
-                &allow_copying,
-                &current_copy_buffer,
+                (&allow_copying, &current_copy_buffer),
             );
 
             let pattern_found = self.split_pattern_matching(
@@ -958,6 +960,8 @@ impl MyServerKey {
 
             global_pattern_found = global_pattern_found.bitor(&self.key, &pattern_found);
 
+            // Ignore pattern founds if we reached the apropriate number of splits in
+            // the n case
             self.handle_n_case(
                 &pattern_found,
                 &n,
@@ -968,15 +972,16 @@ impl MyServerKey {
             );
         }
 
+        // After we are done with copying, we delete the pattern from the copy buffers
+        // depending on the rsplit flavour and move all non \0 chars to the start of the string
+        // This is the slowest part of the process
         self.clear_pattern_from_result(
             &n,
             &mut result,
             &pattern,
             public_parameters,
-            &zero,
-            &one,
-            is_inclusive,
-            is_terminator,
+            (&zero, &one),
+            (is_inclusive, is_terminator),
         );
 
         FheSplit::new(result, global_pattern_found, public_parameters, &self.key)
