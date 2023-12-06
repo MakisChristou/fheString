@@ -1,4 +1,5 @@
 use crate::ciphertext::public_parameters::PublicParameters;
+use crate::MAX_BLOCKS;
 use tfhe::integer::ciphertext::BaseRadixCiphertext;
 use tfhe::integer::RadixClientKey;
 use tfhe::shortint::Ciphertext;
@@ -6,15 +7,11 @@ use tfhe::shortint::Ciphertext;
 #[derive(Clone)]
 pub struct FheAsciiChar {
     pub inner: BaseRadixCiphertext<Ciphertext>,
-    num_blocks: usize,
 }
 
 impl FheAsciiChar {
     pub fn new(value: BaseRadixCiphertext<Ciphertext>) -> Self {
-        FheAsciiChar {
-            inner: value,
-            num_blocks: 4,
-        }
+        FheAsciiChar { inner: value }
     }
 
     pub fn encrypt_trivial(
@@ -23,8 +20,7 @@ impl FheAsciiChar {
         server_key: &tfhe::integer::ServerKey,
     ) -> FheAsciiChar {
         let _ = &public_parameters.public_key;
-        let num_blocks = public_parameters.num_blocks;
-        let new_char = server_key.create_trivial_radix(value, num_blocks);
+        let new_char = server_key.create_trivial_radix(value, MAX_BLOCKS);
         FheAsciiChar::new(new_char)
     }
 
@@ -38,32 +34,32 @@ impl FheAsciiChar {
 
     pub fn eq(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.eq_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
+        FheAsciiChar::new(res.into_radix(MAX_BLOCKS, server_key))
     }
 
     pub fn ne(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.ne_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
+        FheAsciiChar::new(res.into_radix(MAX_BLOCKS, server_key))
     }
 
     pub fn le(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.le_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
+        FheAsciiChar::new(res.into_radix(MAX_BLOCKS, server_key))
     }
 
     pub fn lt(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.lt_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
+        FheAsciiChar::new(res.into_radix(MAX_BLOCKS, server_key))
     }
 
     pub fn ge(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.ge_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
+        FheAsciiChar::new(res.into_radix(MAX_BLOCKS, server_key))
     }
 
     pub fn gt(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.gt_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
+        FheAsciiChar::new(res.into_radix(MAX_BLOCKS, server_key))
     }
 
     pub fn bitand(

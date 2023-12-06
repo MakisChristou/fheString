@@ -10,6 +10,7 @@ use std::time::Instant;
 const STRING_PADDING: usize = 0;
 const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
+const MAX_BLOCKS: usize = 4;
 
 mod args;
 mod ciphertext;
@@ -28,10 +29,8 @@ fn main() {
         "Repeat method will not function correctly, increase MAX_REPETITIONS (max = 255)"
     );
 
-    let num_blocks = 4;
-
     // Construct custom key types from tfhe-rs keys, based on the default parameters
-    let my_client_key = MyClientKey::from_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
+    let my_client_key = MyClientKey::from_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS, MAX_BLOCKS);
     let my_server_key = my_client_key.get_server_key();
     let public_parameters = my_client_key.get_public_parameters();
 
