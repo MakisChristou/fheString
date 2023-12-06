@@ -18,18 +18,19 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 14;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
-    /// let ctxt_2 = cks.encrypt_crt(clear_2, basis);
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
+    /// let ctxt_2 = cks.encrypt(clear_2);
     ///
     /// // Compute homomorphically a multiplication
     /// sks.unchecked_crt_add_assign(&mut ctxt_1, &ctxt_2);
@@ -37,8 +38,8 @@ impl ServerKey {
     /// sks.full_extract_message_assign(&mut ctxt_1);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 + clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 + clear_2) % modulus, res);
     /// ```
     pub fn full_extract_message_assign(&self, ctxt: &mut CrtCiphertext) {
         for ct_i in ctxt.blocks.iter_mut() {
@@ -57,11 +58,12 @@ impl ServerKey {
     ///
     /// ```rust
     /// use tfhe::integer::gen_keys_crt;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
     /// let basis = vec![2, 3, 5];
-    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_2_CARRY_2_KS_PBS, basis);
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 28;
     ///
@@ -72,7 +74,7 @@ impl ServerKey {
     ///
     /// // Decrypt
     /// let res = cks.decrypt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_1 * clear_1) % 30, res);
+    /// assert_eq!((clear_1 * clear_1 * clear_1) % modulus, res);
     /// ```
     pub fn pbs_crt_compliant_function_assign<F>(&self, ct1: &mut CrtCiphertext, f: F)
     where

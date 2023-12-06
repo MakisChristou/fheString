@@ -34,9 +34,10 @@ impl ServerKey {
         Scalar: DecomposableInto<u8>,
         T: IntegerRadixCiphertext,
     {
-        if !self.is_scalar_add_possible(ct, scalar) {
+        if self.is_scalar_add_possible(ct, scalar).is_err() {
             self.full_propagate_parallelized(ct);
         }
+        self.is_scalar_add_possible(ct, scalar).unwrap();
         self.unchecked_scalar_add(ct, scalar)
     }
 
@@ -71,9 +72,10 @@ impl ServerKey {
         Scalar: DecomposableInto<u8>,
         T: IntegerRadixCiphertext,
     {
-        if !self.is_scalar_add_possible(ct, scalar) {
+        if self.is_scalar_add_possible(ct, scalar).is_err() {
             self.full_propagate_parallelized(ct);
         }
+        self.is_scalar_add_possible(ct, scalar).unwrap();
         self.unchecked_scalar_add_assign(ct, scalar);
     }
 
@@ -168,7 +170,7 @@ impl ServerKey {
 
         if self.is_eligible_for_parallel_single_carry_propagation(ct) {
             self.unchecked_scalar_add_assign(ct, scalar);
-            self.propagate_single_carry_parallelized_low_latency(ct);
+            let _carry = self.propagate_single_carry_parallelized_low_latency(ct);
         } else {
             self.unchecked_scalar_add_assign(ct, scalar);
             self.full_propagate_parallelized(ct);

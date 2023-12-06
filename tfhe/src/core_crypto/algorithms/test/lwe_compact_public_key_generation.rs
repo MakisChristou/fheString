@@ -5,6 +5,11 @@ use crate::core_crypto::commons::generators::{
 };
 use crate::core_crypto::commons::math::random::ActivatedRandomGenerator;
 
+#[cfg(not(feature = "__coverage"))]
+const NB_TESTS: usize = 10;
+#[cfg(feature = "__coverage")]
+const NB_TESTS: usize = 1;
+
 fn test_seeded_lwe_cpk_gen_equivalence<Scalar: UnsignedTorus>(
     ciphertext_modulus: CiphertextModulus<Scalar>,
 ) {
@@ -22,9 +27,7 @@ fn test_seeded_lwe_cpk_gen_equivalence<Scalar: UnsignedTorus>(
     let mut secret_generator =
         SecretRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed());
 
-    const NB_TEST: usize = 10;
-
-    for _ in 0..NB_TEST {
+    for _ in 0..NB_TESTS {
         // Create the LweSecretKey
         let input_lwe_secret_key =
             allocate_and_generate_new_binary_lwe_secret_key(lwe_dimension, &mut secret_generator);
@@ -45,7 +48,10 @@ fn test_seeded_lwe_cpk_gen_equivalence<Scalar: UnsignedTorus>(
             &mut encryption_generator,
         );
 
-        assert!(check_content_respects_mod(&cpk, ciphertext_modulus));
+        assert!(check_encrypted_content_respects_mod(
+            &cpk,
+            ciphertext_modulus
+        ));
 
         let mut seeded_cpk = SeededLweCompactPublicKey::new(
             Scalar::ZERO,
@@ -64,7 +70,10 @@ fn test_seeded_lwe_cpk_gen_equivalence<Scalar: UnsignedTorus>(
             &mut deterministic_seeder,
         );
 
-        assert!(check_content_respects_mod(&seeded_cpk, ciphertext_modulus));
+        assert!(check_encrypted_content_respects_mod(
+            &seeded_cpk,
+            ciphertext_modulus
+        ));
 
         let decompressed_cpk = seeded_cpk.decompress_into_lwe_compact_public_key();
 
@@ -74,10 +83,10 @@ fn test_seeded_lwe_cpk_gen_equivalence<Scalar: UnsignedTorus>(
 
 #[test]
 fn test_seeded_lwe_cpk_gen_equivalence_u32_native_mod() {
-    test_seeded_lwe_cpk_gen_equivalence::<u32>(CiphertextModulus::new_native())
+    test_seeded_lwe_cpk_gen_equivalence::<u32>(CiphertextModulus::new_native());
 }
 
 #[test]
 fn test_seeded_lwe_cpk_gen_equivalence_u64_naive_mod() {
-    test_seeded_lwe_cpk_gen_equivalence::<u64>(CiphertextModulus::new_native())
+    test_seeded_lwe_cpk_gen_equivalence::<u64>(CiphertextModulus::new_native());
 }

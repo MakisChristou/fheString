@@ -1,8 +1,6 @@
 use crate::conformance::{ListSizeConstraint, ParameterSetConformant};
-use crate::errors::{UninitializedPublicKey, UnwrapResultExt};
-use crate::high_level_api::integers::parameters::IntegerParameter;
+use crate::high_level_api::integers::parameters::IntegerId;
 use crate::high_level_api::integers::types::base::GenericInteger;
-use crate::high_level_api::internal_traits::TypeIdentifier;
 use crate::high_level_api::traits::FheTryEncrypt;
 use crate::integer::ciphertext::CompactCiphertextList;
 use crate::integer::parameters::{
@@ -13,37 +11,37 @@ use crate::CompactPublicKey;
 
 #[cfg_attr(all(doc, not(doctest)), doc(cfg(feature = "integer")))]
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
-pub struct GenericCompactInteger<P: IntegerParameter> {
+pub struct GenericCompactInteger<Id: IntegerId> {
     pub(in crate::high_level_api::integers) list: CompactCiphertextList,
-    pub(in crate::high_level_api::integers) id: P::Id,
+    pub(in crate::high_level_api::integers) id: Id,
 }
 
 #[cfg_attr(all(doc, not(doctest)), doc(cfg(feature = "integer")))]
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
-pub struct GenericCompactIntegerList<P: IntegerParameter> {
+pub struct GenericCompactIntegerList<Id: IntegerId> {
     pub(in crate::high_level_api::integers) list: CompactCiphertextList,
-    pub(in crate::high_level_api::integers) id: P::Id,
+    pub(in crate::high_level_api::integers) id: Id,
 }
 
-impl<P> GenericCompactInteger<P>
+impl<Id> GenericCompactInteger<Id>
 where
-    P: IntegerParameter,
+    Id: IntegerId,
 {
-    pub fn expand(&self) -> GenericInteger<P> {
+    pub fn expand(&self) -> GenericInteger<Id> {
         let ct = self.list.expand_one();
         GenericInteger::new(ct, self.id)
     }
 }
 
-impl<P> GenericCompactIntegerList<P>
+impl<Id> GenericCompactIntegerList<Id>
 where
-    P: IntegerParameter,
+    Id: IntegerId,
 {
     pub fn len(&self) -> usize {
         self.list.ciphertext_count()
     }
 
-    pub fn expand(&self) -> Vec<GenericInteger<P>> {
+    pub fn expand(&self) -> Vec<GenericInteger<Id>> {
         self.list
             .expand()
             .into_iter()
@@ -52,21 +50,16 @@ where
     }
 }
 
-impl<P, T> FheTryEncrypt<T, CompactPublicKey> for GenericCompactInteger<P>
+impl<Id, T> FheTryEncrypt<T, CompactPublicKey> for GenericCompactInteger<Id>
 where
     T: crate::integer::block_decomposition::DecomposableInto<u64>,
-    P: IntegerParameter,
-    P::Id: Default + TypeIdentifier,
+    Id: IntegerId,
 {
     type Error = crate::high_level_api::errors::Error;
 
     fn try_encrypt(value: T, key: &CompactPublicKey) -> Result<Self, Self::Error> {
-        let id = P::Id::default();
-        let ciphertext = key
-            .integer_key
-            .try_encrypt_compact(&[value], P::num_blocks())
-            .ok_or(UninitializedPublicKey(id.type_variant()))
-            .unwrap_display();
+        let id = Id::default();
+        let ciphertext = key.key.try_encrypt_compact(&[value], Id::num_blocks());
         Ok(Self {
             list: ciphertext,
             id,
@@ -74,21 +67,16 @@ where
     }
 }
 
-impl<'a, P, T> FheTryEncrypt<&'a [T], CompactPublicKey> for GenericCompactIntegerList<P>
+impl<'a, Id, T> FheTryEncrypt<&'a [T], CompactPublicKey> for GenericCompactIntegerList<Id>
 where
     T: crate::integer::block_decomposition::DecomposableInto<u64>,
-    P: IntegerParameter,
-    P::Id: Default + TypeIdentifier,
+    Id: IntegerId,
 {
     type Error = crate::high_level_api::errors::Error;
 
     fn try_encrypt(values: &'a [T], key: &CompactPublicKey) -> Result<Self, Self::Error> {
-        let id = P::Id::default();
-        let ciphertext = key
-            .integer_key
-            .try_encrypt_compact(values, P::num_blocks())
-            .ok_or(UninitializedPublicKey(id.type_variant()))
-            .unwrap_display();
+        let id = Id::default();
+        let ciphertext = key.key.try_encrypt_compact(values, Id::num_blocks());
         Ok(Self {
             list: ciphertext,
             id,
@@ -96,7 +84,7 @@ where
     }
 }
 
-impl<P: IntegerParameter> ParameterSetConformant for GenericCompactInteger<P> {
+impl<Id: IntegerId> ParameterSetConformant for GenericCompactInteger<Id> {
     type ParameterSet = RadixCiphertextConformanceParams;
     fn is_conformant(&self, params: &RadixCiphertextConformanceParams) -> bool {
         let lsc = ListSizeConstraint::exact_size(1);
@@ -106,15 +94,15 @@ impl<P: IntegerParameter> ParameterSetConformant for GenericCompactInteger<P> {
     }
 }
 
-impl<P: IntegerParameter> Named for GenericCompactInteger<P> {
+impl<Id: IntegerId> Named for GenericCompactInteger<Id> {
     const NAME: &'static str = "high_level_api::GenericCompactInteger";
 }
 
-impl<P: IntegerParameter> Named for GenericCompactIntegerList<P> {
+impl<Id: IntegerId> Named for GenericCompactIntegerList<Id> {
     const NAME: &'static str = "high_level_api::GenericCompactIntegerList";
 }
 
-impl<P: IntegerParameter> ParameterSetConformant for GenericCompactIntegerList<P> {
+impl<Id: IntegerId> ParameterSetConformant for GenericCompactIntegerList<Id> {
     type ParameterSet = RadixCompactCiphertextListConformanceParams;
     fn is_conformant(&self, params: &RadixCompactCiphertextListConformanceParams) -> bool {
         self.list.is_conformant(params)
@@ -139,8 +127,8 @@ mod test {
 
     fn change_parameters<Ct, T: UnsignedInteger>(
         func: &ParameterAccessor<Ct, T>,
-    ) -> Vec<Box<ParameterModifier<'_, Ct>>> {
-        vec![
+    ) -> [Box<ParameterModifier<'_, Ct>>; 3] {
+        [
             Box::new(|ct| *func(ct) = T::ZERO),
             Box::new(|ct| *func(ct) = func(ct).wrapping_add(T::ONE)),
             Box::new(|ct| *func(ct) = func(ct).wrapping_sub(T::ONE)),
@@ -151,9 +139,7 @@ mod test {
     fn test_invalid_generic_compact_integer() {
         type Ct = CompactFheUint8;
 
-        let config = ConfigBuilder::all_disabled()
-            .enable_default_integers()
-            .build();
+        let config = ConfigBuilder::default().build();
 
         let (client_key, _server_key) = generate_keys(config);
 
@@ -168,11 +154,11 @@ mod test {
             ))
         );
 
-        let breaker_lists = vec![
+        let breaker_lists = [
             change_parameters(&|ct: &mut Ct| &mut ct.list.num_blocks_per_integer),
             change_parameters(&|ct: &mut Ct| &mut ct.list.ct_list.message_modulus.0),
             change_parameters(&|ct: &mut Ct| &mut ct.list.ct_list.carry_modulus.0),
-            change_parameters(&|ct: &mut Ct| &mut ct.list.ct_list.degree.0),
+            change_parameters(&|ct: &mut Ct| ct.list.ct_list.degree.as_mut()),
             change_parameters(&|ct: &mut Ct| {
                 &mut ct.list.ct_list.ct_list.get_mut_lwe_ciphertext_count().0
             }),
@@ -228,9 +214,7 @@ mod test {
     fn test_invalid_generic_compact_integer_list() {
         type Ct = CompactFheUint8List;
 
-        let config = ConfigBuilder::all_disabled()
-            .enable_default_integers()
-            .build();
+        let config = ConfigBuilder::default().build();
 
         let (client_key, _server_key) = generate_keys(config);
 
@@ -246,11 +230,11 @@ mod test {
 
         assert!(ct.is_conformant(&params));
 
-        let breaker_lists = vec![
+        let breaker_lists = [
             change_parameters(&|ct: &mut Ct| &mut ct.list.num_blocks_per_integer),
             change_parameters(&|ct: &mut Ct| &mut ct.list.ct_list.message_modulus.0),
             change_parameters(&|ct: &mut Ct| &mut ct.list.ct_list.carry_modulus.0),
-            change_parameters(&|ct: &mut Ct| &mut ct.list.ct_list.degree.0),
+            change_parameters(&|ct: &mut Ct| ct.list.ct_list.degree.as_mut()),
             change_parameters(&|ct: &mut Ct| {
                 &mut ct.list.ct_list.ct_list.get_mut_lwe_ciphertext_count().0
             }),
@@ -294,9 +278,7 @@ mod test {
 
     #[test]
     fn test_valid_generic_compact_integer() {
-        let config = ConfigBuilder::all_disabled()
-            .enable_default_integers()
-            .build();
+        let config = ConfigBuilder::default().build();
 
         let (client_key, server_key) = generate_keys(config);
 
@@ -340,9 +322,7 @@ mod test {
 
     #[test]
     fn test_valid_generic_compact_integer_list() {
-        let config = ConfigBuilder::all_disabled()
-            .enable_default_integers()
-            .build();
+        let config = ConfigBuilder::default().build();
 
         let (client_key, server_key) = generate_keys(config);
 

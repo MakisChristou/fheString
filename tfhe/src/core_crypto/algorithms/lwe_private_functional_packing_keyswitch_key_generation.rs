@@ -129,7 +129,7 @@ pub fn generate_lwe_private_functional_packing_keyswitch_key<
             &messages,
             noise_parameters,
             &mut loop_generator,
-        )
+        );
     }
 }
 
@@ -246,7 +246,7 @@ pub fn par_generate_lwe_private_functional_packing_keyswitch_key<
                     &messages,
                     noise_parameters,
                     &mut loop_generator,
-                )
+                );
             },
         );
 }
@@ -257,10 +257,10 @@ mod test {
     use crate::core_crypto::commons::math::random::Seed;
     use crate::core_crypto::prelude::*;
 
+    const NB_TESTS: usize = 10;
+
     #[test]
     fn test_pfpksk_list_gen_equivalence() {
-        const NB_TESTS: usize = 10;
-
         for _ in 0..NB_TESTS {
             // DISCLAIMER: these toy example parameters are not guaranteed to be secure or yield
             // correct computations
@@ -331,7 +331,7 @@ mod test {
                 &mut encryption_generator,
             );
 
-            assert_eq!(par_cbs_pfpksk, ser_cbs_pfpksk)
+            assert_eq!(par_cbs_pfpksk, ser_cbs_pfpksk);
         }
     }
 }

@@ -393,7 +393,7 @@ fn _bench_wopbs_param_message_8_norm2_5(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("programmable_bootstrap");
 
     let param = WOPBS_PARAM_MESSAGE_4_NORM2_6_KS_PBS;
-    let param_set: ShortintParameterSet = param.try_into().unwrap();
+    let param_set: ShortintParameterSet = param.into();
     let pbs_params = param_set.pbs_parameters().unwrap();
 
     let keys = KEY_CACHE_WOPBS.get_from_param((pbs_params, param));
@@ -402,14 +402,14 @@ fn _bench_wopbs_param_message_8_norm2_5(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
 
     let clear = rng.gen::<usize>() % param.message_modulus.0;
-    let mut ct = cks.encrypt_without_padding(clear as u64);
+    let ct = cks.encrypt_without_padding(clear as u64);
     let vec_lut = wopbs_key.generate_lut_native_crt(&ct, |x| x);
 
     let id = format!("Shortint WOPBS: {param:?}");
 
     bench_group.bench_function(&id, |b| {
         b.iter(|| {
-            let _ = wopbs_key.programmable_bootstrapping_native_crt(&mut ct, &vec_lut);
+            let _ = wopbs_key.programmable_bootstrapping_native_crt(&ct, &vec_lut);
         })
     });
 

@@ -3,7 +3,7 @@ use crate::core_crypto::commons::math::random::{
     UniformWithZeros,
 };
 use crate::core_crypto::commons::math::torus::{UnsignedInteger, UnsignedTorus};
-use crate::core_crypto::commons::numeric::{CastFrom, CastInto, FloatingPoint};
+use crate::core_crypto::commons::numeric::{CastInto, FloatingPoint};
 use crate::core_crypto::commons::parameters::CiphertextModulus;
 use concrete_csprng::generators::{BytesPerChild, ChildrenCount, ForkError};
 use rayon::prelude::*;
@@ -40,7 +40,7 @@ pub struct CompressionSeed {
 
 impl From<Seed> for CompressionSeed {
     fn from(seed: Seed) -> Self {
-        CompressionSeed { seed }
+        Self { seed }
     }
 }
 
@@ -96,8 +96,8 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
     /// use tfhe::core_crypto::commons::math::random::RandomGenerator;
     /// let mut generator = RandomGenerator::<SoftwareRandomGenerator>::new(Seed(0));
     /// ```
-    pub fn new(seed: Seed) -> RandomGenerator<G> {
-        RandomGenerator(G::new(seed))
+    pub fn new(seed: Seed) -> Self {
+        Self(G::new(seed))
     }
 
     /// Return the number of bytes that can still be generated, if the generator is bounded.
@@ -134,7 +134,7 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
         &mut self,
         n_child: usize,
         bytes_per_child: usize,
-    ) -> Result<impl Iterator<Item = RandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         self.0
             .try_fork(ChildrenCount(n_child), BytesPerChild(bytes_per_child))
             .map(|iter| iter.map(Self))
@@ -162,8 +162,52 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
     /// let random = generator.random_uniform::<i64>();
     /// let random = generator.random_uniform::<i128>();
     /// ```
-    pub fn random_uniform<Scalar: RandomGenerable<Uniform>>(&mut self) -> Scalar {
+    pub fn random_uniform<Scalar>(&mut self) -> Scalar
+    where
+        Scalar: RandomGenerable<Uniform>,
+    {
         Scalar::generate_one(self, Uniform)
+    }
+
+    /// Generate a random uniform unsigned integer. This is only supported for unsigned integers at
+    /// the moment.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use concrete_csprng::generators::SoftwareRandomGenerator;
+    /// use concrete_csprng::seeders::Seed;
+    /// use tfhe::core_crypto::commons::ciphertext_modulus::CiphertextModulus;
+    /// use tfhe::core_crypto::commons::math::random::RandomGenerator;
+    /// let mut generator = RandomGenerator::<SoftwareRandomGenerator>::new(Seed(0));
+    ///
+    /// let random =
+    ///     generator.random_uniform_custom_mod::<u8>(CiphertextModulus::try_new(1 << 8).unwrap());
+    /// let random =
+    ///     generator.random_uniform_custom_mod::<u16>(CiphertextModulus::try_new(1 << 8).unwrap());
+    /// let random =
+    ///     generator.random_uniform_custom_mod::<u32>(CiphertextModulus::try_new(1 << 8).unwrap());
+    /// let random =
+    ///     generator.random_uniform_custom_mod::<u64>(CiphertextModulus::try_new(1 << 8).unwrap());
+    /// let random =
+    ///     generator.random_uniform_custom_mod::<u128>(CiphertextModulus::try_new(1 << 8).unwrap());
+    /// ```
+    pub fn random_uniform_custom_mod<Scalar>(
+        &mut self,
+        custom_modulus: CiphertextModulus<Scalar>,
+    ) -> Scalar
+    where
+        Scalar: UnsignedInteger + RandomGenerable<Uniform, CustomModulus = Scalar>,
+    {
+        if custom_modulus.is_native_modulus() {
+            return self.random_uniform();
+        }
+
+        Scalar::generate_one_custom_modulus(
+            self,
+            Uniform,
+            custom_modulus.get_custom_modulus().cast_into(),
+        )
     }
 
     /// Fill a slice with random uniform values.
@@ -186,8 +230,7 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
         Scalar::fill_slice(self, Uniform, output);
     }
 
-    /// Fill a slice with random uniform values, for non-native power of 2 moduli, a shift is
-    /// applied to only keep log2(modulus) MSBs and zeroed out LSBs
+    /// Fill a slice with random uniform values.
     ///
     /// # Example
     ///
@@ -209,16 +252,16 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
         output: &mut [Scalar],
         custom_modulus: CiphertextModulus<Scalar>,
     ) where
-        Scalar: UnsignedInteger + RandomGenerable<Uniform>,
+        Scalar: UnsignedInteger + RandomGenerable<Uniform, CustomModulus = Scalar>,
     {
-        assert!(custom_modulus.is_compatible_with_native_modulus());
-        self.fill_slice_with_random_uniform(output);
-
-        if !custom_modulus.is_native_modulus() {
-            output.as_mut().iter_mut().for_each(|x| {
-                *x = (*x).wrapping_rem(custom_modulus.get_custom_modulus().cast_into())
-            });
+        if custom_modulus.is_native_modulus() {
+            self.fill_slice_with_random_uniform(output);
+            return;
         }
+
+        // This needs to be our Scalar in the RandomGenerable implementation
+        let custom_modulus_scalar: Scalar = custom_modulus.get_custom_modulus().cast_into();
+        Scalar::fill_slice_custom_mod(self, Uniform, output, custom_modulus_scalar);
     }
 
     /// Generate a random uniform binary value.
@@ -232,7 +275,10 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
     /// let mut generator = RandomGenerator::<SoftwareRandomGenerator>::new(Seed(0));
     /// let random: u32 = generator.random_uniform_binary();
     /// ```
-    pub fn random_uniform_binary<Scalar: RandomGenerable<UniformBinary>>(&mut self) -> Scalar {
+    pub fn random_uniform_binary<Scalar>(&mut self) -> Scalar
+    where
+        Scalar: RandomGenerable<UniformBinary>,
+    {
         Scalar::generate_one(self, UniformBinary)
     }
 
@@ -267,7 +313,10 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
     /// let mut generator = RandomGenerator::<SoftwareRandomGenerator>::new(Seed(0));
     /// let random: u32 = generator.random_uniform_ternary();
     /// ```
-    pub fn random_uniform_ternary<Scalar: RandomGenerable<UniformTernary>>(&mut self) -> Scalar {
+    pub fn random_uniform_ternary<Scalar>(&mut self) -> Scalar
+    where
+        Scalar: RandomGenerable<UniformTernary>,
+    {
         Scalar::generate_one(self, UniformTernary)
     }
 
@@ -284,10 +333,10 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
     /// let random: u8 = generator.random_uniform_n_lsb(3);
     /// assert!(random <= 7 as u8);
     /// ```
-    pub fn random_uniform_n_lsb<Scalar: RandomGenerable<UniformLsb>>(
-        &mut self,
-        n: usize,
-    ) -> Scalar {
+    pub fn random_uniform_n_lsb<Scalar>(&mut self, n: usize) -> Scalar
+    where
+        Scalar: RandomGenerable<UniformLsb>,
+    {
         Scalar::generate_one(self, UniformLsb { n })
     }
 
@@ -304,10 +353,10 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
     /// let random: u8 = generator.random_uniform_n_msb(3);
     /// assert!(random == 0 || random >= 32);
     /// ```
-    pub fn random_uniform_n_msb<Scalar: RandomGenerable<UniformMsb>>(
-        &mut self,
-        n: usize,
-    ) -> Scalar {
+    pub fn random_uniform_n_msb<Scalar>(&mut self, n: usize) -> Scalar
+    where
+        Scalar: RandomGenerable<UniformMsb>,
+    {
         Scalar::generate_one(self, UniformMsb { n })
     }
 
@@ -329,10 +378,10 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
     /// assert_eq!(generator.random_uniform_with_zeros::<u128>(1.), 0);
     /// assert_ne!(generator.random_uniform_with_zeros::<u128>(0.), 0);
     /// ```
-    pub fn random_uniform_with_zeros<Scalar: RandomGenerable<UniformWithZeros>>(
-        &mut self,
-        prob_zero: f32,
-    ) -> Scalar {
+    pub fn random_uniform_with_zeros<Scalar>(&mut self, prob_zero: f32) -> Scalar
+    where
+        Scalar: RandomGenerable<UniformWithZeros>,
+    {
         Scalar::generate_one(self, UniformWithZeros { prob_zero })
     }
 
@@ -424,21 +473,21 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
         std: Float,
         custom_modulus: CiphertextModulus<Scalar>,
     ) where
-        Float: FloatingPoint + CastFrom<u128>,
-        Scalar: UnsignedInteger,
-        (Scalar, Scalar): RandomGenerable<Gaussian<Float>, CustomModulus = Float>,
+        Float: FloatingPoint,
+        Scalar: UnsignedTorus + CastInto<Float>,
+        (Scalar, Scalar): RandomGenerable<Gaussian<Float>, CustomModulus = Scalar>,
     {
         if custom_modulus.is_native_modulus() {
             self.fill_slice_with_random_gaussian(output, mean, std);
             return;
         }
 
-        let custom_modulus_float: Float = custom_modulus.get_custom_modulus().cast_into();
+        let custom_modulus_as_scalar: Scalar = custom_modulus.get_custom_modulus().cast_into();
         output.chunks_mut(2).for_each(|s| {
             let (g1, g2) = <(Scalar, Scalar)>::generate_one_custom_modulus(
                 self,
                 Gaussian { std, mean },
-                custom_modulus_float,
+                custom_modulus_as_scalar,
             );
             if let Some(elem) = s.get_mut(0) {
                 *elem = g1;
@@ -508,21 +557,21 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
         std: Float,
         custom_modulus: CiphertextModulus<Scalar>,
     ) where
-        Scalar: UnsignedTorus,
-        Float: FloatingPoint + CastFrom<u128>,
-        (Scalar, Scalar): RandomGenerable<Gaussian<Float>, CustomModulus = Float>,
+        Float: FloatingPoint,
+        Scalar: UnsignedTorus + CastInto<Float>,
+        (Scalar, Scalar): RandomGenerable<Gaussian<Float>, CustomModulus = Scalar>,
     {
         if custom_modulus.is_native_modulus() {
             self.unsigned_torus_slice_wrapping_add_random_gaussian_assign(output, mean, std);
             return;
         }
 
-        let custom_modulus_float: Float = custom_modulus.get_custom_modulus().cast_into();
+        let custom_modulus_as_scalar: Scalar = custom_modulus.get_custom_modulus().cast_into();
         output.chunks_mut(2).for_each(|s| {
             let (g1, g2) = <(Scalar, Scalar)>::generate_one_custom_modulus(
                 self,
                 Gaussian { std, mean },
-                custom_modulus_float,
+                custom_modulus_as_scalar,
             );
             if let Some(elem) = s.get_mut(0) {
                 *elem = (*elem).wrapping_add(g1);
@@ -554,7 +603,7 @@ impl<G: ParallelByteRandomGenerator> RandomGenerator<G> {
         &mut self,
         n_child: usize,
         bytes_per_child: usize,
-    ) -> Result<impl IndexedParallelIterator<Item = RandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         self.0
             .par_try_fork(ChildrenCount(n_child), BytesPerChild(bytes_per_child))
             .map(|iter| iter.map(Self))

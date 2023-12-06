@@ -32,8 +32,8 @@ pub struct NoiseRandomGenerator<G: ByteRandomGenerator> {
 }
 
 impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
-    pub fn new(seed: Seed) -> NoiseRandomGenerator<G> {
-        NoiseRandomGenerator {
+    pub fn new(seed: Seed) -> Self {
+        Self {
             gen: RandomGenerator::new(seed),
         }
     }
@@ -63,20 +63,20 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         custom_modulus: CiphertextModulus<Scalar>,
     ) -> Scalar
     where
-        Scalar: UnsignedInteger + RandomGenerable<Gaussian<f64>, CustomModulus = f64>,
+        Scalar: UnsignedInteger + RandomGenerable<Gaussian<f64>, CustomModulus = Scalar>,
     {
         if custom_modulus.is_native_modulus() {
             return self.random_noise(std);
         }
 
-        let custom_modulus_f64: f64 = custom_modulus.get_custom_modulus().cast_into();
+        let custom_modulus_as_scalar: Scalar = custom_modulus.get_custom_modulus().cast_into();
         Scalar::generate_one_custom_modulus(
             &mut self.gen,
             Gaussian {
                 std: std.get_standard_dev(),
                 mean: 0.,
             },
-            custom_modulus_f64,
+            custom_modulus_as_scalar,
         )
     }
 
@@ -86,10 +86,11 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         output: &mut [Scalar],
         std: impl DispersionParameter,
     ) where
+        Scalar: UnsignedTorus,
         (Scalar, Scalar): RandomGenerable<Gaussian<f64>>,
     {
         self.gen
-            .fill_slice_with_random_gaussian(output, 0., std.get_standard_dev())
+            .fill_slice_with_random_gaussian(output, 0., std.get_standard_dev());
     }
 
     // Fills the input slice with random noise, using the random generator.
@@ -99,8 +100,8 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         std: impl DispersionParameter,
         custom_modulus: CiphertextModulus<Scalar>,
     ) where
-        Scalar: UnsignedInteger,
-        (Scalar, Scalar): RandomGenerable<Gaussian<f64>, CustomModulus = f64>,
+        Scalar: UnsignedTorus,
+        (Scalar, Scalar): RandomGenerable<Gaussian<f64>, CustomModulus = Scalar>,
     {
         self.gen.fill_slice_with_random_gaussian_custom_mod(
             output,
@@ -135,7 +136,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         custom_modulus: CiphertextModulus<Scalar>,
     ) where
         Scalar: UnsignedTorus,
-        (Scalar, Scalar): RandomGenerable<Gaussian<f64>, CustomModulus = f64>,
+        (Scalar, Scalar): RandomGenerable<Gaussian<f64>, CustomModulus = Scalar>,
     {
         self.gen
             .unsigned_torus_slice_wrapping_add_random_gaussian_custom_mod_assign(
@@ -153,7 +154,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         level: DecompositionLevelCount,
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_ggsw(level, glwe_size, polynomial_size);
         self.try_fork(lwe_dimension.0, noise_bytes)
     }
@@ -166,7 +167,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
         grouping_factor: LweBskGroupingFactor,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_multi_bit_bsk_ggsw_group(
             level,
             glwe_size,
@@ -184,7 +185,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
         grouping_factor: LweBskGroupingFactor,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let ggsw_count = grouping_factor.ggsw_per_multi_bit_element();
         let noise_bytes = noise_bytes_per_ggsw(level, glwe_size, polynomial_size);
         self.try_fork(ggsw_count.0, noise_bytes)
@@ -196,7 +197,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         level: DecompositionLevelCount,
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_ggsw_level(glwe_size, polynomial_size);
         self.try_fork(level.0, noise_bytes)
     }
@@ -206,7 +207,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_glwe(polynomial_size);
         self.try_fork(glwe_size.0, noise_bytes)
     }
@@ -216,7 +217,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         level: DecompositionLevelCount,
         lwe_size: LweSize,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_gsw_level(lwe_size);
         self.try_fork(level.0, noise_bytes)
     }
@@ -225,7 +226,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
     pub(crate) fn fork_gsw_level_to_lwe(
         &mut self,
         lwe_size: LweSize,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_lwe();
         self.try_fork(lwe_size.0, noise_bytes)
     }
@@ -234,7 +235,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
     pub(crate) fn fork_lwe_list_to_lwe(
         &mut self,
         lwe_count: LweCiphertextCount,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_lwe();
         self.try_fork(lwe_count.0, noise_bytes)
     }
@@ -246,7 +247,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         poly_size: PolynomialSize,
         lwe_size: LweSize,
         pfpksk_count: FunctionalPackingKeyswitchKeyCount,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_pfpksk(level, poly_size, lwe_size);
         self.try_fork(pfpksk_count.0, noise_bytes)
     }
@@ -257,7 +258,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         level: DecompositionLevelCount,
         poly_size: PolynomialSize,
         lwe_size: LweSize,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_pfpksk_chunk(level, poly_size);
         self.try_fork(lwe_size.0, noise_bytes)
     }
@@ -266,7 +267,7 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         lwe_mask_count: LweMaskCount,
         lwe_dimension: LweDimension,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_lwe_compact_ciphertext_bin(lwe_dimension);
         self.try_fork(lwe_mask_count.0, noise_bytes)
     }
@@ -275,12 +276,12 @@ impl<G: ByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         n_child: usize,
         noise_bytes: usize,
-    ) -> Result<impl Iterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl Iterator<Item = Self>, ForkError> {
         // We try to fork the generators
         let noise_iter = self.gen.try_fork(n_child, noise_bytes)?;
 
         // We return a proper iterator.
-        Ok(noise_iter.map(|gen| NoiseRandomGenerator { gen }))
+        Ok(noise_iter.map(|gen| Self { gen }))
     }
 }
 
@@ -292,7 +293,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         level: DecompositionLevelCount,
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_ggsw(level, glwe_size, polynomial_size);
         self.par_try_fork(lwe_dimension.0, noise_bytes)
     }
@@ -305,7 +306,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
         grouping_factor: LweBskGroupingFactor,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_multi_bit_bsk_ggsw_group(
             level,
             glwe_size,
@@ -323,7 +324,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
         grouping_factor: LweBskGroupingFactor,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let ggsw_count = grouping_factor.ggsw_per_multi_bit_element();
         let noise_bytes = noise_bytes_per_ggsw(level, glwe_size, polynomial_size);
         self.par_try_fork(ggsw_count.0, noise_bytes)
@@ -335,7 +336,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         level: DecompositionLevelCount,
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_ggsw_level(glwe_size, polynomial_size);
         self.par_try_fork(level.0, noise_bytes)
     }
@@ -345,7 +346,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         glwe_size: GlweSize,
         polynomial_size: PolynomialSize,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_glwe(polynomial_size);
         self.par_try_fork(glwe_size.0, noise_bytes)
     }
@@ -355,7 +356,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         level: DecompositionLevelCount,
         lwe_size: LweSize,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_gsw_level(lwe_size);
         self.par_try_fork(level.0, noise_bytes)
     }
@@ -364,7 +365,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
     pub(crate) fn par_fork_gsw_level_to_lwe(
         &mut self,
         lwe_size: LweSize,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_lwe();
         self.par_try_fork(lwe_size.0, noise_bytes)
     }
@@ -373,7 +374,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
     pub(crate) fn par_fork_lwe_list_to_lwe(
         &mut self,
         lwe_count: LweCiphertextCount,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_lwe();
         self.par_try_fork(lwe_count.0, noise_bytes)
     }
@@ -385,7 +386,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         poly_size: PolynomialSize,
         lwe_size: LweSize,
         pfpksk_count: FunctionalPackingKeyswitchKeyCount,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_pfpksk(level, poly_size, lwe_size);
         self.par_try_fork(pfpksk_count.0, noise_bytes)
     }
@@ -396,7 +397,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         level: DecompositionLevelCount,
         poly_size: PolynomialSize,
         lwe_size: LweSize,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_pfpksk_chunk(level, poly_size);
         self.par_try_fork(lwe_size.0, noise_bytes)
     }
@@ -405,7 +406,7 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         lwe_mask_count: LweMaskCount,
         lwe_dimension: LweDimension,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         let noise_bytes = noise_bytes_per_lwe_compact_ciphertext_bin(lwe_dimension);
         self.par_try_fork(lwe_mask_count.0, noise_bytes)
     }
@@ -415,12 +416,12 @@ impl<G: ParallelByteRandomGenerator> NoiseRandomGenerator<G> {
         &mut self,
         n_child: usize,
         noise_bytes: usize,
-    ) -> Result<impl IndexedParallelIterator<Item = NoiseRandomGenerator<G>>, ForkError> {
+    ) -> Result<impl IndexedParallelIterator<Item = Self>, ForkError> {
         // We try to fork the generators
         let noise_iter = self.gen.par_try_fork(n_child, noise_bytes)?;
 
         // We return a proper iterator.
-        Ok(noise_iter.map(|gen| NoiseRandomGenerator { gen }))
+        Ok(noise_iter.map(|gen| Self { gen }))
     }
 }
 

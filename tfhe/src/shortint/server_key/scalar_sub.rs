@@ -1,8 +1,8 @@
-use super::ServerKey;
-use crate::shortint::engine::ShortintEngine;
+use crate::core_crypto::algorithms::*;
+use crate::core_crypto::entities::*;
+use crate::shortint::ciphertext::Degree;
 use crate::shortint::server_key::CheckError;
-use crate::shortint::server_key::CheckError::CarryFull;
-use crate::shortint::Ciphertext;
+use crate::shortint::{Ciphertext, MessageModulus, ServerKey};
 
 impl ServerKey {
     /// Compute homomorphically a subtraction of a ciphertext by a scalar.
@@ -161,9 +161,9 @@ impl ServerKey {
     /// assert_eq!(3, clear);
     /// ```
     pub fn unchecked_scalar_sub(&self, ct: &Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_scalar_sub(ct, scalar).unwrap()
-        })
+        let mut ct_result = ct.clone();
+        self.unchecked_scalar_sub_assign(&mut ct_result, scalar);
+        ct_result
     }
 
     /// Compute homomorphically a subtraction of a ciphertext by a scalar.
@@ -204,9 +204,15 @@ impl ServerKey {
     /// assert_eq!(3, clear);
     /// ```
     pub fn unchecked_scalar_sub_assign(&self, ct: &mut Ciphertext, scalar: u8) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_scalar_sub_assign(ct, scalar).unwrap()
-        })
+        let neg_scalar = neg_scalar(scalar, ct.message_modulus);
+
+        let delta = (1_u64 << 63) / (self.message_modulus.0 * self.carry_modulus.0) as u64;
+        let shift_plaintext = neg_scalar as u64 * delta;
+        let encoded_scalar = Plaintext(shift_plaintext);
+
+        lwe_ciphertext_plaintext_add_assign(&mut ct.ct, encoded_scalar);
+
+        ct.degree += Degree::new(neg_scalar as usize);
     }
 
     /// Verify if a scalar can be subtracted to the ciphertext.
@@ -226,9 +232,7 @@ impl ServerKey {
     /// let ct = cks.encrypt(5);
     ///
     /// // Verification if the scalar subtraction can be computed:
-    /// let can_be_computed = sks.is_scalar_sub_possible(&ct, 3);
-    ///
-    /// assert_eq!(can_be_computed, true);
+    /// sks.is_scalar_sub_possible(&ct, 3).unwrap();
     ///
     /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_PBS_KS);
     ///
@@ -236,20 +240,16 @@ impl ServerKey {
     /// let ct = cks.encrypt(5);
     ///
     /// // Verification if the scalar subtraction can be computed:
-    /// let can_be_computed = sks.is_scalar_sub_possible(&ct, 3);
-    ///
-    /// assert_eq!(can_be_computed, true);
+    /// sks.is_scalar_sub_possible(&ct, 3).unwrap();
     /// ```
-    pub fn is_scalar_sub_possible(&self, ct: &Ciphertext, scalar: u8) -> bool {
-        let neg_scalar = u64::from(scalar.wrapping_neg()) % self.message_modulus.0 as u64;
-        let final_degree = neg_scalar as usize + ct.degree.0;
-        final_degree <= self.max_degree.0
+    pub fn is_scalar_sub_possible(&self, ct: &Ciphertext, scalar: u8) -> Result<(), CheckError> {
+        self.is_scalar_add_possible(ct, neg_scalar(scalar, ct.message_modulus))
     }
 
     /// Compute homomorphically a subtraction of a ciphertext by a scalar.
     ///
     /// If the operation is possible, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -266,11 +266,8 @@ impl ServerKey {
     /// let ct = cks.encrypt(5);
     ///
     /// // Compute homomorphically a subtraction multiplication:
-    /// let ct_res = sks.checked_scalar_sub(&ct, 2);
+    /// let ct_res = sks.checked_scalar_sub(&ct, 2).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// assert_eq!(clear_res, 3);
     ///
@@ -280,11 +277,8 @@ impl ServerKey {
     /// let ct = cks.encrypt(5);
     ///
     /// // Compute homomorphically a subtraction multiplication:
-    /// let ct_res = sks.checked_scalar_sub(&ct, 2);
+    /// let ct_res = sks.checked_scalar_sub(&ct, 2).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// assert_eq!(clear_res, 3);
     /// ```
@@ -293,19 +287,14 @@ impl ServerKey {
         ct: &Ciphertext,
         scalar: u8,
     ) -> Result<Ciphertext, CheckError> {
-        //If the scalar subtraction cannot be done without exceeding the max degree
-        if self.is_scalar_sub_possible(ct, scalar) {
-            let ct_result = self.unchecked_scalar_sub(ct, scalar);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.checked_scalar_add(ct, neg_scalar(scalar, ct.message_modulus))
     }
 
     /// Compute homomorphically a subtraction of a ciphertext by a scalar.
     ///
     /// If the operation is possible, the result is stored _in_ the input ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned and the ciphertext is not modified.
+    /// Otherwise a [CheckError] is returned and the ciphertext is not
+    /// modified.
     ///
     /// # Example
     ///
@@ -322,9 +311,7 @@ impl ServerKey {
     /// let mut ct = cks.encrypt(5);
     ///
     /// // Compute homomorphically a scalar subtraction:
-    /// let res = sks.checked_scalar_sub_assign(&mut ct, 2);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_scalar_sub_assign(&mut ct, 2).unwrap();
     ///
     /// let clear_res = cks.decrypt(&ct);
     /// assert_eq!(clear_res, 3);
@@ -335,9 +322,7 @@ impl ServerKey {
     /// let mut ct = cks.encrypt(5);
     ///
     /// // Compute homomorphically a scalar subtraction:
-    /// let res = sks.checked_scalar_sub_assign(&mut ct, 2);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_scalar_sub_assign(&mut ct, 2).unwrap();
     ///
     /// let clear_res = cks.decrypt(&ct);
     /// assert_eq!(clear_res, 3);
@@ -347,12 +332,7 @@ impl ServerKey {
         ct: &mut Ciphertext,
         scalar: u8,
     ) -> Result<(), CheckError> {
-        if self.is_scalar_sub_possible(ct, scalar) {
-            self.unchecked_scalar_sub_assign(ct, scalar);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.checked_scalar_add_assign(ct, neg_scalar(scalar, ct.message_modulus))
     }
 
     /// Compute homomorphically a subtraction of a ciphertext by a scalar.
@@ -406,9 +386,7 @@ impl ServerKey {
     /// assert_eq!(msg - scalar as u64, clear);
     /// ```
     pub fn smart_scalar_sub(&self, ct: &mut Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_sub(self, ct, scalar).unwrap()
-        })
+        self.smart_scalar_add(ct, neg_scalar(scalar, ct.message_modulus))
     }
 
     /// Compute homomorphically a subtraction of a ciphertext by a scalar.
@@ -455,8 +433,14 @@ impl ServerKey {
     /// assert_eq!(msg - scalar as u64, clear);
     /// ```
     pub fn smart_scalar_sub_assign(&self, ct: &mut Ciphertext, scalar: u8) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_sub_assign(self, ct, scalar).unwrap()
-        })
+        self.smart_scalar_add_assign(ct, neg_scalar(scalar, ct.message_modulus))
     }
+}
+
+fn neg_scalar(scalar: u8, msg_modulus: MessageModulus) -> u8 {
+    let msg_modulus = msg_modulus.0 as u64;
+
+    let scalar = scalar as u64 % msg_modulus;
+
+    ((msg_modulus - scalar) % msg_modulus) as u8
 }

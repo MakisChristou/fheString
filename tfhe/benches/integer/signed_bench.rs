@@ -10,7 +10,7 @@ use rand::prelude::*;
 use rand::Rng;
 use std::vec::IntoIter;
 use tfhe::integer::keycache::KEY_CACHE;
-use tfhe::integer::{RadixCiphertext, ServerKey, SignedRadixCiphertext, I256};
+use tfhe::integer::{IntegerKeyKind, RadixCiphertext, ServerKey, SignedRadixCiphertext, I256};
 use tfhe::keycache::NamedParam;
 
 use tfhe::shortint::parameters::{
@@ -114,7 +114,7 @@ fn bench_server_key_signed_binary_function_clean_inputs<F>(
 
         let bench_id = format!("{bench_name}::{param_name}::{bit_size}_bits");
         bench_group.bench_function(&bench_id, |b| {
-            let (cks, sks) = KEY_CACHE.get_from_params(param);
+            let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
 
             let encrypt_two_values = || {
                 let ct_0 = cks.encrypt_signed_radix(gen_random_i256(&mut rng), num_block);
@@ -167,7 +167,7 @@ fn bench_server_key_signed_shift_function_clean_inputs<F>(
 
         let bench_id = format!("{bench_name}::{param_name}::{bit_size}_bits");
         bench_group.bench_function(&bench_id, |b| {
-            let (cks, sks) = KEY_CACHE.get_from_params(param);
+            let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
 
             let encrypt_two_values = || {
                 let clear_1 = rng.gen_range(0u128..bit_size as u128);
@@ -223,7 +223,7 @@ fn bench_server_key_unary_function_clean_inputs<F>(
 
         let bench_id = format!("{bench_name}::{param_name}::{bit_size}_bits");
         bench_group.bench_function(&bench_id, |b| {
-            let (cks, sks) = KEY_CACHE.get_from_params(param);
+            let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
 
             let encrypt_one_value =
                 || cks.encrypt_signed_radix(gen_random_i256(&mut rng), num_block);
@@ -266,13 +266,13 @@ fn signed_if_then_else_parallelized(c: &mut Criterion) {
 
         let bench_id = format!("{bench_name}::{param_name}::{bit_size}_bits");
         bench_group.bench_function(&bench_id, |b| {
-            let (cks, sks) = KEY_CACHE.get_from_params(param);
+            let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
 
             let encrypt_tree_values = || {
                 let ct_0 = cks.encrypt_signed_radix(gen_random_i256(&mut rng), num_block);
                 let ct_1 = cks.encrypt_signed_radix(gen_random_i256(&mut rng), num_block);
 
-                let cond = sks.create_trivial_radix(rng.gen_bool(0.5) as u64, num_block);
+                let cond = sks.create_trivial_boolean_block(rng.gen_bool(0.5));
 
                 (cond, ct_0, ct_1)
             };
@@ -348,6 +348,169 @@ macro_rules! define_server_key_bench_unary_signed_clean_input_fn (
     };
   );
 
+define_server_key_bench_unary_signed_clean_input_fn!(
+    method_name: neg_parallelized,
+    display_name: negation
+);
+define_server_key_bench_unary_signed_clean_input_fn!(
+    method_name: abs_parallelized,
+    display_name: abs
+);
+
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: add_parallelized,
+    display_name: add
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: sub_parallelized,
+    display_name: sub
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: mul_parallelized,
+    display_name: mul
+);
+// define_server_key_bench_binary_signed_clean_inputs_fn!(
+//     method_name: div_parallelized,
+//     display_name: div,
+//     sample_size:10
+// );
+// define_server_key_bench_binary_signed_clean_inputs_fn!(
+//     method_name: rem_parallelized,
+//     display_name: modulo,
+//     sample_size:10
+// );
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: div_rem_parallelized,
+    display_name: div_mod,
+    sample_size:10
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: bitand_parallelized,
+    display_name: bitand
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: bitxor_parallelized,
+    display_name: bitxor
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: bitor_parallelized,
+    display_name: bitor
+);
+define_server_key_bench_unary_signed_clean_input_fn!(
+    method_name: bitnot_parallelized,
+    display_name: bitnot
+);
+
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: max_parallelized,
+    display_name: max
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: min_parallelized,
+    display_name: min
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: eq_parallelized,
+    display_name: equal
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: ne_parallelized,
+    display_name: not_equal
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: lt_parallelized,
+    display_name: less_than
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: le_parallelized,
+    display_name: less_or_equal
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: gt_parallelized,
+    display_name: greater_than
+);
+define_server_key_bench_binary_signed_clean_inputs_fn!(
+    method_name: ge_parallelized,
+    display_name: greater_or_equal
+);
+
+fn left_shift_parallelized(c: &mut Criterion) {
+    bench_server_key_signed_shift_function_clean_inputs(
+        c,
+        concat!("integer::signed::", "left_shift_parallelized"),
+        "left_shift",
+        |server_key, lhs, rhs| {
+            server_key.left_shift_parallelized(lhs, rhs);
+        },
+    )
+}
+
+fn right_shift_parallelized(c: &mut Criterion) {
+    bench_server_key_signed_shift_function_clean_inputs(
+        c,
+        concat!("integer::signed::", "right_shift_parallelized"),
+        "right_shift",
+        |server_key, lhs, rhs| {
+            server_key.right_shift_parallelized(lhs, rhs);
+        },
+    )
+}
+
+fn rotate_left_parallelized(c: &mut Criterion) {
+    bench_server_key_signed_shift_function_clean_inputs(
+        c,
+        concat!("integer::signed::", "rotate_left_parallelized"),
+        "rotate_left",
+        |server_key, lhs, rhs| {
+            server_key.rotate_left_parallelized(lhs, rhs);
+        },
+    )
+}
+
+fn rotate_right_parallelized(c: &mut Criterion) {
+    bench_server_key_signed_shift_function_clean_inputs(
+        c,
+        concat!("integer::signed::", "rotate_right_parallelized"),
+        "rotate_right",
+        |server_key, lhs, rhs| {
+            server_key.rotate_right_parallelized(lhs, rhs);
+        },
+    )
+}
+
+criterion_group!(
+    default_parallelized_ops,
+    neg_parallelized,
+    abs_parallelized,
+    add_parallelized,
+    sub_parallelized,
+    mul_parallelized,
+    // div_parallelized,
+    // rem_parallelized,
+    div_rem_parallelized, // For ciphertext div == rem == div_rem
+    bitand_parallelized,
+    bitnot_parallelized,
+    bitor_parallelized,
+    bitxor_parallelized,
+    left_shift_parallelized,
+    right_shift_parallelized,
+    rotate_left_parallelized,
+    rotate_right_parallelized,
+);
+
+criterion_group!(
+    default_parallelized_ops_comp,
+    max_parallelized,
+    min_parallelized,
+    eq_parallelized,
+    ne_parallelized,
+    lt_parallelized,
+    le_parallelized,
+    gt_parallelized,
+    ge_parallelized,
+    signed_if_then_else_parallelized,
+);
+
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_mul_parallelized,
     display_name: mul
@@ -370,32 +533,32 @@ define_server_key_bench_binary_signed_clean_inputs_fn!(
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_eq_parallelized,
-    display_name: eq
+    display_name: equal
 );
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_ne_parallelized,
-    display_name: ne
+    display_name: not_equal
 );
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_le_parallelized,
-    display_name: le
+    display_name: less_or_equal
 );
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_lt_parallelized,
-    display_name: lt
+    display_name: less_than
 );
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_ge_parallelized,
-    display_name: ge
+    display_name: greater_or_equal
 );
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_gt_parallelized,
-    display_name: gt
+    display_name: greater_than
 );
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
@@ -410,13 +573,13 @@ define_server_key_bench_binary_signed_clean_inputs_fn!(
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_div_rem_parallelized,
-    display_name: div_rem,
+    display_name: div_mod,
     sample_size: 10,
 );
 
 define_server_key_bench_binary_signed_clean_inputs_fn!(
     method_name: unchecked_div_rem_floor_parallelized,
-    display_name: div_rem_floor,
+    display_name: div_mod_floor,
     sample_size: 10,
 );
 
@@ -528,7 +691,7 @@ fn bench_server_key_binary_scalar_function_clean_inputs<F, G>(
 
         let bench_id = format!("{bench_name}::{param_name}::{bit_size}_bits_scalar_{bit_size}");
         bench_group.bench_function(&bench_id, |b| {
-            let (cks, sks) = KEY_CACHE.get_from_params(param);
+            let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
 
             let encrypt_one_value = || {
                 let ct_0 = cks.encrypt_signed_radix(gen_random_i256(&mut rng), num_block);
@@ -652,110 +815,247 @@ macro_rules! define_server_key_bench_binary_scalar_clean_inputs_fn (
   );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_add_parallelized,
+    display_name: add,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_sub_parallelized,
+    display_name: sub,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_mul_parallelized,
+    display_name: mul,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: signed_scalar_div_parallelized,
+    display_name: div,
+    rng_func: div_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: signed_scalar_rem_parallelized,
+    display_name: modulo,
+    rng_func: div_scalar
+);
+// define_server_key_bench_binary_scalar_clean_inputs_fn!(
+//     method_name: signed_scalar_div_rem_parallelized,
+//     display_name: div_mod,
+//     rng_func: div_scalar
+// );
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_bitand_parallelized,
+    display_name: bitand,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_bitxor_parallelized,
+    display_name: bitxor,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_bitor_parallelized,
+    display_name: bitor,
+    rng_func: default_scalar
+);
+
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_left_shift_parallelized,
+    display_name: left_shift,
+    rng_func: shift_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_right_shift_parallelized,
+    display_name: right_shift,
+    rng_func: shift_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_rotate_left_parallelized,
+    display_name: rotate_left,
+    rng_func: shift_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_rotate_right_parallelized,
+    display_name: rotate_right,
+    rng_func: shift_scalar
+);
+
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_max_parallelized,
+    display_name: max,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_min_parallelized,
+    display_name: min,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_eq_parallelized,
+    display_name: equal,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_ne_parallelized,
+    display_name: not_equal,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_lt_parallelized,
+    display_name: less_than,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_le_parallelized,
+    display_name: less_or_equal,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_gt_parallelized,
+    display_name: greater_than,
+    rng_func: default_scalar
+);
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
+    method_name: scalar_ge_parallelized,
+    display_name: greater_or_equal,
+    rng_func: default_scalar
+);
+
+criterion_group!(
+    default_scalar_parallelized_ops,
+    scalar_add_parallelized,
+    scalar_sub_parallelized,
+    scalar_mul_parallelized,
+    signed_scalar_div_parallelized,
+    signed_scalar_rem_parallelized, // For scalar rem == div_rem
+    // signed_scalar_div_rem_parallelized,
+    scalar_bitand_parallelized,
+    scalar_bitor_parallelized,
+    scalar_bitxor_parallelized,
+    scalar_left_shift_parallelized,
+    scalar_right_shift_parallelized,
+    scalar_rotate_left_parallelized,
+    scalar_rotate_right_parallelized,
+);
+
+criterion_group!(
+    default_scalar_parallelized_ops_comp,
+    scalar_max_parallelized,
+    scalar_min_parallelized,
+    scalar_eq_parallelized,
+    scalar_ne_parallelized,
+    scalar_lt_parallelized,
+    scalar_le_parallelized,
+    scalar_gt_parallelized,
+    scalar_ge_parallelized,
+);
+
+define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_left_shift_parallelized,
-    display_name: scalar_left_shift,
+    display_name: left_shift,
     rng_func: shift_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_right_shift_parallelized,
-    display_name: scalar_right_shift,
+    display_name: right_shift,
     rng_func: shift_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_rotate_right_parallelized,
-    display_name: scalar_rotate_right,
+    display_name: rotate_right,
     rng_func: shift_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_rotate_left_parallelized,
-    display_name: scalar_rotate_left,
+    display_name: rotate_left,
     rng_func: shift_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_mul_parallelized,
-    display_name: scalar_mul,
+    display_name: mul,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_bitand_parallelized,
-    display_name: scalar_bitand,
+    display_name: bitand,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_bitor_parallelized,
-    display_name: scalar_bitor,
+    display_name: bitor,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_bitxor_parallelized,
-    display_name: scalar_bitxor,
+    display_name: bitxor,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_eq_parallelized,
-    display_name: scalar_eq,
+    display_name: equal,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_ne_parallelized,
-    display_name: scalar_ne,
+    display_name: not_equal,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_le_parallelized,
-    display_name: scalar_le,
+    display_name: less_or_equal,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_lt_parallelized,
-    display_name: scalar_lt,
+    display_name: less_than,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_ge_parallelized,
-    display_name: scalar_ge,
+    display_name: greater_or_equal,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_gt_parallelized,
-    display_name: scalar_gt,
+    display_name: greater_than,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_max_parallelized,
-    display_name: scalar_max,
+    display_name: max,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_scalar_min_parallelized,
-    display_name: scalar_min,
+    display_name: min,
     rng_func: default_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_signed_scalar_div_rem_parallelized,
-    display_name: scalar_div_rem,
+    display_name: div_mod,
     rng_func: div_scalar
 );
 
 define_server_key_bench_binary_scalar_clean_inputs_fn!(
     method_name: unchecked_signed_scalar_div_parallelized,
-    display_name: scalar_div,
+    display_name: div,
     rng_func: div_scalar
 );
 
@@ -786,12 +1086,14 @@ criterion_group!(
     unchecked_scalar_min_parallelized,
 );
 
-criterion_group!(default_ops, signed_if_then_else_parallelized,);
-
 fn main() {
     match env::var("__TFHE_RS_BENCH_OP_FLAVOR") {
         Ok(val) => {
             match val.to_lowercase().as_str() {
+                "default" => default_parallelized_ops(),
+                "default_comp" => default_parallelized_ops_comp(),
+                "default_scalar" => default_scalar_parallelized_ops(),
+                "default_scalar_comp" => default_scalar_parallelized_ops_comp(),
                 "unchecked" => unchecked_ops(),
                 "unchecked_comp" => unchecked_ops_comp(),
                 "unchecked_scalar" => unchecked_scalar_ops(),
@@ -800,10 +1102,8 @@ fn main() {
             };
         }
         Err(_) => {
-            unchecked_ops();
-            unchecked_ops_comp();
-            unchecked_scalar_ops();
-            unchecked_scalar_ops_comp();
+            default_parallelized_ops();
+            default_scalar_parallelized_ops();
         }
     };
 

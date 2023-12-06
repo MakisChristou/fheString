@@ -4,6 +4,7 @@ use super::{ClientKey, RecomposableSignedInteger};
 use crate::core_crypto::prelude::{SignedNumeric, UnsignedNumeric};
 use crate::integer::block_decomposition::{DecomposableInto, RecomposableFrom};
 use crate::integer::ciphertext::{RadixCiphertext, SignedRadixCiphertext};
+use crate::integer::BooleanBlock;
 use crate::shortint::{Ciphertext as ShortintCiphertext, PBSParameters as ShortintParameters};
 use serde::{Deserialize, Serialize};
 
@@ -60,11 +61,23 @@ impl RadixClientKey {
         self.key.encrypt_radix(message, self.num_blocks)
     }
 
+    pub fn encrypt_without_padding<T: DecomposableInto<u64> + UnsignedNumeric>(
+        &self,
+        message: T,
+    ) -> RadixCiphertext {
+        self.key
+            .encrypt_radix_without_padding(message, self.num_blocks)
+    }
+
     pub fn encrypt_signed<T: DecomposableInto<u64> + SignedNumeric>(
         &self,
         message: T,
     ) -> SignedRadixCiphertext {
         self.key.encrypt_signed_radix(message, self.num_blocks)
+    }
+
+    pub fn encrypt_bool(&self, msg: bool) -> BooleanBlock {
+        self.key.encrypt_bool(msg)
     }
 
     pub fn decrypt<T>(&self, ciphertext: &RadixCiphertext) -> T
@@ -74,11 +87,22 @@ impl RadixClientKey {
         self.key.decrypt_radix(ciphertext)
     }
 
+    pub fn decrypt_without_padding<T>(&self, ctxt: &RadixCiphertext) -> T
+    where
+        T: RecomposableFrom<u64> + UnsignedNumeric,
+    {
+        self.key.decrypt_radix_without_padding(ctxt)
+    }
+
     pub fn decrypt_signed<T>(&self, ciphertext: &SignedRadixCiphertext) -> T
     where
         T: RecomposableSignedInteger,
     {
         self.key.decrypt_signed_radix(ciphertext)
+    }
+
+    pub fn decrypt_bool(&self, ciphertext: &BooleanBlock) -> bool {
+        self.key.decrypt_bool(ciphertext)
     }
 
     /// Returns the parameters used by the client key.

@@ -37,7 +37,13 @@ Each operation may come in different 'flavors':
 
 Not all operations have these 4 flavors, as some of them are implemented in a way that the operation is always possible without ever exceeding the plaintext space capacity.
 
+{% hint style="info" %}
+If you don't know which flavor to use, you should use the `default` one.
+{% endhint %}
+
+
 ## How to use operation types
+
 
 Let's try to do a circuit evaluation using the different flavors of operations that we have already introduced. For a very small circuit, the `unchecked` flavour may be enough to do the computation correctly. Otherwise,`checked` and `smart` are the best options.
 
@@ -367,14 +373,14 @@ fn main() {
     let modulus = client_key.parameters.message_modulus().0 as u64;
 
     // We use the private client key to encrypt two messages:
-    let ct_1 = client_key.encrypt(msg1);
+    let mut ct_1 = client_key.encrypt(msg1);
     let mut ct_2 = client_key.encrypt(msg2);
 
     // Compute the lookup table for the bivariate functions
     let acc = server_key.generate_lookup_table_bivariate(|x,y| (x.count_ones()
         + y.count_ones()) as u64 % modulus );
 
-    let ct_res = server_key.smart_apply_lookup_table_bivariate(&ct_1, &mut ct_2, &acc);
+    let ct_res = server_key.smart_apply_lookup_table_bivariate(&mut ct_1, &mut ct_2, &acc);
 
     // We use the client key to decrypt the output of the circuit:
     let output = client_key.decrypt(&ct_res);

@@ -136,6 +136,11 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> SeededLweKeyswitch
         ciphertext_modulus: CiphertextModulus<C::Element>,
     ) -> Self {
         assert!(
+            ciphertext_modulus.is_compatible_with_native_modulus(),
+            "Seeded entities are not yet compatible with non power of 2 moduli."
+        );
+
+        assert!(
             container.container_len() > 0,
             "Got an empty container to create an SeededLweKeyswitchKey"
         );
@@ -148,7 +153,7 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> SeededLweKeyswitch
             container.container_len()
         );
 
-        SeededLweKeyswitchKey {
+        Self {
             data: container,
             decomp_base_log,
             decomp_level_count,
@@ -339,8 +344,8 @@ impl<Scalar: UnsignedInteger> SeededLweKeyswitchKeyOwned<Scalar> {
         output_key_lwe_dimension: LweDimension,
         compression_seed: CompressionSeed,
         ciphertext_modulus: CiphertextModulus<Scalar>,
-    ) -> SeededLweKeyswitchKeyOwned<Scalar> {
-        SeededLweKeyswitchKeyOwned::from_container(
+    ) -> Self {
+        Self::from_container(
             vec![
                 fill_with;
                 input_key_lwe_dimension.0

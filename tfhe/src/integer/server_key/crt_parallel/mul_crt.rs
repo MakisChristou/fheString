@@ -15,6 +15,7 @@ impl ServerKey {
     ///
     /// // Generate the client key and the server key:
     /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
     /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 29;
@@ -28,7 +29,7 @@ impl ServerKey {
     /// sks.unchecked_crt_mul_assign_parallelized(&mut ctxt_1, &ctxt_2);
     /// // Decrypt
     /// let res = cks.decrypt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn unchecked_crt_mul_assign_parallelized(
         &self,
@@ -38,9 +39,14 @@ impl ServerKey {
         ct_left
             .blocks
             .par_iter_mut()
-            .zip(&ct_right.blocks)
+            .zip(ct_right.blocks.par_iter())
             .for_each(|(ct_left, ct_right)| {
-                self.key.unchecked_mul_lsb_assign(ct_left, ct_right);
+                if ct_left.message_modulus.0 <= ct_left.carry_modulus.0 {
+                    self.key.unchecked_mul_lsb_assign(ct_left, ct_right);
+                } else {
+                    self.key
+                        .unchecked_mul_lsb_small_carry_assign(ct_left, ct_right);
+                }
             });
     }
 
@@ -67,6 +73,7 @@ impl ServerKey {
     /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
     /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 29;
@@ -81,7 +88,7 @@ impl ServerKey {
     ///
     /// // Decrypt
     /// let res = cks.decrypt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_mul_assign_parallelized(
         &self,
@@ -91,7 +98,7 @@ impl ServerKey {
         ct_left
             .blocks
             .par_iter_mut()
-            .zip(&mut ct_right.blocks)
+            .zip(ct_right.blocks.par_iter_mut())
             .for_each(|(block_left, block_right)| {
                 self.key.smart_mul_lsb_assign(block_left, block_right);
             });

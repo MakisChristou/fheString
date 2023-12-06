@@ -1,12 +1,17 @@
 use super::*;
-use crate::core_crypto::commons::test_tools::{torus_modular_diff, variance};
+use crate::core_crypto::algorithms::misc::check_clear_content_respects_mod;
+use crate::core_crypto::commons::test_tools::{
+    modular_distance, modular_distance_custom_mod, torus_modular_diff, variance,
+};
 
 // This is 1 / 16 which is exactly representable in an f64 (even an f32)
 // 1 / 32 is too strict and fails the tests
 const RELATIVE_TOLERANCE: f64 = 0.0625;
 
+const NB_TESTS: usize = 1000;
+
 fn lwe_encrypt_decrypt_noise_distribution_custom_mod<Scalar: UnsignedTorus + CastInto<usize>>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let lwe_dimension = params.lwe_dimension;
     let lwe_modular_std_dev = params.lwe_modular_std_dev;
@@ -17,7 +22,6 @@ fn lwe_encrypt_decrypt_noise_distribution_custom_mod<Scalar: UnsignedTorus + Cas
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 1000;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -49,7 +53,10 @@ fn lwe_encrypt_decrypt_noise_distribution_custom_mod<Scalar: UnsignedTorus + Cas
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&ct, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &ct,
+                ciphertext_modulus
+            ));
 
             let decrypted = decrypt_lwe_ciphertext(&lwe_sk, &ct);
 
@@ -57,13 +64,12 @@ fn lwe_encrypt_decrypt_noise_distribution_custom_mod<Scalar: UnsignedTorus + Cas
 
             assert_eq!(msg, decoded);
 
-            let torus_distance = torus_modular_diff(plaintext.0, decrypted.0, ciphertext_modulus);
-            noise_samples.push(torus_distance);
+            let torus_diff = torus_modular_diff(plaintext.0, decrypted.0, ciphertext_modulus);
+            noise_samples.push(torus_diff);
         }
     }
 
     let measured_variance = variance(&noise_samples);
-
     let var_abs_diff = (expected_variance.0 - measured_variance.0).abs();
     let tolerance_threshold = RELATIVE_TOLERANCE * expected_variance.0;
     assert!(
@@ -77,6 +83,7 @@ fn lwe_encrypt_decrypt_noise_distribution_custom_mod<Scalar: UnsignedTorus + Cas
 
 create_parametrized_test!(lwe_encrypt_decrypt_noise_distribution_custom_mod {
     TEST_PARAMS_4_BITS_NATIVE_U64,
+    TEST_PARAMS_3_BITS_SOLINAS_U64,
     TEST_PARAMS_3_BITS_63_U64
 });
 
@@ -103,7 +110,7 @@ fn test_variance_increase_cpk_formula() {
 fn lwe_compact_public_encrypt_noise_distribution_custom_mod<
     Scalar: UnsignedTorus + CastInto<usize>,
 >(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let lwe_dimension = LweDimension(params.polynomial_size.0);
     let glwe_modular_std_dev = params.glwe_modular_std_dev;
@@ -115,7 +122,6 @@ fn lwe_compact_public_encrypt_noise_distribution_custom_mod<
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 1000;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -156,7 +162,10 @@ fn lwe_compact_public_encrypt_noise_distribution_custom_mod<
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&ct, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &ct,
+                ciphertext_modulus
+            ));
 
             let decrypted = decrypt_lwe_ciphertext(&lwe_sk, &ct);
 
@@ -164,8 +173,8 @@ fn lwe_compact_public_encrypt_noise_distribution_custom_mod<
 
             assert_eq!(msg, decoded);
 
-            let torus_distance = torus_modular_diff(plaintext.0, decrypted.0, ciphertext_modulus);
-            noise_samples.push(torus_distance);
+            let torus_diff = torus_modular_diff(plaintext.0, decrypted.0, ciphertext_modulus);
+            noise_samples.push(torus_diff);
         }
     }
 
@@ -183,4 +192,71 @@ fn lwe_compact_public_encrypt_noise_distribution_custom_mod<
 
 create_parametrized_test!(lwe_compact_public_encrypt_noise_distribution_custom_mod {
     TEST_PARAMS_4_BITS_NATIVE_U64
+});
+
+fn random_noise_roundtrip<Scalar: UnsignedTorus + CastInto<usize>>(
+    params: ClassicTestParams<Scalar>,
+) {
+    let mut rsc = TestResources::new();
+    let noise = params.glwe_modular_std_dev;
+    let ciphertext_modulus = params.ciphertext_modulus;
+    let encryption_rng = &mut rsc.encryption_random_generator;
+    let expected_variance = Variance(noise.get_variance());
+
+    let num_ouptuts = 100_000;
+
+    let mut output: Vec<_> = vec![Scalar::ZERO; num_ouptuts];
+
+    encryption_rng.fill_slice_with_random_noise_custom_mod(&mut output, noise, ciphertext_modulus);
+
+    assert!(check_clear_content_respects_mod(
+        &output,
+        ciphertext_modulus
+    ));
+
+    for val in output.iter().copied() {
+        if ciphertext_modulus.is_native_modulus() {
+            let float_torus = val.into_torus();
+            let from_torus = Scalar::from_torus(float_torus);
+            assert!(
+                modular_distance(val, from_torus)
+                    < (Scalar::ONE << (Scalar::BITS.saturating_sub(f64::MANTISSA_DIGITS as usize))),
+                "val={val}, from_torus={from_torus}, float_torus={float_torus}"
+            );
+        } else {
+            let custom_modulus_as_scalar: Scalar =
+                ciphertext_modulus.get_custom_modulus().cast_into();
+
+            let float_torus = val.into_torus_custom_mod(custom_modulus_as_scalar);
+            let from_torus = Scalar::from_torus_custom_mod(float_torus, custom_modulus_as_scalar);
+            assert!(from_torus < custom_modulus_as_scalar);
+            assert!(
+                modular_distance_custom_mod(val, from_torus, custom_modulus_as_scalar)
+                    < (Scalar::ONE << (Scalar::BITS.saturating_sub(f64::MANTISSA_DIGITS as usize))),
+                "val={val}, from_torus={from_torus}, float_torus={float_torus}"
+            );
+        }
+    }
+
+    let output: Vec<_> = output
+        .into_iter()
+        .map(|x| torus_modular_diff(Scalar::ZERO, x, ciphertext_modulus))
+        .collect();
+
+    let measured_variance = variance(&output);
+    let var_abs_diff = (expected_variance.0 - measured_variance.0).abs();
+    let tolerance_threshold = RELATIVE_TOLERANCE * expected_variance.0;
+    assert!(
+        var_abs_diff < tolerance_threshold,
+        "Absolute difference for variance: {var_abs_diff}, \
+            tolerance threshold: {tolerance_threshold}, \
+            got variance: {measured_variance:?}, \
+            expected variance: {expected_variance:?}"
+    );
+}
+
+create_parametrized_test!(random_noise_roundtrip {
+    TEST_PARAMS_4_BITS_NATIVE_U64,
+    TEST_PARAMS_3_BITS_SOLINAS_U64,
+    TEST_PARAMS_3_BITS_63_U64
 });

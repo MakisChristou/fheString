@@ -1,5 +1,4 @@
 use crate::integer::server_key::CheckError;
-use crate::integer::server_key::CheckError::CarryFull;
 use crate::integer::{CrtCiphertext, ServerKey};
 
 impl ServerKey {
@@ -13,23 +12,24 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 2;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// sks.unchecked_crt_scalar_mul_assign(&mut ctxt_1, clear_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn unchecked_crt_scalar_mul(&self, ctxt: &CrtCiphertext, scalar: u64) -> CrtCiphertext {
         let mut ct_result = ctxt.clone();
@@ -40,8 +40,18 @@ impl ServerKey {
 
     pub fn unchecked_crt_scalar_mul_assign(&self, ctxt: &mut CrtCiphertext, scalar: u64) {
         for (ct_i, mod_i) in ctxt.blocks.iter_mut().zip(ctxt.moduli.iter()) {
-            self.key
-                .unchecked_scalar_mul_assign(ct_i, (scalar % mod_i) as u8);
+            let scalar_i = (scalar % mod_i) as u8;
+            if self
+                .key
+                .max_degree
+                .validate(ct_i.degree * scalar_i as usize)
+                .is_ok()
+            {
+                self.key.unchecked_scalar_mul_assign(ct_i, scalar_i);
+            } else {
+                self.key
+                    .unchecked_scalar_mul_lsb_small_carry_modulus_assign(ct_i, scalar_i);
+            }
         }
     }
 
@@ -50,60 +60,60 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 2;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
-    /// let tmp = sks.is_crt_scalar_mul_possible(&mut ctxt_1, clear_2);
-    ///
-    /// assert_eq!(true, tmp);
+    /// sks.is_crt_scalar_mul_possible(&mut ctxt_1, clear_2)
+    ///     .unwrap();
     /// ```
-    pub fn is_crt_scalar_mul_possible(&self, ctxt: &CrtCiphertext, scalar: u64) -> bool {
+    pub fn is_crt_scalar_mul_possible(
+        &self,
+        ctxt: &CrtCiphertext,
+        scalar: u64,
+    ) -> Result<(), CheckError> {
         for (ct_i, mod_i) in ctxt.blocks.iter().zip(ctxt.moduli.iter()) {
-            if !self
-                .key
-                .is_scalar_mul_possible(ct_i, (scalar % mod_i) as u8)
-            {
-                return false;
-            }
+            self.key
+                .is_scalar_mul_possible(ct_i, (scalar % mod_i) as u8)?;
         }
-        true
+        Ok(())
     }
 
     /// Computes homomorphically a multiplication between a scalar and a ciphertext.
     ///
     /// If the operation can be performed, the result is returned in a new ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
     /// ```rust
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 2;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// sks.checked_crt_scalar_mul_assign(&mut ctxt_1, clear_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// # Ok(())
     /// # }
     /// ```
@@ -115,38 +125,32 @@ impl ServerKey {
         let mut ct_result = ct.clone();
 
         // If the ciphertext cannot be multiplied without exceeding the capacity of a ciphertext
-        if self.is_crt_scalar_mul_possible(ct, scalar) {
-            ct_result = self.unchecked_crt_scalar_mul(&ct_result, scalar);
+        self.is_crt_scalar_mul_possible(ct, scalar)?;
+        ct_result = self.unchecked_crt_scalar_mul(&ct_result, scalar);
 
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        Ok(ct_result)
     }
 
     /// Computes homomorphically a multiplication between a scalar and a ciphertext.
     ///
     /// If the operation can be performed, the result is assigned to the ciphertext given
     /// as parameter.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     pub fn checked_crt_scalar_mul_assign(
         &self,
         ct: &mut CrtCiphertext,
         scalar: u64,
     ) -> Result<(), CheckError> {
         // If the ciphertext cannot be multiplied without exceeding the capacity of a ciphertext
-        if self.is_crt_scalar_mul_possible(ct, scalar) {
-            self.unchecked_crt_scalar_mul_assign(ct, scalar);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_crt_scalar_mul_possible(ct, scalar)?;
+        self.unchecked_crt_scalar_mul_assign(ct, scalar);
+        Ok(())
     }
 
     /// Computes homomorphically a multiplication between a scalar and a ciphertext.
     ///
     /// `small` means the scalar value shall fit in a __shortint block__.
-    /// For example, if the parameters are PARAM_MESSAGE_2_CARRY_2_KS_PBS,
+    /// For example, if the parameters are PARAM_MESSAGE_3_CARRY_3_KS_PBS,
     /// the scalar should fit in 2 bits.
     ///
     /// The result is returned as a new ciphertext.
@@ -154,35 +158,39 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 14;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// let ctxt = sks.smart_crt_scalar_mul(&mut ctxt_1, clear_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_scalar_mul(&self, ctxt: &mut CrtCiphertext, scalar: u64) -> CrtCiphertext {
-        if !self.is_crt_scalar_mul_possible(ctxt, scalar) {
+        if self.is_crt_scalar_mul_possible(ctxt, scalar).is_err() {
             self.full_extract_message_assign(ctxt);
         }
+
+        self.is_crt_scalar_mul_possible(ctxt, scalar).unwrap();
+
         self.unchecked_crt_scalar_mul(ctxt, scalar)
     }
 
     /// Computes homomorphically a multiplication between a scalar and a ciphertext.
     ///
     /// `small` means the scalar shall value fit in a __shortint block__.
-    /// For example, if the parameters are PARAM_MESSAGE_2_CARRY_2_KS_PBS,
+    /// For example, if the parameters are PARAM_MESSAGE_3_CARRY_3_KS_PBS,
     /// the scalar should fit in 2 bits.
     ///
     /// The result is assigned to the input ciphertext
@@ -190,37 +198,42 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 14;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// sks.smart_crt_scalar_mul_assign(&mut ctxt_1, clear_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_scalar_mul_assign(&self, ctxt: &mut CrtCiphertext, scalar: u64) {
-        if !self.is_crt_small_scalar_mul_possible(ctxt, scalar) {
+        if self.is_crt_small_scalar_mul_possible(ctxt, scalar).is_err() {
             self.full_extract_message_assign(ctxt);
         }
+        self.is_crt_scalar_mul_possible(ctxt, scalar).unwrap();
+
         self.unchecked_crt_scalar_mul_assign(ctxt, scalar);
     }
 
-    pub fn is_crt_small_scalar_mul_possible(&self, ctxt: &CrtCiphertext, scalar: u64) -> bool {
+    pub fn is_crt_small_scalar_mul_possible(
+        &self,
+        ctxt: &CrtCiphertext,
+        scalar: u64,
+    ) -> Result<(), CheckError> {
         for ct_i in ctxt.blocks.iter() {
-            if !self.key.is_scalar_mul_possible(ct_i, scalar as u8) {
-                return false;
-            }
+            self.key.is_scalar_mul_possible(ct_i, scalar as u8)?;
         }
-        true
+        Ok(())
     }
 }

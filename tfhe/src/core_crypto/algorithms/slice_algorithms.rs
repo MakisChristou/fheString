@@ -38,6 +38,31 @@ where
         })
 }
 
+/// This primitive is meant to manage the dot product avoiding overflow on multiplication by casting
+/// to u128, for example for u64, avoiding overflow on each multiplication (as u64::MAX * u64::MAX <
+/// u128::MAX)
+pub fn slice_wrapping_dot_product_custom_mod<Scalar>(
+    lhs: &[Scalar],
+    rhs: &[Scalar],
+    modulus: Scalar,
+) -> Scalar
+where
+    Scalar: UnsignedInteger,
+{
+    assert!(
+        lhs.len() == rhs.len(),
+        "lhs (len: {}) and rhs (len: {}) must have the same length",
+        lhs.len(),
+        rhs.len()
+    );
+
+    lhs.iter()
+        .zip(rhs.iter())
+        .fold(Scalar::ZERO, |acc, (&left, &right)| {
+            acc.wrapping_add_custom_mod(left.wrapping_mul_custom_mod(right, modulus), modulus)
+        })
+}
+
 /// Add a slice containing unsigned integers to another one element-wise.
 ///
 /// # Note
@@ -78,6 +103,33 @@ where
         .for_each(|(out, (&lhs, &rhs))| *out = lhs.wrapping_add(rhs));
 }
 
+pub fn slice_wrapping_add_custom_mod<Scalar>(
+    output: &mut [Scalar],
+    lhs: &[Scalar],
+    rhs: &[Scalar],
+    custom_modulus: Scalar,
+) where
+    Scalar: UnsignedInteger,
+{
+    assert!(
+        lhs.len() == rhs.len(),
+        "lhs (len: {}) and rhs (len: {}) must have the same length",
+        lhs.len(),
+        rhs.len()
+    );
+    assert!(
+        output.len() == lhs.len(),
+        "output (len: {}) and rhs (len: {}) must have the same length",
+        output.len(),
+        lhs.len()
+    );
+
+    output
+        .iter_mut()
+        .zip(lhs.iter().zip(rhs.iter()))
+        .for_each(|(out, (&lhs, &rhs))| *out = lhs.wrapping_add_custom_mod(rhs, custom_modulus));
+}
+
 /// Add a slice containing unsigned integers to another one element-wise and in place.
 ///
 /// # Note
@@ -108,6 +160,25 @@ where
     lhs.iter_mut()
         .zip(rhs.iter())
         .for_each(|(lhs, &rhs)| *lhs = (*lhs).wrapping_add(rhs));
+}
+
+pub fn slice_wrapping_add_assign_custom_mod<Scalar>(
+    lhs: &mut [Scalar],
+    rhs: &[Scalar],
+    custom_modulus: Scalar,
+) where
+    Scalar: UnsignedInteger,
+{
+    assert!(
+        lhs.len() == rhs.len(),
+        "lhs (len: {}) and rhs (len: {}) must have the same length",
+        lhs.len(),
+        rhs.len()
+    );
+
+    lhs.iter_mut()
+        .zip(rhs.iter())
+        .for_each(|(lhs, &rhs)| *lhs = (*lhs).wrapping_add_custom_mod(rhs, custom_modulus));
 }
 
 /// Add a slice containing unsigned integers to another one mutiplied by a scalar.
@@ -187,6 +258,33 @@ where
         .for_each(|(out, (&lhs, &rhs))| *out = lhs.wrapping_sub(rhs));
 }
 
+pub fn slice_wrapping_sub_custom_mod<Scalar>(
+    output: &mut [Scalar],
+    lhs: &[Scalar],
+    rhs: &[Scalar],
+    custom_modulus: Scalar,
+) where
+    Scalar: UnsignedInteger,
+{
+    assert!(
+        lhs.len() == rhs.len(),
+        "lhs (len: {}) and rhs (len: {}) must have the same length",
+        lhs.len(),
+        rhs.len()
+    );
+    assert!(
+        output.len() == lhs.len(),
+        "output (len: {}) and rhs (len: {}) must have the same length",
+        output.len(),
+        lhs.len()
+    );
+
+    output
+        .iter_mut()
+        .zip(lhs.iter().zip(rhs.iter()))
+        .for_each(|(out, (&lhs, &rhs))| *out = lhs.wrapping_sub_custom_mod(rhs, custom_modulus));
+}
+
 /// Subtract a slice containing unsigned integers to another one, element-wise and in place.
 ///
 /// # Note
@@ -219,6 +317,25 @@ where
         .for_each(|(lhs, &rhs)| *lhs = (*lhs).wrapping_sub(rhs));
 }
 
+pub fn slice_wrapping_sub_assign_custom_mod<Scalar>(
+    lhs: &mut [Scalar],
+    rhs: &[Scalar],
+    custom_modulus: Scalar,
+) where
+    Scalar: UnsignedInteger,
+{
+    assert!(
+        lhs.len() == rhs.len(),
+        "lhs (len: {}) and rhs (len: {}) must have the same length",
+        lhs.len(),
+        rhs.len()
+    );
+
+    lhs.iter_mut()
+        .zip(rhs.iter())
+        .for_each(|(lhs, &rhs)| *lhs = (*lhs).wrapping_sub_custom_mod(rhs, custom_modulus));
+}
+
 /// Subtract a slice containing unsigned integers to another one mutiplied by a scalar,
 /// element-wise and in place.
 ///
@@ -228,6 +345,11 @@ where
 ///
 /// Computations wrap around (similar to computing modulo $2^{n\_{bits}}$) when exceeding the
 /// unsigned integer capacity.
+///
+/// This functions has hardcoded cases for small values for `scalar` in $[-16, 16]$ which allows
+/// for specifically optimized code paths (a multiplication by a power of 2 can be changed to shift
+/// by the compiler), this yields significant performance improvements for the keyswitch which
+/// heavily relies on that primitive.
 ///
 /// # Example
 ///
@@ -245,15 +367,118 @@ pub fn slice_wrapping_sub_scalar_mul_assign<Scalar>(
 ) where
     Scalar: UnsignedInteger,
 {
+    struct Impl<'a, Scalar> {
+        lhs: &'a mut [Scalar],
+        rhs: &'a [Scalar],
+        scalar: Scalar,
+    }
+
+    impl<Scalar: UnsignedInteger> pulp::NullaryFnOnce for Impl<'_, Scalar> {
+        type Output = ();
+
+        #[inline(always)]
+        fn call(self) -> Self::Output {
+            let Self { lhs, rhs, scalar } = self;
+
+            macro_rules! spec_constant {
+                ($constant: expr) => {
+                    if scalar == Scalar::cast_from($constant as u128) {
+                        for (lhs, &rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                            *lhs = (*lhs).wrapping_sub(
+                                rhs.wrapping_mul(Scalar::cast_from($constant as u128)),
+                            )
+                        }
+                        return;
+                    }
+                };
+            }
+
+            // Manage all values with hardcoded paths for values in [-16; 16]
+            // This takes care of all keyswitch base logs <= 5
+            // The negated value is handled in the spec constant to avoid bad surprises with the
+            // constant type vs the Scalar type
+            // UnsignedInteger is CastFrom<u128> by default, we give the constant in a readable form
+            // as an i128, it then gets cast to u128
+            spec_constant!(-16i128);
+            spec_constant!(-15i128);
+            spec_constant!(-14i128);
+            spec_constant!(-13i128);
+            spec_constant!(-12i128);
+            spec_constant!(-11i128);
+            spec_constant!(-10i128);
+            spec_constant!(-9i128);
+            spec_constant!(-8i128);
+            spec_constant!(-7i128);
+            spec_constant!(-6i128);
+            spec_constant!(-5i128);
+            spec_constant!(-4i128);
+            spec_constant!(-3i128);
+            spec_constant!(-2i128);
+            spec_constant!(-1i128);
+            spec_constant!(0i128);
+            spec_constant!(1i128);
+            spec_constant!(2i128);
+            spec_constant!(3i128);
+            spec_constant!(4i128);
+            spec_constant!(5i128);
+            spec_constant!(6i128);
+            spec_constant!(7i128);
+            spec_constant!(8i128);
+            spec_constant!(9i128);
+            spec_constant!(10i128);
+            spec_constant!(11i128);
+            spec_constant!(12i128);
+            spec_constant!(13i128);
+            spec_constant!(14i128);
+            spec_constant!(15i128);
+            spec_constant!(16i128);
+
+            // Fall back case, will likely be slower as the compiler cannot hard code optimized code
+            // like filling with 0s for the 0 case, noop for the 1 case, shift left by 1 for 2, etc.
+            for (lhs, &rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                *lhs = (*lhs).wrapping_sub(rhs.wrapping_mul(scalar));
+            }
+        }
+    }
+
+    // Const evaluated
+    assert!(
+        Scalar::BITS <= 128,
+        "Scalar has more than 128 bits, \
+        specialized constants will not work properly for negative values."
+    );
+
     assert!(
         lhs.len() == rhs.len(),
         "lhs (len: {}) and rhs (len: {}) must have the same length",
         lhs.len(),
         rhs.len()
     );
-    lhs.iter_mut()
-        .zip(rhs.iter())
-        .for_each(|(lhs, &rhs)| *lhs = (*lhs).wrapping_sub(rhs.wrapping_mul(scalar)));
+
+    pulp::Arch::new().dispatch(Impl { lhs, rhs, scalar });
+}
+
+/// This primitive is meant to manage the sub_scalar_mul operation for values that were cast to a
+/// bigger type, for example u64 to u128, avoiding overflow on each multiplication (as u64::MAX *
+/// u64::MAX < u128::MAX )
+pub fn slice_wrapping_sub_scalar_mul_assign_custom_modulus<Scalar>(
+    lhs: &mut [Scalar],
+    rhs: &[Scalar],
+    scalar: Scalar,
+    modulus: Scalar,
+) where
+    Scalar: UnsignedInteger,
+{
+    assert!(
+        lhs.len() == rhs.len(),
+        "lhs (len: {}) and rhs (len: {}) must have the same length",
+        lhs.len(),
+        rhs.len()
+    );
+    lhs.iter_mut().zip(rhs.iter()).for_each(|(lhs, &rhs)| {
+        *lhs =
+            (*lhs).wrapping_sub_custom_mod(rhs.wrapping_mul_custom_mod(scalar, modulus), modulus);
+    });
 }
 
 /// Compute the opposite of a slice containing unsigned integers, element-wise and in place.
@@ -280,6 +505,17 @@ where
         .for_each(|elt| *elt = (*elt).wrapping_neg());
 }
 
+pub fn slice_wrapping_opposite_assign_custom_mod<Scalar>(
+    slice: &mut [Scalar],
+    custom_modulus: Scalar,
+) where
+    Scalar: UnsignedInteger,
+{
+    slice
+        .iter_mut()
+        .for_each(|elt| *elt = (*elt).wrapping_neg_custom_mod(custom_modulus));
+}
+
 /// Multiply a slice containing unsigned integers by a scalar, element-wise and in place.
 ///
 /// # Note
@@ -302,6 +538,17 @@ where
 {
     lhs.iter_mut()
         .for_each(|lhs| *lhs = (*lhs).wrapping_mul(rhs));
+}
+
+pub fn slice_wrapping_scalar_mul_assign_custom_mod<Scalar>(
+    lhs: &mut [Scalar],
+    rhs: Scalar,
+    custom_modulus: Scalar,
+) where
+    Scalar: UnsignedInteger,
+{
+    lhs.iter_mut()
+        .for_each(|lhs| *lhs = (*lhs).wrapping_mul_custom_mod(rhs, custom_modulus));
 }
 
 pub fn slice_wrapping_scalar_div_assign<Scalar>(lhs: &mut [Scalar], rhs: Scalar)

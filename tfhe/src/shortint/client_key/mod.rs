@@ -1,12 +1,15 @@
 //! Module with the definition of the ClientKey.
 
 use crate::core_crypto::entities::*;
+use crate::core_crypto::prelude::decrypt_lwe_ciphertext;
 use crate::shortint::ciphertext::{Ciphertext, CompressedCiphertext};
 use crate::shortint::engine::ShortintEngine;
 use crate::shortint::parameters::{MessageModulus, ShortintParameterSet};
 use crate::shortint::CarryModulus;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+
+use super::PBSOrder;
 
 /// A structure containing the client key, which must be kept secret.
 ///
@@ -38,15 +41,13 @@ impl ClientKey {
     /// // Generate the client key:
     /// let cks = ClientKey::new(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
     /// ```
-    pub fn new<P>(parameters: P) -> ClientKey
+    pub fn new<P>(parameters: P) -> Self
     where
         P: TryInto<ShortintParameterSet>,
         <P as TryInto<ShortintParameterSet>>::Error: Debug,
     {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .new_client_key(parameters.try_into().unwrap())
-                .unwrap()
+            engine.new_client_key(parameters.try_into().unwrap())
         })
     }
 
@@ -78,7 +79,7 @@ impl ClientKey {
     /// assert_eq!(msg % modulus, dec);
     /// ```
     pub fn encrypt(&self, message: u64) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| engine.encrypt(self, message).unwrap())
+        ShortintEngine::with_thread_local_mut(|engine| engine.encrypt(self, message))
     }
 
     /// Encrypt a integer message using the client key returning a compressed ciphertext.
@@ -113,9 +114,7 @@ impl ClientKey {
     /// assert_eq!(msg % modulus, dec);
     /// ```
     pub fn encrypt_compressed(&self, message: u64) -> CompressedCiphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.encrypt_compressed(self, message).unwrap()
-        })
+        ShortintEngine::with_thread_local_mut(|engine| engine.encrypt_compressed(self, message))
     }
 
     /// Encrypt a small integer message using the client key with a specific message modulus
@@ -144,9 +143,7 @@ impl ClientKey {
         message_modulus: MessageModulus,
     ) -> Ciphertext {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .encrypt_with_message_modulus(self, message, message_modulus)
-                .unwrap()
+            engine.encrypt_with_message_modulus(self, message, message_modulus)
         })
     }
 
@@ -183,14 +180,12 @@ impl ClientKey {
         carry_modulus: CarryModulus,
     ) -> Ciphertext {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .encrypt_with_message_and_carry_modulus(
-                    self,
-                    message,
-                    message_modulus,
-                    carry_modulus,
-                )
-                .unwrap()
+            engine.encrypt_with_message_and_carry_modulus(
+                self,
+                message,
+                message_modulus,
+                carry_modulus,
+            )
         })
     }
 
@@ -223,9 +218,7 @@ impl ClientKey {
         message_modulus: MessageModulus,
     ) -> CompressedCiphertext {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .encrypt_with_message_modulus_compressed(self, message, message_modulus)
-                .unwrap()
+            engine.encrypt_with_message_modulus_compressed(self, message, message_modulus)
         })
     }
 
@@ -251,9 +244,7 @@ impl ClientKey {
     /// assert_eq!(msg, dec);
     /// ```
     pub fn unchecked_encrypt(&self, message: u64) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_encrypt(self, message).unwrap()
-        })
+        ShortintEngine::with_thread_local_mut(|engine| engine.unchecked_encrypt(self, message))
     }
 
     /// Decrypt a ciphertext encrypting an integer message and carries using the client key.
@@ -288,9 +279,26 @@ impl ClientKey {
     /// assert_eq!(msg, dec);
     /// ```
     pub fn decrypt_message_and_carry(&self, ct: &Ciphertext) -> u64 {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.decrypt_message_and_carry(self, ct).unwrap()
-        })
+        let lwe_decryption_key = match ct.pbs_order {
+            PBSOrder::KeyswitchBootstrap => &self.large_lwe_secret_key,
+            PBSOrder::BootstrapKeyswitch => &self.small_lwe_secret_key,
+        };
+
+        // decryption
+        let decrypted_encoded = decrypt_lwe_ciphertext(lwe_decryption_key, &ct.ct);
+
+        let decrypted_u64: u64 = decrypted_encoded.0;
+
+        let delta = (1_u64 << 63)
+            / (self.parameters.message_modulus().0 * self.parameters.carry_modulus().0) as u64;
+
+        //The bit before the message
+        let rounding_bit = delta >> 1;
+
+        //compute the rounding bit
+        let rounding = (decrypted_u64 & rounding_bit) << 1;
+
+        (decrypted_u64.wrapping_add(rounding)) / delta
     }
 
     /// Decrypt a ciphertext encrypting a message using the client key.
@@ -325,7 +333,7 @@ impl ClientKey {
     /// assert_eq!(msg, dec);
     /// ```
     pub fn decrypt(&self, ct: &Ciphertext) -> u64 {
-        ShortintEngine::with_thread_local_mut(|engine| engine.decrypt(self, ct).unwrap())
+        self.decrypt_message_and_carry(ct) % ct.message_modulus.0 as u64
     }
 
     /// Encrypt a small integer message using the client key without padding bit.
@@ -349,7 +357,7 @@ impl ClientKey {
     /// ```
     pub fn encrypt_without_padding(&self, message: u64) -> Ciphertext {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine.encrypt_without_padding(self, message).unwrap()
+            engine.encrypt_without_padding(self, message)
         })
     }
 
@@ -377,9 +385,7 @@ impl ClientKey {
     /// ```
     pub fn encrypt_without_padding_compressed(&self, message: u64) -> CompressedCiphertext {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .encrypt_without_padding_compressed(self, message)
-                .unwrap()
+            engine.encrypt_without_padding_compressed(self, message)
         })
     }
 
@@ -416,11 +422,27 @@ impl ClientKey {
     /// assert_eq!(msg, dec);
     /// ```
     pub fn decrypt_message_and_carry_without_padding(&self, ct: &Ciphertext) -> u64 {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .decrypt_message_and_carry_without_padding(self, ct)
-                .unwrap()
-        })
+        let lwe_decryption_key = match ct.pbs_order {
+            PBSOrder::KeyswitchBootstrap => &self.large_lwe_secret_key,
+            PBSOrder::BootstrapKeyswitch => &self.small_lwe_secret_key,
+        };
+
+        // decryption
+        let decrypted_encoded = decrypt_lwe_ciphertext(lwe_decryption_key, &ct.ct);
+
+        let decrypted_u64: u64 = decrypted_encoded.0;
+
+        let delta = ((1_u64 << 63)
+            / (self.parameters.message_modulus().0 * self.parameters.carry_modulus().0) as u64)
+            * 2;
+
+        //The bit before the message
+        let rounding_bit = delta >> 1;
+
+        //compute the rounding bit
+        let rounding = (decrypted_u64 & rounding_bit) << 1;
+
+        (decrypted_u64.wrapping_add(rounding)) / delta
     }
 
     /// Decrypt a ciphertext encrypting an integer message using the client key,
@@ -457,9 +479,7 @@ impl ClientKey {
     /// assert_eq!(msg % modulus, dec);
     /// ```
     pub fn decrypt_without_padding(&self, ct: &Ciphertext) -> u64 {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.decrypt_without_padding(self, ct).unwrap()
-        })
+        self.decrypt_message_and_carry_without_padding(ct) % ct.message_modulus.0 as u64
     }
 
     /// Encrypt a small integer message using the client key without padding bit with some modulus.
@@ -487,9 +507,7 @@ impl ClientKey {
     /// ```
     pub fn encrypt_native_crt(&self, message: u64, message_modulus: u8) -> Ciphertext {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .encrypt_native_crt(self, message, message_modulus)
-                .unwrap()
+            engine.encrypt_native_crt(self, message, message_modulus)
         })
     }
 
@@ -525,9 +543,7 @@ impl ClientKey {
         message_modulus: u8,
     ) -> CompressedCiphertext {
         ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .encrypt_native_crt_compressed(self, message, message_modulus)
-                .unwrap()
+            engine.encrypt_native_crt_compressed(self, message, message_modulus)
         })
     }
 
@@ -565,11 +581,22 @@ impl ClientKey {
     /// let dec = cks.decrypt_message_native_crt(&ct, modulus);
     /// assert_eq!(msg, dec % modulus as u64);
     /// ```
-    pub fn decrypt_message_native_crt(&self, ct: &Ciphertext, message_modulus: u8) -> u64 {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .decrypt_message_native_crt(self, ct, message_modulus as u64)
-                .unwrap()
-        })
+    pub fn decrypt_message_native_crt(&self, ct: &Ciphertext, basis: u8) -> u64 {
+        let basis = basis as u64;
+
+        let lwe_decryption_key = match ct.pbs_order {
+            PBSOrder::KeyswitchBootstrap => &self.large_lwe_secret_key,
+            PBSOrder::BootstrapKeyswitch => &self.small_lwe_secret_key,
+        };
+
+        // decryption
+        let decrypted_encoded = decrypt_lwe_ciphertext(lwe_decryption_key, &ct.ct);
+
+        let decrypted_u64: u64 = decrypted_encoded.0;
+
+        let mut result = decrypted_u64 as u128 * basis as u128;
+        result = result.wrapping_add((result & 1 << 63) << 1) / (1 << 64);
+
+        result as u64 % basis
     }
 }

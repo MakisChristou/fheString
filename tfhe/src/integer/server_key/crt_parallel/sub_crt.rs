@@ -10,24 +10,25 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 5;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
-    /// let mut ctxt_2 = cks.encrypt_crt(clear_2, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
+    /// let mut ctxt_2 = cks.encrypt(clear_2);
     ///
     /// let ctxt = sks.unchecked_crt_sub_parallelized(&mut ctxt_1, &mut ctxt_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt);
-    /// assert_eq!((clear_1 - clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt);
+    /// assert_eq!((clear_1 - clear_2) % modulus, res);
     /// ```
     pub fn unchecked_crt_sub_parallelized(
         &self,
@@ -48,24 +49,25 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 5;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
-    /// let mut ctxt_2 = cks.encrypt_crt(clear_2, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
+    /// let mut ctxt_2 = cks.encrypt(clear_2);
     ///
     /// let ctxt = sks.unchecked_crt_sub_parallelized(&mut ctxt_1, &mut ctxt_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt);
-    /// assert_eq!((clear_1 - clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt);
+    /// assert_eq!((clear_1 - clear_2) % modulus, res);
     /// ```
     pub fn unchecked_crt_sub_assign_parallelized(
         &self,
@@ -81,24 +83,25 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 5;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
-    /// let mut ctxt_2 = cks.encrypt_crt(clear_2, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
+    /// let mut ctxt_2 = cks.encrypt(clear_2);
     ///
     /// let ctxt = sks.smart_crt_sub_parallelized(&mut ctxt_1, &mut ctxt_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt);
-    /// assert_eq!((clear_1 - clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt);
+    /// assert_eq!((clear_1 - clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_sub_parallelized(
         &self,
@@ -106,12 +109,14 @@ impl ServerKey {
         ctxt_right: &mut CrtCiphertext,
     ) -> CrtCiphertext {
         // If the ciphertext cannot be added together without exceeding the capacity of a ciphertext
-        if !self.is_crt_sub_possible(ctxt_left, ctxt_right) {
+        if self.is_crt_sub_possible(ctxt_left, ctxt_right).is_err() {
             rayon::join(
                 || self.full_extract_message_assign_parallelized(ctxt_left),
                 || self.full_extract_message_assign_parallelized(ctxt_right),
             );
         }
+
+        self.is_crt_sub_possible(ctxt_left, ctxt_right).unwrap();
 
         self.unchecked_crt_sub_parallelized(ctxt_left, ctxt_right)
     }
@@ -121,24 +126,25 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 5;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
-    /// let mut ctxt_2 = cks.encrypt_crt(clear_2, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
+    /// let mut ctxt_2 = cks.encrypt(clear_2);
     ///
     /// sks.smart_crt_sub_assign_parallelized(&mut ctxt_1, &mut ctxt_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 - clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 - clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_sub_assign_parallelized(
         &self,
@@ -146,12 +152,14 @@ impl ServerKey {
         ctxt_right: &mut CrtCiphertext,
     ) {
         // If the ciphertext cannot be added together without exceeding the capacity of a ciphertext
-        if !self.is_crt_sub_possible(ctxt_left, ctxt_right) {
+        if self.is_crt_sub_possible(ctxt_left, ctxt_right).is_err() {
             rayon::join(
                 || self.full_extract_message_assign_parallelized(ctxt_left),
                 || self.full_extract_message_assign_parallelized(ctxt_right),
             );
         }
+
+        self.is_crt_sub_possible(ctxt_left, ctxt_right).unwrap();
 
         self.unchecked_crt_sub_assign_parallelized(ctxt_left, ctxt_right);
     }

@@ -1,8 +1,9 @@
-use super::ServerKey;
-use crate::shortint::engine::ShortintEngine;
+use crate::core_crypto::algorithms::*;
+use crate::core_crypto::entities::*;
+use crate::core_crypto::prelude::lwe_encryption::trivially_encrypt_lwe_ciphertext;
+use crate::shortint::ciphertext::Degree;
 use crate::shortint::server_key::CheckError;
-use crate::shortint::server_key::CheckError::CarryFull;
-use crate::shortint::Ciphertext;
+use crate::shortint::{Ciphertext, ServerKey};
 
 impl ServerKey {
     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
@@ -112,8 +113,7 @@ impl ServerKey {
     /// );
     /// ```
     pub fn scalar_mul_assign(&self, ct: &mut Ciphertext, scalar: u8) {
-        let modulus = self.message_modulus.0 as u64;
-        let acc = self.generate_lookup_table(|x| (scalar as u64 * x) % modulus);
+        let acc = self.generate_msg_lookup_table(|x| scalar as u64 * x, self.message_modulus);
         self.apply_lookup_table_assign(ct, &acc);
     }
 
@@ -157,9 +157,10 @@ impl ServerKey {
     /// assert_eq!(3, clear);
     /// ```
     pub fn unchecked_scalar_mul(&self, ct: &Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_scalar_mul(ct, scalar).unwrap()
-        })
+        let mut ct_result = ct.clone();
+        self.unchecked_scalar_mul_assign(&mut ct_result, scalar);
+
+        ct_result
     }
 
     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
@@ -202,9 +203,61 @@ impl ServerKey {
     /// assert_eq!(3, clear);
     /// ```
     pub fn unchecked_scalar_mul_assign(&self, ct: &mut Ciphertext, scalar: u8) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_scalar_mul_assign(ct, scalar).unwrap()
-        })
+        unchecked_scalar_mul_assign(ct, scalar);
+    }
+
+    /// Multiply one ciphertext with a scalar in the case the carry space cannot fit the product
+    /// applying the message space modulus in the process.
+    ///
+    /// This is a bootstrapped operation.
+    ///
+    /// # Example
+    ///
+    ///```rust
+    /// use tfhe::shortint::gen_keys;
+    /// use tfhe::shortint::parameters::{
+    ///     PARAM_MESSAGE_2_CARRY_2_KS_PBS, PARAM_MESSAGE_2_CARRY_2_PBS_KS,
+    /// };
+    ///
+    /// // Generate the client key and the server key:
+    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    ///
+    /// let clear_1 = 1;
+    /// let clear_2 = 2;
+    ///
+    /// // Encrypt two messages
+    /// let mut ct_1 = cks.encrypt(clear_1);
+    ///
+    /// // Compute homomorphically a multiplication
+    /// sks.unchecked_scalar_mul_lsb_small_carry_modulus_assign(&mut ct_1, clear_2 as u8);
+    ///
+    /// // Decrypt
+    /// let res = cks.decrypt(&ct_1);
+    /// assert_eq!(clear_2 * clear_1, res);
+    ///
+    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_PBS_KS);
+    ///
+    /// // Encrypt two messages
+    /// let mut ct_1 = cks.encrypt(clear_1);
+    ///
+    /// // Compute homomorphically a multiplication
+    /// sks.unchecked_scalar_mul_lsb_small_carry_modulus_assign(&mut ct_1, clear_2 as u8);
+    ///
+    /// // Decrypt
+    /// let res = cks.decrypt(&ct_1);
+    /// assert_eq!(clear_2 * clear_1, res);
+    /// ```
+    pub fn unchecked_scalar_mul_lsb_small_carry_modulus_assign(
+        &self,
+        ct: &mut Ciphertext,
+        scalar: u8,
+    ) {
+        // Modulus of the msg in the msg bits
+        let modulus = ct.message_modulus.0 as u64;
+
+        let acc_mul = self.generate_lookup_table(|x| (x.wrapping_mul(scalar as u64)) % modulus);
+
+        self.apply_lookup_table_assign(ct, &acc_mul);
     }
 
     /// Verify if the ciphertext can be multiplied by a scalar.
@@ -224,9 +277,7 @@ impl ServerKey {
     /// let ct = cks.encrypt(2);
     ///
     /// // Verification if the scalar multiplication can be computed:
-    /// let can_be_computed = sks.is_scalar_mul_possible(&ct, 3);
-    ///
-    /// assert_eq!(can_be_computed, true);
+    /// sks.is_scalar_mul_possible(&ct, 3).unwrap();
     ///
     /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_PBS_KS);
     ///
@@ -234,21 +285,24 @@ impl ServerKey {
     /// let ct = cks.encrypt(2);
     ///
     /// // Verification if the scalar multiplication can be computed:
-    /// let can_be_computed = sks.is_scalar_mul_possible(&ct, 3);
-    ///
-    /// assert_eq!(can_be_computed, true);
+    /// sks.is_scalar_mul_possible(&ct, 3).unwrap();
     /// ```
-    pub fn is_scalar_mul_possible(&self, ct: &Ciphertext, scalar: u8) -> bool {
+    pub fn is_scalar_mul_possible(&self, ct: &Ciphertext, scalar: u8) -> Result<(), CheckError> {
         //scalar * ct.counter
-        let final_degree = scalar as usize * ct.degree.0;
+        let final_degree = scalar as usize * ct.degree.get();
 
-        final_degree <= self.max_degree.0
+        self.max_degree.validate(Degree::new(final_degree))?;
+
+        self.max_noise_level
+            .validate(ct.noise_level() * scalar as usize)?;
+
+        Ok(())
     }
 
     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
     ///
     /// If the operation is possible, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// The operation is modulo the precision bits to the power of two.
     ///
@@ -268,11 +322,8 @@ impl ServerKey {
     /// let ct = cks.encrypt(1);
     ///
     /// // Compute homomorphically a scalar multiplication:
-    /// let ct_res = sks.checked_scalar_mul(&ct, 3);
+    /// let ct_res = sks.checked_scalar_mul(&ct, 3).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// assert_eq!(clear_res, 3);
     ///
@@ -282,11 +333,8 @@ impl ServerKey {
     /// let ct = cks.encrypt(1);
     ///
     /// // Compute homomorphically a scalar multiplication:
-    /// let ct_res = sks.checked_scalar_mul(&ct, 3);
+    /// let ct_res = sks.checked_scalar_mul(&ct, 3).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// assert_eq!(clear_res, 3);
     /// ```
@@ -296,18 +344,15 @@ impl ServerKey {
         scalar: u8,
     ) -> Result<Ciphertext, CheckError> {
         //If the ciphertext cannot be multiplied without exceeding the degree max
-        if self.is_scalar_mul_possible(ct, scalar) {
-            let ct_result = self.unchecked_scalar_mul(ct, scalar);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_scalar_mul_possible(ct, scalar)?;
+        let ct_result = self.unchecked_scalar_mul(ct, scalar);
+        Ok(ct_result)
     }
 
     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
     ///
     /// If the operation is possible, the result is stored _in_ the input ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned and the ciphertext is not .
+    /// Otherwise a [CheckError] is returned and the ciphertext is not .
     ///
     /// The operation is modulo the precision bits to the power of two.
     ///
@@ -326,9 +371,7 @@ impl ServerKey {
     /// let mut ct = cks.encrypt(1);
     ///
     /// // Compute homomorphically a scalar multiplication:
-    /// let res = sks.checked_scalar_mul_assign(&mut ct, 3);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_scalar_mul_assign(&mut ct, 3).unwrap();
     ///
     /// let clear_res = cks.decrypt(&ct);
     /// assert_eq!(clear_res, 3);
@@ -339,9 +382,7 @@ impl ServerKey {
     /// let mut ct = cks.encrypt(1);
     ///
     /// // Compute homomorphically a scalar multiplication:
-    /// let res = sks.checked_scalar_mul_assign(&mut ct, 3);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_scalar_mul_assign(&mut ct, 3).unwrap();
     ///
     /// let clear_res = cks.decrypt(&ct);
     /// assert_eq!(clear_res, 3);
@@ -351,12 +392,9 @@ impl ServerKey {
         ct: &mut Ciphertext,
         scalar: u8,
     ) -> Result<(), CheckError> {
-        if self.is_scalar_mul_possible(ct, scalar) {
-            self.unchecked_scalar_mul_assign(ct, scalar);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_scalar_mul_possible(ct, scalar)?;
+        self.unchecked_scalar_mul_assign(ct, scalar);
+        Ok(())
     }
 
     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
@@ -408,10 +446,12 @@ impl ServerKey {
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(3, clear % modulus);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_mul(&self, ct: &mut Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_mul(self, ct, scalar).unwrap()
-        })
+        let mut ct_result = ct.clone();
+        self.smart_scalar_mul_assign(&mut ct_result, scalar);
+
+        ct_result
     }
 
     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
@@ -456,8 +496,35 @@ impl ServerKey {
     /// assert_eq!(3, clear);
     /// ```
     pub fn smart_scalar_mul_assign(&self, ct: &mut Ciphertext, scalar: u8) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_mul_assign(self, ct, scalar).unwrap()
-        })
+        // Direct scalar computation is possible
+        if self.is_scalar_mul_possible(ct, scalar).is_ok() {
+            self.unchecked_scalar_mul_assign(ct, scalar);
+            ct.degree = Degree::new(ct.degree.get() * scalar as usize);
+        }
+        // If the ciphertext cannot be multiplied without exceeding the degree max
+        else {
+            let acc = self.generate_msg_lookup_table(|x| scalar as u64 * x, self.message_modulus);
+            self.apply_lookup_table_assign(ct, &acc);
+            ct.degree = Degree::new(self.message_modulus.0 - 1);
+        }
+    }
+}
+
+pub(crate) fn unchecked_scalar_mul_assign(ct: &mut Ciphertext, scalar: u8) {
+    ct.set_noise_level(ct.noise_level() * scalar as usize);
+    ct.degree = Degree::new(ct.degree.get() * scalar as usize);
+
+    match scalar {
+        0 => {
+            trivially_encrypt_lwe_ciphertext(&mut ct.ct, Plaintext(0));
+        }
+        1 => {
+            // Multiplication by one is the identidy
+        }
+        scalar => {
+            let scalar = u64::from(scalar);
+            let cleartext_scalar = Cleartext(scalar);
+            lwe_ciphertext_cleartext_mul_assign(&mut ct.ct, cleartext_scalar);
+        }
     }
 }

@@ -63,16 +63,17 @@ impl KeySwitchingKey {
             key_pair_1.0.parameters.carry_modulus().0 * key_pair_1.0.parameters.message_modulus().0;
         let full_message_modulus_2 =
             key_pair_2.0.parameters.carry_modulus().0 * key_pair_2.0.parameters.message_modulus().0;
-        if !full_message_modulus_1.is_power_of_two() || !full_message_modulus_2.is_power_of_two() {
-            panic!("Cannot create casting key if the full messages moduli are not a power of 2");
-        }
+        assert!(
+            full_message_modulus_1.is_power_of_two() && full_message_modulus_2.is_power_of_two(),
+            "Cannot create casting key if the full messages moduli are not a power of 2"
+        );
 
         let nb_bits_1: i8 = full_message_modulus_1.ilog2().try_into().unwrap();
         let nb_bits_2: i8 = full_message_modulus_2.ilog2().try_into().unwrap();
 
         // Pack the keys in the casting key set:
         Self {
-            key_switching_key: key_switching_key.unwrap(),
+            key_switching_key,
             dest_server_key: key_pair_2.1.clone(),
             src_server_key: key_pair_1.1.clone(),
             cast_rshift: nb_bits_2 - nb_bits_1,
@@ -102,9 +103,12 @@ impl KeySwitchingKey {
     ///     PARAM_KEYSWITCH_1_1_KS_PBS_TO_2_2_KS_PBS,
     /// );
     ///
-    /// let cipher = ck1.encrypt(1);
+    /// let cleartext = 1;
+    /// let cipher = ck1.encrypt(cleartext);
     /// let mut cipher_2 = sk2.create_trivial(0);
     /// ksk.cast_into(&cipher, &mut cipher_2);
+    ///
+    /// assert_eq!(ck2.decrypt(&cipher_2), cleartext);
     /// ```
     pub fn cast_into(&self, ct: &Ciphertext, ct_dest: &mut Ciphertext) {
         match self.cast_rshift {
@@ -122,7 +126,10 @@ impl KeySwitchingKey {
 
             // Cast to smaller bit length: left shift, then keyswitch
             i if i < 0 => {
-                let acc = self.src_server_key.generate_lookup_table(|n| n << -i);
+                // We want to avoid the padding bit to be dirty, hence the modulus
+                let acc = self.src_server_key.generate_lookup_table(|n| {
+                    (n << -i) % (ct.carry_modulus.0 * ct.message_modulus.0) as u64
+                });
                 let shifted_cipher = self.src_server_key.apply_lookup_table(ct, &acc);
 
                 keyswitch_lwe_ciphertext(
@@ -159,8 +166,12 @@ impl KeySwitchingKey {
     ///     PARAM_KEYSWITCH_1_1_KS_PBS_TO_2_2_KS_PBS,
     /// );
     ///
-    /// let cipher = ck1.encrypt(1);
+    /// let cleartext = 1;
+    ///
+    /// let cipher = ck1.encrypt(cleartext);
     /// let cipher_2 = ksk.cast(&cipher);
+    ///
+    /// assert_eq!(ck2.decrypt(&cipher_2), cleartext);
     /// ```
     pub fn cast(&self, ct: &Ciphertext) -> Ciphertext {
         let mut ret = self.dest_server_key.create_trivial(0);

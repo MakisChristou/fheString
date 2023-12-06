@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use serde::{Deserialize, Serialize};
 
 use crate::core_crypto::prelude::{
@@ -8,7 +10,7 @@ use crate::core_crypto::prelude::{
 
 use crate::core_crypto::prelude::encrypt_lwe_ciphertext_with_compact_public_key;
 
-use crate::shortint::ciphertext::{CompactCiphertextList, Degree};
+use crate::shortint::ciphertext::{CompactCiphertextList, Degree, NoiseLevel};
 use crate::shortint::{Ciphertext, ClientKey, PBSOrder, ShortintParameterSet};
 
 use crate::shortint::engine::ShortintEngine;
@@ -40,13 +42,13 @@ fn to_plaintext_iterator(
 }
 
 impl CompactPublicKey {
-    pub fn new(client_key: &ClientKey) -> CompactPublicKey {
+    pub fn new(client_key: &ClientKey) -> Self {
         Self::try_new(client_key).expect(
             "Incompatible parameters, the lwe_dimension of the secret key must be a power of two",
         )
     }
 
-    pub fn try_new(client_key: &ClientKey) -> Option<CompactPublicKey> {
+    pub fn try_new(client_key: &ClientKey) -> Option<Self> {
         let parameters = client_key.parameters;
         let (secret_encryption_key, encryption_noise) =
             match client_key.parameters.encryption_key_choice().into() {
@@ -86,7 +88,7 @@ impl CompactPublicKey {
     }
 
     pub fn encrypt(&self, message: u64) -> Ciphertext {
-        let plain = to_plaintext_iterator([message].iter().copied(), &self.parameters)
+        let plain = to_plaintext_iterator(once(message), &self.parameters)
             .next()
             .unwrap();
 
@@ -115,13 +117,14 @@ impl CompactPublicKey {
         });
 
         let message_modulus = self.parameters.message_modulus();
-        Ciphertext {
-            ct: encrypted_ct,
-            degree: Degree(message_modulus.0 - 1),
+        Ciphertext::new(
+            encrypted_ct,
+            Degree::new(message_modulus.0 - 1),
+            NoiseLevel::NOMINAL,
             message_modulus,
-            carry_modulus: self.parameters.carry_modulus(),
-            pbs_order: self.pbs_order,
-        }
+            self.parameters.carry_modulus(),
+            self.pbs_order,
+        )
     }
 
     pub fn encrypt_slice(&self, messages: &[u64]) -> CompactCiphertextList {
@@ -178,10 +181,11 @@ impl CompactPublicKey {
         let message_modulus = self.parameters.message_modulus();
         CompactCiphertextList {
             ct_list,
-            degree: Degree(message_modulus.0 - 1),
+            degree: Degree::new(message_modulus.0 - 1),
             message_modulus,
             carry_modulus: self.parameters.carry_modulus(),
             pbs_order: self.pbs_order,
+            noise_level: NoiseLevel::NOMINAL,
         }
     }
 

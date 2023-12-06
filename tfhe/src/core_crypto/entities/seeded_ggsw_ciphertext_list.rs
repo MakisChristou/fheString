@@ -125,7 +125,12 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> SeededGgswCipherte
         decomp_level_count: DecompositionLevelCount,
         compression_seed: CompressionSeed,
         ciphertext_modulus: CiphertextModulus<C::Element>,
-    ) -> SeededGgswCiphertextList<C> {
+    ) -> Self {
+        assert!(
+            ciphertext_modulus.is_compatible_with_native_modulus(),
+            "Seeded entities are not yet compatible with non power of 2 moduli."
+        );
+
         assert!(
             container.container_len() % (decomp_level_count.0 * glwe_size.0 * polynomial_size.0)
                 == 0,
@@ -137,7 +142,7 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> SeededGgswCipherte
             container.container_len()
         );
 
-        SeededGgswCiphertextList {
+        Self {
             data: container,
             glwe_size,
             polynomial_size,
@@ -288,8 +293,8 @@ impl<Scalar: UnsignedInteger> SeededGgswCiphertextListOwned<Scalar> {
         ciphertext_count: GgswCiphertextCount,
         compression_seed: CompressionSeed,
         ciphertext_modulus: CiphertextModulus<Scalar>,
-    ) -> SeededGgswCiphertextListOwned<Scalar> {
-        SeededGgswCiphertextList::from_container(
+    ) -> Self {
+        Self::from_container(
             vec![
                 fill_with;
                 ciphertext_count.0
@@ -323,7 +328,7 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> CreateFrom<C>
     type Metadata = SeededGgswCiphertextListCreationMetadata<Scalar>;
 
     #[inline]
-    fn create_from(from: C, meta: Self::Metadata) -> SeededGgswCiphertextList<C> {
+    fn create_from(from: C, meta: Self::Metadata) -> Self {
         let SeededGgswCiphertextListCreationMetadata(
             glwe_size,
             polynomial_size,
@@ -332,7 +337,7 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> CreateFrom<C>
             compression_seed,
             ciphertext_modulus,
         ) = meta;
-        SeededGgswCiphertextList::from_container(
+        Self::from_container(
             from,
             glwe_size,
             polynomial_size,

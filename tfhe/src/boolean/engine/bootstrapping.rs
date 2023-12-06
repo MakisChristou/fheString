@@ -8,7 +8,6 @@ use crate::core_crypto::commons::parameters::{CiphertextModulus, PBSOrder};
 use crate::core_crypto::entities::*;
 use crate::core_crypto::fft_impl::fft64::math::fft::Fft;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
 /// Memory used as buffer for the bootstrap
 ///
@@ -148,18 +147,15 @@ pub(crate) struct Bootstrapper {
 
 impl Bootstrapper {
     pub fn new(seeder: &mut dyn Seeder) -> Self {
-        Bootstrapper {
-            memory: Default::default(),
+        Self {
+            memory: Memory::default(),
             encryption_generator: EncryptionRandomGenerator::<_>::new(seeder.seed(), seeder),
-            computation_buffers: Default::default(),
+            computation_buffers: ComputationBuffers::default(),
             seeder: DeterministicSeeder::<_>::new(seeder.seed()),
         }
     }
 
-    pub(crate) fn new_server_key(
-        &mut self,
-        cks: &ClientKey,
-    ) -> Result<ServerKey, Box<dyn std::error::Error>> {
+    pub(crate) fn new_server_key(&mut self, cks: &ClientKey) -> ServerKey {
         let standard_bootstrapping_key: LweBootstrapKeyOwned<u32> =
             par_allocate_and_generate_new_lwe_bootstrap_key(
                 &cks.lwe_secret_key,
@@ -208,17 +204,14 @@ impl Bootstrapper {
             &mut self.encryption_generator,
         );
 
-        Ok(ServerKey {
+        ServerKey {
             bootstrapping_key: fourier_bsk,
             key_switching_key: ksk,
             pbs_order: cks.parameters.encryption_key_choice.into(),
-        })
+        }
     }
 
-    pub(crate) fn new_compressed_server_key(
-        &mut self,
-        cks: &ClientKey,
-    ) -> Result<CompressedServerKey, Box<dyn std::error::Error>> {
+    pub(crate) fn new_compressed_server_key(&mut self, cks: &ClientKey) -> CompressedServerKey {
         #[cfg(not(feature = "__wasm_api"))]
         let bootstrapping_key = par_allocate_and_generate_new_seeded_lwe_bootstrap_key(
             &cks.lwe_secret_key,
@@ -254,18 +247,18 @@ impl Bootstrapper {
             &mut self.seeder,
         );
 
-        Ok(CompressedServerKey {
+        CompressedServerKey {
             bootstrapping_key,
             key_switching_key,
             pbs_order: cks.parameters.encryption_key_choice.into(),
-        })
+        }
     }
 
     pub(crate) fn bootstrap(
         &mut self,
         input: &LweCiphertextOwned<u32>,
         server_key: &ServerKey,
-    ) -> Result<LweCiphertextOwned<u32>, Box<dyn Error>> {
+    ) -> LweCiphertextOwned<u32> {
         let BuffersRef {
             lookup_table: accumulator,
             mut buffer_lwe_after_pbs,
@@ -297,37 +290,17 @@ impl Bootstrapper {
             stack,
         );
 
-        Ok(LweCiphertext::from_container(
+        LweCiphertext::from_container(
             buffer_lwe_after_pbs.as_ref().to_owned(),
             input.ciphertext_modulus(),
-        ))
-    }
-
-    pub(crate) fn keyswitch(
-        &mut self,
-        input: &LweCiphertextOwned<u32>,
-        server_key: &ServerKey,
-    ) -> Result<LweCiphertextOwned<u32>, Box<dyn Error>> {
-        // Allocate the output of the KS
-        let mut output = LweCiphertext::new(
-            0u32,
-            server_key
-                .bootstrapping_key
-                .input_lwe_dimension()
-                .to_lwe_size(),
-            input.ciphertext_modulus(),
-        );
-
-        keyswitch_lwe_ciphertext(&server_key.key_switching_key, input, &mut output);
-
-        Ok(output)
+        )
     }
 
     pub(crate) fn bootstrap_keyswitch(
         &mut self,
         mut ciphertext: LweCiphertextOwned<u32>,
         server_key: &ServerKey,
-    ) -> Result<Ciphertext, Box<dyn Error>> {
+    ) -> Ciphertext {
         let BuffersRef {
             lookup_table,
             mut buffer_lwe_after_pbs,
@@ -367,14 +340,14 @@ impl Bootstrapper {
             &mut ciphertext,
         );
 
-        Ok(Ciphertext::Encrypted(ciphertext))
+        Ciphertext::Encrypted(ciphertext)
     }
 
     pub(crate) fn keyswitch_bootstrap(
         &mut self,
         mut ciphertext: LweCiphertextOwned<u32>,
         server_key: &ServerKey,
-    ) -> Result<Ciphertext, Box<dyn Error>> {
+    ) -> Ciphertext {
         let BuffersRef {
             lookup_table,
             mut buffer_lwe_after_ks,
@@ -414,17 +387,32 @@ impl Bootstrapper {
             stack,
         );
 
-        Ok(Ciphertext::Encrypted(ciphertext))
+        Ciphertext::Encrypted(ciphertext)
     }
     pub(crate) fn apply_bootstrapping_pattern(
         &mut self,
         ct: LweCiphertextOwned<u32>,
         server_key: &ServerKey,
-    ) -> Result<Ciphertext, Box<dyn Error>> {
+    ) -> Ciphertext {
         match server_key.pbs_order {
             PBSOrder::KeyswitchBootstrap => self.keyswitch_bootstrap(ct, server_key),
             PBSOrder::BootstrapKeyswitch => self.bootstrap_keyswitch(ct, server_key),
         }
+    }
+}
+
+impl ServerKey {
+    pub(crate) fn keyswitch(&self, input: &LweCiphertextOwned<u32>) -> LweCiphertextOwned<u32> {
+        // Allocate the output of the KS
+        let mut output = LweCiphertext::new(
+            0u32,
+            self.bootstrapping_key.input_lwe_dimension().to_lwe_size(),
+            input.ciphertext_modulus(),
+        );
+
+        keyswitch_lwe_ciphertext(&self.key_switching_key, input, &mut output);
+
+        output
     }
 }
 
@@ -458,8 +446,8 @@ impl From<CompressedServerKey> for ServerKey {
         );
 
         Self {
-            key_switching_key,
             bootstrapping_key,
+            key_switching_key,
             pbs_order,
         }
     }

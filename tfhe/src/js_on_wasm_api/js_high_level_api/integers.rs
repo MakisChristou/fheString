@@ -11,9 +11,9 @@ impl From<U256> for JsValue {
     fn from(value: U256) -> Self {
         let (low_rs, high_rs) = value.to_low_high_u128();
 
-        let low_js = JsValue::from(low_rs);
-        let high_js = JsValue::from(high_rs);
-        (high_js << JsValue::bigint_from_str("128")) + low_js
+        let low_js = Self::from(low_rs);
+        let high_js = Self::from(high_rs);
+        (high_js << Self::bigint_from_str("128")) + low_js
     }
 }
 
@@ -30,23 +30,24 @@ impl TryFrom<JsValue> for U256 {
         let high_rs =
             u128::try_from(high_js).map_err(|_| JsError::new("value is out of range for u256"))?;
 
-        let value = U256::from((low_rs, high_rs));
+        let value = Self::from((low_rs, high_rs));
         Ok(value)
     }
 }
 
 impl From<I256> for JsValue {
     fn from(mut value: I256) -> Self {
-        let mut was_neg = false;
-        if value < I256::ZERO {
+        let was_neg = if value < I256::ZERO {
             value = -value;
-            was_neg = true;
-        }
-        let shift = JsValue::bigint_from_str("64");
-        let mut result = JsValue::bigint_from_str("0");
+            true
+        } else {
+            false
+        };
+        let shift = Self::bigint_from_str("64");
+        let mut result = Self::bigint_from_str("0");
         for v in value.0.iter().rev() {
             result = result << &shift;
-            result = result | JsValue::from(*v);
+            result = result | Self::from(*v);
         }
 
         if was_neg {
@@ -61,11 +62,12 @@ impl TryFrom<JsValue> for I256 {
     type Error = JsError;
 
     fn try_from(mut value: JsValue) -> Result<Self, Self::Error> {
-        let mut was_neg = false;
-        if value.lt(&JsValue::from(0)) {
+        let was_neg = if value.lt(&JsValue::from(0)) {
             value = -value;
-            was_neg = true;
-        }
+            true
+        } else {
+            false
+        };
 
         let low_js = &value & JsValue::bigint_from_str(U128_MAX_AS_STR);
         let high_js =
@@ -75,7 +77,7 @@ impl TryFrom<JsValue> for I256 {
         let low_rs = u128::try_from(low_js).unwrap();
         // Since we masked the low value it will fit in u128
         let high_rs = u128::try_from(high_js).unwrap();
-        let rs_value = I256::from((low_rs, high_rs));
+        let rs_value = Self::from((low_rs, high_rs));
         Ok(if was_neg { -rs_value } else { rs_value })
     }
 }
@@ -181,6 +183,24 @@ macro_rules! create_wrapper_type_non_native_type(
                         .map_err(into_js_error)
                 })
             }
+
+            #[wasm_bindgen]
+            pub fn safe_serialize(&self, serialized_size_limit: u64) -> Result<Vec<u8>, JsError> {
+                let mut buffer = vec![];
+                catch_panic_result(|| crate::safe_deserialization::safe_serialize(&self.0, &mut buffer, serialized_size_limit)
+                    .map_err(into_js_error))?;
+
+                Ok(buffer)
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_deserialize(buffer: &[u8], serialized_size_limit: u64) -> Result<$type_name, JsError> {
+                catch_panic_result(|| {
+                    crate::safe_deserialization::safe_deserialize(buffer, serialized_size_limit)
+                        .map($type_name)
+                        .map_err(into_js_error)
+                })
+            }
         }
 
         #[wasm_bindgen]
@@ -224,6 +244,24 @@ macro_rules! create_wrapper_type_non_native_type(
                         .map_err(into_js_error)
                 })
             }
+
+            #[wasm_bindgen]
+            pub fn safe_serialize(&self, serialized_size_limit: u64) -> Result<Vec<u8>, JsError> {
+                let mut buffer = vec![];
+                catch_panic_result(|| crate::safe_deserialization::safe_serialize(&self.0, &mut buffer, serialized_size_limit)
+                    .map_err(into_js_error))?;
+
+                Ok(buffer)
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_deserialize(buffer: &[u8], serialized_size_limit: u64) -> Result<$compressed_type_name, JsError> {
+                catch_panic_result(|| {
+                    crate::safe_deserialization::safe_deserialize(buffer, serialized_size_limit)
+                        .map($compressed_type_name)
+                        .map_err(into_js_error)
+                })
+            }
         }
 
         #[wasm_bindgen]
@@ -263,6 +301,24 @@ macro_rules! create_wrapper_type_non_native_type(
             pub fn deserialize(buffer: &[u8]) -> Result<$compact_type_name, JsError> {
                 catch_panic_result(|| {
                     bincode::deserialize(buffer)
+                        .map($compact_type_name)
+                        .map_err(into_js_error)
+                })
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_serialize(&self, serialized_size_limit: u64) -> Result<Vec<u8>, JsError> {
+                let mut buffer = vec![];
+                catch_panic_result(|| crate::safe_deserialization::safe_serialize(&self.0, &mut buffer, serialized_size_limit)
+                    .map_err(into_js_error))?;
+
+                Ok(buffer)
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_deserialize(buffer: &[u8], serialized_size_limit: u64) -> Result<$compact_type_name, JsError> {
+                catch_panic_result(|| {
+                    crate::safe_deserialization::safe_deserialize(buffer, serialized_size_limit)
                         .map($compact_type_name)
                         .map_err(into_js_error)
                 })
@@ -469,6 +525,24 @@ macro_rules! create_wrapper_type_that_has_native_type(
                         .map_err(into_js_error)
                 })
             }
+
+            #[wasm_bindgen]
+            pub fn safe_serialize(&self, serialized_size_limit: u64) -> Result<Vec<u8>, JsError> {
+                let mut buffer = vec![];
+                catch_panic_result(|| crate::safe_deserialization::safe_serialize(&self.0, &mut buffer, serialized_size_limit)
+                    .map_err(into_js_error))?;
+
+                Ok(buffer)
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_deserialize(buffer: &[u8], serialized_size_limit: u64) -> Result<$type_name, JsError> {
+                catch_panic_result(|| {
+                    crate::safe_deserialization::safe_deserialize(buffer, serialized_size_limit)
+                        .map(Self)
+                        .map_err(into_js_error)
+                })
+            }
         }
         #[wasm_bindgen]
         pub struct $compressed_type_name(pub(crate) crate::high_level_api::$compressed_type_name);
@@ -505,6 +579,24 @@ macro_rules! create_wrapper_type_that_has_native_type(
             pub fn deserialize(buffer: &[u8]) -> Result<$compressed_type_name, JsError> {
                 catch_panic_result(|| {
                     bincode::deserialize(buffer)
+                        .map($compressed_type_name)
+                        .map_err(into_js_error)
+                })
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_serialize(&self, serialized_size_limit: u64) -> Result<Vec<u8>, JsError> {
+                let mut buffer = vec![];
+                catch_panic_result(|| crate::safe_deserialization::safe_serialize(&self.0, &mut buffer, serialized_size_limit)
+                    .map_err(into_js_error))?;
+
+                Ok(buffer)
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_deserialize(buffer: &[u8], serialized_size_limit: u64) -> Result<$compressed_type_name, JsError> {
+                catch_panic_result(|| {
+                    crate::safe_deserialization::safe_deserialize(buffer, serialized_size_limit)
                         .map($compressed_type_name)
                         .map_err(into_js_error)
                 })
@@ -546,6 +638,24 @@ macro_rules! create_wrapper_type_that_has_native_type(
             pub fn deserialize(buffer: &[u8]) -> Result<$compact_type_name, JsError> {
                 catch_panic_result(|| {
                     bincode::deserialize(buffer)
+                        .map($compact_type_name)
+                        .map_err(into_js_error)
+                })
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_serialize(&self, serialized_size_limit: u64) -> Result<Vec<u8>, JsError> {
+                let mut buffer = vec![];
+                catch_panic_result(|| crate::safe_deserialization::safe_serialize(&self.0, &mut buffer, serialized_size_limit)
+                    .map_err(into_js_error))?;
+
+                Ok(buffer)
+            }
+
+            #[wasm_bindgen]
+            pub fn safe_deserialize(buffer: &[u8], serialized_size_limit: u64) -> Result<$compact_type_name, JsError> {
+                catch_panic_result(|| {
+                    crate::safe_deserialization::safe_deserialize(buffer, serialized_size_limit)
                         .map($compact_type_name)
                         .map_err(into_js_error)
                 })

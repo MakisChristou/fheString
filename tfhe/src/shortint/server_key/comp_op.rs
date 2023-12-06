@@ -1,7 +1,6 @@
 use super::ServerKey;
-use crate::shortint::engine::ShortintEngine;
+use crate::shortint::ciphertext::Degree;
 use crate::shortint::server_key::CheckError;
-use crate::shortint::server_key::CheckError::CarryFull;
 use crate::shortint::Ciphertext;
 
 // # Note:
@@ -117,15 +116,21 @@ impl ServerKey {
     /// assert_eq!((msg_1 > msg_2) as u64, res);
     /// ```
     pub fn unchecked_greater(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_greater(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_greater_assign(&mut result, ct_right);
+        result
+    }
+
+    fn unchecked_greater_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |lhs, rhs| {
+            u64::from(lhs > rhs)
+        });
     }
 
     /// Implement the "greater" (`>`) operator between two ciphertexts with checks.
     ///
     /// If the operation can be performed, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -144,10 +149,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_greater(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_greater(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 > msg_2) as u64, clear_res);
@@ -158,10 +160,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_greater(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_greater(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 > msg_2) as u64, clear_res);
@@ -171,11 +170,8 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
-            Ok(self.unchecked_greater(ct_left, ct_right))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)?;
+        Ok(self.unchecked_greater(ct_left, ct_right))
     }
 
     /// Compute homomorphically a `>` between two ciphertexts encrypting integer values.
@@ -220,9 +216,16 @@ impl ServerKey {
     /// assert_eq!((msg > msg) as u64, res);
     /// ```
     pub fn smart_greater(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_greater(self, ct_left, ct_right).unwrap()
-        })
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+        self.unchecked_greater(ct_left, ct_right)
     }
 
     /// Compute homomorphically a `>=` between two ciphertexts encrypting integer values.
@@ -335,11 +338,15 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_greater_or_equal(self, ct_left, ct_right)
-                .unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_greater_or_equal_assign(&mut result, ct_right);
+        result
+    }
+
+    fn unchecked_greater_or_equal_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |lhs, rhs| {
+            u64::from(lhs >= rhs)
+        });
     }
 
     /// Compute homomorphically a `>=` between two ciphertexts encrypting integer values.
@@ -388,17 +395,22 @@ impl ServerKey {
         ct_left: &mut Ciphertext,
         ct_right: &mut Ciphertext,
     ) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_greater_or_equal(self, ct_left, ct_right)
-                .unwrap()
-        })
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+        self.unchecked_greater_or_equal(ct_left, ct_right)
     }
 
     /// Implement the "greater or equal" (`>=`) operator between two ciphertexts with checks.
     ///
     /// If the operation can be performed, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -417,10 +429,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_greater_or_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_greater_or_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 >= msg_2) as u64, clear_res);
@@ -431,10 +440,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_greater_or_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_greater_or_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 >= msg_2) as u64, clear_res);
@@ -444,11 +450,8 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
-            Ok(self.unchecked_greater_or_equal(ct_left, ct_right))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)?;
+        Ok(self.unchecked_greater_or_equal(ct_left, ct_right))
     }
 
     /// Compute homomorphically a `<` between two ciphertexts encrypting integer values.
@@ -559,15 +562,21 @@ impl ServerKey {
     /// assert_eq!((msg_1 < msg_2) as u64, res);
     /// ```
     pub fn unchecked_less(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_less(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_less_assign(&mut result, ct_right);
+        result
+    }
+
+    fn unchecked_less_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |lhs, rhs| {
+            u64::from(lhs < rhs)
+        });
     }
 
     /// Implement the "less" (`<`) operator between two ciphertexts with checks.
     ///
     /// If the operation can be performed, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -586,10 +595,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_less(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_less(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 < msg_2) as u64, clear_res);
@@ -600,10 +606,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_less(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_less(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 < msg_2) as u64, clear_res);
@@ -613,11 +616,8 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
-            Ok(self.unchecked_less(ct_left, ct_right))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)?;
+        Ok(self.unchecked_less(ct_left, ct_right))
     }
 
     /// Compute homomorphically a `<` between two ciphertexts encrypting integer values.
@@ -662,9 +662,16 @@ impl ServerKey {
     /// assert_eq!((msg < msg) as u64, res);
     /// ```
     pub fn smart_less(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_less(self, ct_left, ct_right).unwrap()
-        })
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+        self.unchecked_less(ct_left, ct_right)
     }
 
     /// Compute homomorphically a `<=` between two ciphertexts encrypting integer values.
@@ -777,17 +784,21 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_less_or_equal(self, ct_left, ct_right)
-                .unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_less_or_equal_assign(&mut result, ct_right);
+        result
+    }
+
+    fn unchecked_less_or_equal_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |lhs, rhs| {
+            u64::from(lhs <= rhs)
+        });
     }
 
     /// Implement the "less or equal" (`<=`) operator between two ciphertexts with checks.
     ///
     /// If the operation can be performed, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -806,10 +817,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_less_or_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_less_or_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 <= msg_2) as u64, clear_res);
@@ -820,10 +828,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_less_or_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_less_or_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 <= msg_2) as u64, clear_res);
@@ -833,11 +838,8 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
-            Ok(self.unchecked_less(ct_left, ct_right))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)?;
+        Ok(self.unchecked_less(ct_left, ct_right))
     }
 
     /// Compute homomorphically a `<=` between two ciphertexts encrypting integer values.
@@ -886,9 +888,16 @@ impl ServerKey {
         ct_left: &mut Ciphertext,
         ct_right: &mut Ciphertext,
     ) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_less_or_equal(self, ct_left, ct_right).unwrap()
-        })
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+        self.unchecked_less_or_equal(ct_left, ct_right)
     }
 
     /// Compute homomorphically a `==` between two ciphertexts encrypting integer values.
@@ -997,15 +1006,21 @@ impl ServerKey {
     /// assert_eq!(res, 1);
     /// ```
     pub fn unchecked_equal(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_equal(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_equal_assign(&mut result, ct_right);
+        result
+    }
+
+    fn unchecked_equal_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |lhs, rhs| {
+            u64::from(lhs == rhs)
+        });
     }
 
     /// Implement the "equal" (`==`) operator between two ciphertexts with checks.
     ///
     /// If the operation can be performed, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -1024,10 +1039,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 == msg_2) as u64, clear_res);
@@ -1038,10 +1050,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 == msg_2) as u64, clear_res);
@@ -1051,11 +1060,8 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
-            Ok(self.unchecked_equal(ct_left, ct_right))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)?;
+        Ok(self.unchecked_equal(ct_left, ct_right))
     }
 
     /// Compute homomorphically a `==` between two ciphertexts encrypting integer values.
@@ -1100,9 +1106,16 @@ impl ServerKey {
     /// assert_eq!((msg == msg) as u64, res);
     /// ```
     pub fn smart_equal(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_equal(self, ct_left, ct_right).unwrap()
-        })
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+        self.unchecked_equal(ct_left, ct_right)
     }
 
     /// Compute homomorphically a `!=` between two ciphertexts encrypting integer values.
@@ -1211,15 +1224,21 @@ impl ServerKey {
     /// assert_eq!(res, 1);
     /// ```
     pub fn unchecked_not_equal(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_not_equal(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_not_equal_assign(&mut result, ct_right);
+        result
+    }
+
+    fn unchecked_not_equal_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |lhs, rhs| {
+            u64::from(lhs != rhs)
+        });
     }
 
     /// Implement the "not equal" (`!=`) operator between two ciphertexts with checks.
     ///
     /// If the operation can be performed, the result is returned in a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -1238,10 +1257,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_not_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_not_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 != msg_2) as u64, clear_res);
@@ -1252,10 +1268,7 @@ impl ServerKey {
     /// let ct_left = cks.encrypt(msg_1);
     /// let ct_right = cks.encrypt(msg_2);
     ///
-    /// let res = sks.checked_not_equal(&ct_left, &ct_right);
-    ///
-    /// assert!(res.is_ok());
-    /// let res = res.unwrap();
+    /// let res = sks.checked_not_equal(&ct_left, &ct_right).unwrap();
     ///
     /// let clear_res = cks.decrypt(&res);
     /// assert_eq!((msg_1 != msg_2) as u64, clear_res);
@@ -1265,11 +1278,8 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
-            Ok(self.unchecked_not_equal(ct_left, ct_right))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)?;
+        Ok(self.unchecked_not_equal(ct_left, ct_right))
     }
 
     /// Compute homomorphically a `!=` between two ciphertexts encrypting integer values.
@@ -1318,9 +1328,16 @@ impl ServerKey {
         ct_left: &mut Ciphertext,
         ct_right: &mut Ciphertext,
     ) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_not_equal(self, ct_left, ct_right).unwrap()
-        })
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+        self.unchecked_not_equal(ct_left, ct_right)
     }
 
     /// Implement the "equal" operator (`==`) between a ciphertext and a scalar without checks.
@@ -1358,10 +1375,18 @@ impl ServerKey {
     /// let res = cks.decrypt(&ct_res);
     /// assert_eq!(res, (msg_1 == scalar as u64) as u64);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_equal(&self, ct_left: &mut Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_equal(self, ct_left, scalar).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.smart_scalar_equal_assign(&mut result, scalar);
+        result
+    }
+
+    fn smart_scalar_equal_assign(&self, ct_left: &mut Ciphertext, scalar: u8) {
+        let acc = self
+            .generate_msg_lookup_table(|x| (x == scalar as u64) as u64, ct_left.message_modulus);
+        self.apply_lookup_table_assign(ct_left, &acc);
+        ct_left.degree = Degree::new(1);
     }
 
     /// Alias of [`smart_scalar_equal`](`Self::smart_scalar_equal`) provided for convenience
@@ -1412,12 +1437,18 @@ impl ServerKey {
     /// let res = cks.decrypt(&ct_res);
     /// assert_eq!(res, (msg_1 != scalar as u64) as u64);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_not_equal(&self, ct_left: &mut Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_scalar_not_equal(self, ct_left, scalar)
-                .unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.smart_scalar_not_equal_assign(&mut result, scalar);
+        result
+    }
+
+    fn smart_scalar_not_equal_assign(&self, ct_left: &mut Ciphertext, scalar: u8) {
+        let acc = self
+            .generate_msg_lookup_table(|x| (x != scalar as u64) as u64, ct_left.message_modulus);
+        self.apply_lookup_table_assign(ct_left, &acc);
+        ct_left.degree = Degree::new(1);
     }
 
     /// Alias of [`smart_scalar_not_equal`](`Self::smart_scalar_not_equal`) provided for convenience
@@ -1469,16 +1500,22 @@ impl ServerKey {
     /// let res = cks.decrypt(&ct_res);
     /// assert_eq!(res, (msg_1 >= scalar as u64) as u64);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_greater_or_equal(
         &self,
         ct_left: &mut Ciphertext,
         scalar: u8,
     ) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_scalar_greater_or_equal(self, ct_left, scalar)
-                .unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.smart_scalar_greater_or_equal_assign(&mut result, scalar);
+        result
+    }
+
+    fn smart_scalar_greater_or_equal_assign(&self, ct_left: &mut Ciphertext, scalar: u8) {
+        let acc = self
+            .generate_msg_lookup_table(|x| (x >= scalar as u64) as u64, ct_left.message_modulus);
+        self.apply_lookup_table_assign(ct_left, &acc);
+        ct_left.degree = Degree::new(1);
     }
 
     /// Alias of [`smart_scalar_greater_or_equal`](`Self::smart_scalar_greater_or_equal`) provided
@@ -1531,12 +1568,18 @@ impl ServerKey {
     /// let res = cks.decrypt(&ct_res);
     /// assert_eq!(res, (msg_1 <= scalar as u64) as u64);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_less_or_equal(&self, ct_left: &mut Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_scalar_less_or_equal(self, ct_left, scalar)
-                .unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.smart_scalar_less_or_equal_assign(&mut result, scalar);
+        result
+    }
+
+    fn smart_scalar_less_or_equal_assign(&self, ct_left: &mut Ciphertext, scalar: u8) {
+        let acc = self
+            .generate_msg_lookup_table(|x| (x <= scalar as u64) as u64, ct_left.message_modulus);
+        self.apply_lookup_table_assign(ct_left, &acc);
+        ct_left.degree = Degree::new(1);
     }
 
     /// Alias of [`smart_scalar_less_or_equal`](`Self::smart_scalar_less_or_equal`) provided for
@@ -1588,10 +1631,18 @@ impl ServerKey {
     /// let res = cks.decrypt(&ct_res);
     /// assert_eq!(res, (msg_1 > scalar as u64) as u64);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_greater(&self, ct_left: &mut Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_greater(self, ct_left, scalar).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.smart_scalar_greater_assign(&mut result, scalar);
+        result
+    }
+
+    fn smart_scalar_greater_assign(&self, ct_left: &mut Ciphertext, scalar: u8) {
+        let acc =
+            self.generate_msg_lookup_table(|x| (x > scalar as u64) as u64, ct_left.message_modulus);
+        self.apply_lookup_table_assign(ct_left, &acc);
+        ct_left.degree = Degree::new(1);
     }
 
     /// Alias of [`smart_scalar_greater`](`Self::smart_scalar_greater`) provided for convenience
@@ -1642,10 +1693,18 @@ impl ServerKey {
     /// let res = cks.decrypt(&ct_res);
     /// assert_eq!(res, (msg_1 < scalar as u64) as u64);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_less(&self, ct_left: &mut Ciphertext, scalar: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_less(self, ct_left, scalar).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.smart_scalar_less_assign(&mut result, scalar);
+        result
+    }
+
+    fn smart_scalar_less_assign(&self, ct_left: &mut Ciphertext, scalar: u8) {
+        let acc =
+            self.generate_msg_lookup_table(|x| (x < scalar as u64) as u64, ct_left.message_modulus);
+        self.apply_lookup_table_assign(ct_left, &acc);
+        ct_left.degree = Degree::new(1);
     }
 
     /// Alias of [`smart_scalar_less`](`Self::smart_scalar_less`) provided for convenience

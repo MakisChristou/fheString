@@ -3,11 +3,13 @@ use rayon::prelude::*;
 use super::ServerKey;
 use crate::core_crypto::prelude::Plaintext;
 use crate::integer::block_decomposition::{BlockDecomposer, DecomposableInto};
+use crate::integer::ciphertext::boolean_value::BooleanBlock;
 use crate::integer::ciphertext::IntegerRadixCiphertext;
 use crate::shortint::server_key::LookupTableOwned;
 use crate::shortint::Ciphertext;
 
 /// Used for compare_blocks_with_zero
+#[derive(Clone, Copy)]
 pub(crate) enum ZeroComparisonType {
     // We want to compare with zeros for equality (==)
     Equality,
@@ -16,6 +18,7 @@ pub(crate) enum ZeroComparisonType {
 }
 
 /// Simple enum to select whether we are looking for the min or the max
+#[derive(Clone, Copy)]
 enum MinMaxSelector {
     Max,
     Min,
@@ -26,7 +29,7 @@ enum MinMaxSelector {
 /// This struct keeps in memory the LUTs that are used
 /// during the comparisons and min/max algorithms
 pub struct Comparator<'a> {
-    server_key: &'a ServerKey,
+    pub(crate) server_key: &'a ServerKey,
     // lut to get the sign of (a - b), used as the backbone of comparisons
     sign_lut: LookupTableOwned,
     // lut used to reduce 2 comparison blocks into 1
@@ -146,19 +149,19 @@ impl<'a> Comparator<'a> {
             // However, we are dealing with signed number,
             // so in reality, it is the smaller of the two.
             // i.e the cmp result is inversed
-            if x_sign_bit != y_sign_bit {
-                match x.cmp(&y) {
-                    std::cmp::Ordering::Less => Self::IS_SUPERIOR,
-                    std::cmp::Ordering::Equal => Self::IS_EQUAL,
-                    std::cmp::Ordering::Greater => Self::IS_INFERIOR,
-                }
-            } else {
+            if x_sign_bit == y_sign_bit {
                 // Both have either sign bit set or unset,
                 // cmp will give correct result
                 match x.cmp(&y) {
                     std::cmp::Ordering::Less => Self::IS_INFERIOR,
                     std::cmp::Ordering::Equal => Self::IS_EQUAL,
                     std::cmp::Ordering::Greater => Self::IS_SUPERIOR,
+                }
+            } else {
+                match x.cmp(&y) {
+                    std::cmp::Ordering::Less => Self::IS_SUPERIOR,
+                    std::cmp::Ordering::Equal => Self::IS_EQUAL,
+                    std::cmp::Ordering::Greater => Self::IS_INFERIOR,
                 }
             }
         });
@@ -206,6 +209,7 @@ impl<'a> Comparator<'a> {
 
         // Here we need the true lwe sub, not the one that comes from shortint.
         crate::core_crypto::algorithms::lwe_ciphertext_sub_assign(&mut lhs.ct, &rhs.ct);
+        lhs.set_noise_level(lhs.noise_level() + rhs.noise_level());
         self.server_key
             .key
             .apply_lookup_table_assign(lhs, &self.sign_lut);
@@ -253,8 +257,7 @@ impl<'a> Comparator<'a> {
     fn reduce_signs_parallelized(
         &self,
         mut sign_blocks: Vec<crate::shortint::Ciphertext>,
-    ) -> crate::shortint::Ciphertext
-where {
+    ) -> crate::shortint::Ciphertext {
         let mut sign_blocks_2 = Vec::with_capacity(sign_blocks.len() / 2);
         while sign_blocks.len() != 1 {
             sign_blocks
@@ -291,6 +294,8 @@ where {
     {
         assert_eq!(lhs.blocks().len(), rhs.blocks().len());
 
+        // false positive as compare_blocks does not mean the same in both branches
+        #[allow(clippy::branches_sharing_code)]
         let compare_blocks_fn = if lhs.blocks()[0].carry_modulus.0
             < lhs.blocks()[0].message_modulus.0
         {
@@ -334,7 +339,7 @@ where {
                 {
                     let mut last_lhs_block = last_lhs_block.clone();
                     comparator.compare_block_assign(&mut last_lhs_block, last_rhs_block);
-                    out_comparisons.push(last_lhs_block)
+                    out_comparisons.push(last_lhs_block);
                 }
             }
 
@@ -389,6 +394,8 @@ where {
 
         let num_block = lhs.blocks().len();
 
+        // false positive as compare_blocks does not mean the same in both branches
+        #[allow(clippy::branches_sharing_code)]
         let compare_blocks_fn =
             if lhs.blocks()[0].carry_modulus.0 < lhs.blocks()[0].message_modulus.0 {
                 /// Compares blocks in parallel
@@ -694,8 +701,7 @@ where {
         // blocks  after lhs's last block
         let is_scalar_obviously_bigger = scalar_blocks
             .get(lhs_blocks.len()..)
-            .map(|sub_slice| sub_slice.iter().any(|&scalar_block| scalar_block != 0))
-            .unwrap_or(false);
+            .is_some_and(|sub_slice| sub_slice.iter().any(|&scalar_block| scalar_block != 0));
         if is_scalar_obviously_bigger {
             return self.server_key.key.create_trivial(Self::IS_INFERIOR);
         }
@@ -833,7 +839,7 @@ where {
             let maybe_rhs = self.server_key.key.apply_lookup_table(&rhs_block, rhs_lut);
 
             let r = self.server_key.key.unchecked_add(&maybe_lhs, &maybe_rhs);
-            result.push(r)
+            result.push(r);
         }
 
         T::from_blocks(result)
@@ -948,29 +954,20 @@ where {
     /// And use the given `sign_result_handler_fn`
     /// to convert it to a radix ciphertext that encrypts
     /// a boolean value.
-    fn map_sign_result<T, F>(
+    fn map_sign_result<F>(
         &self,
-        comparison: crate::shortint::Ciphertext,
+        comparison: &crate::shortint::Ciphertext,
         sign_result_handler_fn: F,
-        num_blocks: usize,
-    ) -> T
+    ) -> BooleanBlock
     where
-        T: IntegerRadixCiphertext,
         F: Fn(u64) -> bool,
     {
         let acc = self
             .server_key
             .key
             .generate_lookup_table(|x| u64::from(sign_result_handler_fn(x)));
-        let result_block = self.server_key.key.apply_lookup_table(&comparison, &acc);
-
-        let mut blocks = Vec::with_capacity(num_blocks);
-        blocks.push(result_block);
-        for _ in 0..num_blocks - 1 {
-            blocks.push(self.server_key.key.create_trivial(0));
-        }
-
-        T::from_blocks(blocks)
+        let result_block = self.server_key.key.apply_lookup_table(comparison, &acc);
+        BooleanBlock::new_unchecked(result_block)
     }
 
     /// Helper function to implement unchecked_lt, unchecked_ge, etc
@@ -982,14 +979,14 @@ where {
         sign_result_handler_fn: F,
         lhs: &'b T,
         rhs: &'b T,
-    ) -> T
+    ) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         CmpFn: Fn(&Self, &'b T, &'b T) -> crate::shortint::Ciphertext,
         F: Fn(u64) -> bool,
     {
         let comparison = comparison_fn(self, lhs, rhs);
-        self.map_sign_result(comparison, sign_result_handler_fn, lhs.blocks().len())
+        self.map_sign_result(&comparison, sign_result_handler_fn)
     }
 
     /// Helper function to implement smart_lt, smart_ge, etc
@@ -999,21 +996,21 @@ where {
         sign_result_handler_fn: F,
         lhs: &mut T,
         rhs: &mut T,
-    ) -> T
+    ) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         CmpFn: Fn(&Self, &mut T, &mut T) -> crate::shortint::Ciphertext,
         F: Fn(u64) -> bool,
     {
         let comparison = smart_comparison_fn(self, lhs, rhs);
-        self.map_sign_result(comparison, sign_result_handler_fn, lhs.blocks().len())
+        self.map_sign_result(&comparison, sign_result_handler_fn)
     }
 
     //======================================
     // Unchecked Single-Threaded operations
     //======================================
 
-    pub fn unchecked_gt<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_gt<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1025,7 +1022,7 @@ where {
         )
     }
 
-    pub fn unchecked_ge<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_ge<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1037,7 +1034,7 @@ where {
         )
     }
 
-    pub fn unchecked_lt<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_lt<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1049,7 +1046,7 @@ where {
         )
     }
 
-    pub fn unchecked_le<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_le<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1079,7 +1076,7 @@ where {
     // Unchecked Multi-Threaded operations
     //======================================
 
-    pub fn unchecked_gt_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_gt_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1091,7 +1088,7 @@ where {
         )
     }
 
-    pub fn unchecked_ge_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_ge_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1103,7 +1100,7 @@ where {
         )
     }
 
-    pub fn unchecked_lt_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_lt_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1115,7 +1112,7 @@ where {
         )
     }
 
-    pub fn unchecked_le_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn unchecked_le_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1145,14 +1142,14 @@ where {
     // Smart Single-Threaded operations
     //======================================
 
-    pub fn smart_gt<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_gt<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
         self.smart_comparison_impl(Self::smart_compare, |x| x == Self::IS_SUPERIOR, lhs, rhs)
     }
 
-    pub fn smart_ge<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_ge<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1164,14 +1161,14 @@ where {
         )
     }
 
-    pub fn smart_lt<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_lt<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
         self.smart_comparison_impl(Self::smart_compare, |x| x == Self::IS_INFERIOR, lhs, rhs)
     }
 
-    pub fn smart_le<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_le<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1201,7 +1198,7 @@ where {
     // Smart Multi-Threaded operations
     //======================================
 
-    pub fn smart_gt_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_gt_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1213,7 +1210,7 @@ where {
         )
     }
 
-    pub fn smart_ge_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_ge_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1225,7 +1222,7 @@ where {
         )
     }
 
-    pub fn smart_lt_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_lt_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1237,7 +1234,7 @@ where {
         )
     }
 
-    pub fn smart_le_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> T
+    pub fn smart_le_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1267,7 +1264,7 @@ where {
     // "Default" Multi-Threaded operations
     //======================================
 
-    pub fn gt_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn gt_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1299,7 +1296,7 @@ where {
         self.unchecked_gt_parallelized(lhs, rhs)
     }
 
-    pub fn ge_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn ge_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1331,7 +1328,7 @@ where {
         self.unchecked_ge_parallelized(lhs, rhs)
     }
 
-    pub fn lt_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn lt_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1363,7 +1360,7 @@ where {
         self.unchecked_lt_parallelized(lhs, rhs)
     }
 
-    pub fn le_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
+    pub fn le_parallelized<T>(&self, lhs: &T, rhs: &T) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
     {
@@ -1473,17 +1470,17 @@ where {
         lhs: &T,
         rhs: Scalar,
         sign_result_handler_fn: F,
-    ) -> T
+    ) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
         F: Fn(u64) -> bool + Sync,
     {
         let sign_block = self.unchecked_scalar_compare_parallelized(lhs, rhs);
-        self.map_sign_result(sign_block, sign_result_handler_fn, lhs.blocks().len())
+        self.map_sign_result(&sign_block, sign_result_handler_fn)
     }
 
-    pub fn unchecked_scalar_gt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn unchecked_scalar_gt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1491,7 +1488,7 @@ where {
         self.unchecked_scalar_compare_parallelized_handler(lhs, rhs, |x| x == Self::IS_SUPERIOR)
     }
 
-    pub fn unchecked_scalar_ge_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn unchecked_scalar_ge_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1501,7 +1498,7 @@ where {
         })
     }
 
-    pub fn unchecked_scalar_lt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn unchecked_scalar_lt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1509,7 +1506,7 @@ where {
         self.unchecked_scalar_compare_parallelized_handler(lhs, rhs, |x| x == Self::IS_INFERIOR)
     }
 
-    pub fn unchecked_scalar_le_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn unchecked_scalar_le_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1544,7 +1541,7 @@ where {
         lhs: &mut T,
         rhs: Scalar,
         sign_result_handler_fn: F,
-    ) -> T
+    ) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1556,7 +1553,7 @@ where {
         self.unchecked_scalar_compare_parallelized_handler(lhs, rhs, sign_result_handler_fn)
     }
 
-    pub fn smart_scalar_gt_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> T
+    pub fn smart_scalar_gt_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1564,7 +1561,7 @@ where {
         self.smart_scalar_compare_parallelized(lhs, rhs, |x| x == Self::IS_SUPERIOR)
     }
 
-    pub fn smart_scalar_ge_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> T
+    pub fn smart_scalar_ge_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1574,7 +1571,7 @@ where {
         })
     }
 
-    pub fn smart_scalar_lt_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> T
+    pub fn smart_scalar_lt_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1582,7 +1579,7 @@ where {
         self.smart_scalar_compare_parallelized(lhs, rhs, |x| x == Self::IS_INFERIOR)
     }
 
-    pub fn smart_scalar_le_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> T
+    pub fn smart_scalar_le_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1623,24 +1620,24 @@ where {
         lhs: &T,
         rhs: Scalar,
         sign_result_handler_fn: F,
-    ) -> T
+    ) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
         F: Fn(u64) -> bool + Sync,
     {
         let mut tmp_lhs;
-        let lhs = if !lhs.block_carries_are_empty() {
+        let lhs = if lhs.block_carries_are_empty() {
+            lhs
+        } else {
             tmp_lhs = lhs.clone();
             self.server_key.full_propagate_parallelized(&mut tmp_lhs);
             &tmp_lhs
-        } else {
-            lhs
         };
         self.unchecked_scalar_compare_parallelized_handler(lhs, rhs, sign_result_handler_fn)
     }
 
-    pub fn scalar_gt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn scalar_gt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1648,7 +1645,7 @@ where {
         self.default_scalar_compare_parallelized(lhs, rhs, |x| x == Self::IS_SUPERIOR)
     }
 
-    pub fn scalar_ge_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn scalar_ge_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1658,7 +1655,7 @@ where {
         })
     }
 
-    pub fn scalar_lt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn scalar_lt_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1666,7 +1663,7 @@ where {
         self.default_scalar_compare_parallelized(lhs, rhs, |x| x == Self::IS_INFERIOR)
     }
 
-    pub fn scalar_le_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
+    pub fn scalar_le_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> BooleanBlock
     where
         T: IntegerRadixCiphertext,
         Scalar: DecomposableInto<u64>,
@@ -1682,12 +1679,12 @@ where {
         Scalar: DecomposableInto<u64>,
     {
         let mut tmp_lhs;
-        let lhs = if !lhs.block_carries_are_empty() {
+        let lhs = if lhs.block_carries_are_empty() {
+            lhs
+        } else {
             tmp_lhs = lhs.clone();
             self.server_key.full_propagate_parallelized(&mut tmp_lhs);
             &tmp_lhs
-        } else {
-            lhs
         };
         self.unchecked_scalar_min_or_max_parallelized(lhs, rhs, MinMaxSelector::Max)
     }
@@ -1698,2153 +1695,13 @@ where {
         Scalar: DecomposableInto<u64>,
     {
         let mut tmp_lhs;
-        let lhs = if !lhs.block_carries_are_empty() {
+        let lhs = if lhs.block_carries_are_empty() {
+            lhs
+        } else {
             tmp_lhs = lhs.clone();
             self.server_key.full_propagate_parallelized(&mut tmp_lhs);
             &tmp_lhs
-        } else {
-            lhs
         };
         self.unchecked_scalar_min_or_max_parallelized(lhs, rhs, MinMaxSelector::Min)
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Comparator;
-    use crate::integer::block_decomposition::DecomposableInto;
-    use crate::integer::ciphertext::{
-        IntegerRadixCiphertext, RadixCiphertext, SignedRadixCiphertext,
-    };
-    use crate::integer::{gen_keys, I256, U256};
-    use crate::shortint::ClassicPBSParameters;
-    use rand;
-    use rand::prelude::*;
-
-    // These used to be directly implemented
-    // in Comparator methods, however,
-    // they were made more efficient and don't
-    // use the things stored in the Comparator struct to work
-    // so they were moved out of it.
-    //
-    // But to still benefit from the 'comparator test infrastructure'
-    // we remap them in test cfg
-    impl<'a> Comparator<'a> {
-        pub fn smart_eq<T>(&self, lhs: &mut T, rhs: &mut T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.smart_eq(lhs, rhs)
-        }
-
-        pub fn unchecked_eq<T>(&self, lhs: &T, rhs: &T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.unchecked_eq(lhs, rhs)
-        }
-
-        pub fn unchecked_eq_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.eq_parallelized(lhs, rhs)
-        }
-
-        pub fn smart_eq_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.smart_eq_parallelized(lhs, rhs)
-        }
-
-        pub fn eq_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.eq_parallelized(lhs, rhs)
-        }
-
-        pub fn smart_ne<T>(&self, lhs: &mut T, rhs: &mut T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.smart_ne(lhs, rhs)
-        }
-
-        pub fn unchecked_ne<T>(&self, lhs: &T, rhs: &T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.unchecked_ne(lhs, rhs)
-        }
-
-        pub fn unchecked_ne_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.ne_parallelized(lhs, rhs)
-        }
-
-        pub fn smart_ne_parallelized<T>(&self, lhs: &mut T, rhs: &mut T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.smart_ne_parallelized(lhs, rhs)
-        }
-
-        pub fn ne_parallelized<T>(&self, lhs: &T, rhs: &T) -> T
-        where
-            T: IntegerRadixCiphertext,
-        {
-            self.server_key.ne_parallelized(lhs, rhs)
-        }
-    }
-
-    impl<'a> Comparator<'a> {
-        pub fn unchecked_scalar_eq_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
-        where
-            T: IntegerRadixCiphertext,
-            Scalar: DecomposableInto<u64>,
-        {
-            self.server_key.unchecked_scalar_eq_parallelized(lhs, rhs)
-        }
-
-        pub fn smart_scalar_eq_parallelized<T, Scalar>(&self, lhs: &mut T, rhs: Scalar) -> T
-        where
-            T: IntegerRadixCiphertext,
-            Scalar: DecomposableInto<u64>,
-        {
-            self.server_key.smart_scalar_eq_parallelized(lhs, rhs)
-        }
-
-        pub fn scalar_eq_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
-        where
-            T: IntegerRadixCiphertext,
-            Scalar: DecomposableInto<u64>,
-        {
-            self.server_key.scalar_eq_parallelized(lhs, rhs)
-        }
-
-        pub fn unchecked_scalar_ne_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
-        where
-            T: IntegerRadixCiphertext,
-            Scalar: DecomposableInto<u64>,
-        {
-            self.server_key.unchecked_scalar_ne_parallelized(lhs, rhs)
-        }
-
-        pub fn smart_scalar_ne_parallelized<T, Scalar: DecomposableInto<u64>>(
-            &self,
-            lhs: &mut T,
-            rhs: Scalar,
-        ) -> T
-        where
-            T: IntegerRadixCiphertext,
-            Scalar: DecomposableInto<u64>,
-        {
-            self.server_key.smart_scalar_ne_parallelized(lhs, rhs)
-        }
-
-        pub fn scalar_ne_parallelized<T, Scalar>(&self, lhs: &T, rhs: Scalar) -> T
-        where
-            T: IntegerRadixCiphertext,
-            Scalar: DecomposableInto<u64>,
-        {
-            self.server_key.scalar_ne_parallelized(lhs, rhs)
-        }
-    }
-
-    /// Function to test an "unchecked" compartor function.
-    ///
-    /// This calls the `unchecked_comparator_method` with fresh ciphertexts
-    /// and compares that it gives the same results as the `clear_fn`.
-    fn test_unchecked_function<UncheckedFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        unchecked_comparator_method: UncheckedFn,
-        clear_fn: ClearF,
-    ) where
-        UncheckedFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a RadixCiphertext,
-            &'a RadixCiphertext,
-        ) -> RadixCiphertext,
-        ClearF: Fn(U256, U256) -> U256,
-    {
-        let mut rng = rand::thread_rng();
-
-        let num_block = (256f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-
-        let (cks, sks) = gen_keys(param);
-        let comparator = Comparator::new(&sks);
-
-        for _ in 0..num_test {
-            let clear_a = rng.gen::<U256>();
-            let clear_b = rng.gen::<U256>();
-
-            let a = cks.encrypt_radix(clear_a, num_block);
-            let b = cks.encrypt_radix(clear_b, num_block);
-
-            {
-                let result = unchecked_comparator_method(&comparator, &a, &b);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_b);
-                assert_eq!(decrypted, expected_result);
-            }
-
-            {
-                // Force case where lhs == rhs
-                let result = unchecked_comparator_method(&comparator, &a, &a);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_a);
-                assert_eq!(decrypted, expected_result);
-            }
-        }
-    }
-
-    /// Function to test a "smart" comparator function.
-    ///
-    /// This calls the `smart_comparator_method` with non-fresh ciphertexts,
-    /// that is ciphertexts that have non-zero carries, and compares that the result is
-    /// the same as the one of`clear_fn`.
-    fn test_smart_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        smart_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a mut RadixCiphertext,
-            &'a mut RadixCiphertext,
-        ) -> RadixCiphertext,
-        ClearF: Fn(U256, U256) -> U256,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (256f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<U256>();
-            let mut clear_1 = rng.gen::<U256>();
-            let mut ct_0 = cks.encrypt_radix(clear_0, num_block);
-            let mut ct_1 = cks.encrypt_radix(clear_1, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<U256>();
-                let ct_2 = cks.encrypt_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 += clear_2;
-            }
-
-            while ct_1.block_carries_are_empty() {
-                let clear_2 = rng.gen::<U256>();
-                let ct_2 = cks.encrypt_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_1, &ct_2);
-                clear_1 += clear_2;
-            }
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: U256 = cks.decrypt_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            assert!(!ct_1.block_carries_are_empty());
-            let encrypted_result = smart_comparator_method(&comparator, &mut ct_0, &mut ct_1);
-            assert!(ct_0.block_carries_are_empty());
-            assert!(ct_1.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: U256 = cks.decrypt_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            let decrypted_result: U256 = cks.decrypt_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    /// Function to test a "default" comparator function.
-    ///
-    /// This calls the `comparator_method` with non-fresh ciphertexts,
-    /// that is ciphertexts that have non-zero carries, and compares that the result is
-    /// the same as the one of`clear_fn`.
-    fn test_default_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        default_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a RadixCiphertext,
-            &'a RadixCiphertext,
-        ) -> RadixCiphertext,
-        ClearF: Fn(U256, U256) -> U256,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (256f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<U256>();
-            let mut clear_1 = rng.gen::<U256>();
-            let mut ct_0 = cks.encrypt_radix(clear_0, num_block);
-            let mut ct_1 = cks.encrypt_radix(clear_1, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<U256>();
-                let ct_2 = cks.encrypt_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 += clear_2;
-            }
-
-            while ct_1.block_carries_are_empty() {
-                let clear_2 = rng.gen::<U256>();
-                let ct_2 = cks.encrypt_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_1, &ct_2);
-                clear_1 += clear_2;
-            }
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: U256 = cks.decrypt_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            assert!(!ct_1.block_carries_are_empty());
-            let encrypted_result = default_comparator_method(&comparator, &ct_0, &ct_1);
-            assert!(encrypted_result.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: U256 = cks.decrypt_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            let decrypted_result: U256 = cks.decrypt_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    fn test_unchecked_min_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_unchecked_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.unchecked_min(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn test_unchecked_max_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_unchecked_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.unchecked_max(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    fn test_unchecked_min_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_unchecked_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.unchecked_min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn test_unchecked_max_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_unchecked_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.unchecked_max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    fn test_min_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_default_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn test_max_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_default_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    macro_rules! create_parametrized_test{
-        ($name:ident { $($param:ident),* }) => {
-            ::paste::paste! {
-                $(
-                #[test]
-                fn [<test_ $name _ $param:lower>]() {
-                    $name($param)
-                }
-                )*
-            }
-        };
-    }
-
-    /// This macro generates the tests for a given comparison fn
-    ///
-    /// All our comparison function have 5 variants:
-    /// - unchecked_$comparison_name
-    /// - unchecked_$comparison_name_parallelized
-    /// - smart_$comparison_name
-    /// - smart_$comparison_name_parallelized
-    /// - $comparison_name_parallelized
-    ///
-    /// So, for example, for the `gt` comparison fn, this macro will generate the tests for
-    /// the 5 variants described above
-    macro_rules! define_comparison_test_functions {
-        ($comparison_name:ident) => {
-            paste::paste!{
-                fn [<unchecked_ $comparison_name _256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_unchecked_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<unchecked_ $comparison_name>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                fn [<unchecked_ $comparison_name _parallelized_256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_unchecked_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<unchecked_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                fn [<smart_ $comparison_name _256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_smart_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<smart_ $comparison_name>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                fn [<smart_ $comparison_name _parallelized_256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_smart_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<smart_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                fn [<$comparison_name _parallelized_256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_default_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<$comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                create_parametrized_test!([<unchecked_ $comparison_name _256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-                create_parametrized_test!([<unchecked_ $comparison_name _parallelized_256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<smart_ $comparison_name _256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as smart test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<smart_ $comparison_name _parallelized_256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as smart test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<$comparison_name _parallelized_256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as default test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-            }
-        };
-    }
-
-    use crate::shortint::parameters::{
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS, PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-    };
-
-    define_comparison_test_functions!(eq);
-    define_comparison_test_functions!(ne);
-    define_comparison_test_functions!(lt);
-    define_comparison_test_functions!(le);
-    define_comparison_test_functions!(gt);
-    define_comparison_test_functions!(ge);
-
-    //================
-    // Min
-    //================
-
-    #[test]
-    fn test_unchecked_min_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_unchecked_min_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_min_256_bits_param_message_3_carry_3_ks_pbs() {
-        test_unchecked_min_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_min_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_unchecked_min_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_min_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_unchecked_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_min_parallelized_256_bits_param_message_3_carry_3_ks_pbs() {
-        test_unchecked_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_min_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_unchecked_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_min_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    // #[test]
-    // fn test_min_parallelized_256_bits_param_message_3_carry_3_ks_pbs() {
-    //     test_min_parallelized_256_bits(
-    //         crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-    //         2,
-    //     )
-    // }
-
-    #[test]
-    fn test_min_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    //================
-    // Max
-    //================
-
-    #[test]
-    fn test_unchecked_max_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_unchecked_max_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_max_256_bits_param_message_3_carry_3_ks_pbs() {
-        test_unchecked_max_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_max_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_unchecked_max_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_max_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_unchecked_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_max_parallelized_256_bits_param_message_3_carry_3_ks_pbs() {
-        test_unchecked_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_unchecked_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_max_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    // #[test]
-    // fn test_max_parallelized_256_bits_param_message_3_carry_3_ks_pbs() {
-    //     test_max_parallelized_256_bits(
-    //         crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-    //         2,
-    //     )
-    // }
-
-    #[test]
-    fn test_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    //=============================================================
-    // Signed comparison tests
-    //=============================================================
-
-    /// Function to test an "unchecked" compartor function.
-    ///
-    /// This calls the `unchecked_comparator_method` with fresh ciphertexts
-    /// and compares that it gives the same results as the `clear_fn`.
-    fn test_signed_unchecked_function<UncheckedFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        unchecked_comparator_method: UncheckedFn,
-        clear_fn: ClearF,
-    ) where
-        UncheckedFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a SignedRadixCiphertext,
-            &'a SignedRadixCiphertext,
-        ) -> SignedRadixCiphertext,
-        ClearF: Fn(i128, i128) -> i128,
-    {
-        let mut rng = rand::thread_rng();
-
-        let num_block = (128f64 / (param.message_modulus.0.ilog2() as f64)).ceil() as usize;
-
-        let (cks, sks) = gen_keys(param);
-        let comparator = Comparator::new(&sks);
-
-        // Some hard coded tests
-        let pairs = [
-            (1i128, 2i128),
-            (2i128, 1i128),
-            (-1i128, 1i128),
-            (1i128, -1i128),
-            (-1i128, -2i128),
-            (-2i128, -1i128),
-        ];
-        for (clear_a, clear_b) in pairs {
-            let a = cks.encrypt_signed_radix(clear_a, num_block);
-            let b = cks.encrypt_signed_radix(clear_b, num_block);
-
-            let result = unchecked_comparator_method(&comparator, &a, &b);
-            let decrypted: i128 = cks.decrypt_signed_radix(&result);
-            let expected_result = clear_fn(clear_a, clear_b);
-            assert_eq!(decrypted, expected_result);
-        }
-
-        for _ in 0..num_test {
-            let clear_a = rng.gen::<i128>();
-            let clear_b = rng.gen::<i128>();
-
-            let a = cks.encrypt_signed_radix(clear_a, num_block);
-            let b = cks.encrypt_signed_radix(clear_b, num_block);
-
-            {
-                let result = unchecked_comparator_method(&comparator, &a, &b);
-                let decrypted: i128 = cks.decrypt_signed_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_b);
-                assert_eq!(decrypted, expected_result);
-            }
-
-            {
-                // Force case where lhs == rhs
-                let result = unchecked_comparator_method(&comparator, &a, &a);
-                let decrypted: i128 = cks.decrypt_signed_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_a);
-                assert_eq!(decrypted, expected_result);
-            }
-        }
-    }
-
-    /// Function to test a "smart" comparator function for signed inputs
-    ///
-    /// This calls the `smart_comparator_method` with non-fresh ciphertexts,
-    /// that is ciphertexts that have non-zero carries, and compares that the result is
-    /// the same as the one of`clear_fn`.
-    fn test_signed_smart_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        smart_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a mut SignedRadixCiphertext,
-            &'a mut SignedRadixCiphertext,
-        ) -> SignedRadixCiphertext,
-        ClearF: Fn(i128, i128) -> i128,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (128f64 / (param.message_modulus.0.ilog2() as f64).ceil()) as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<i128>();
-            let mut clear_1 = rng.gen::<i128>();
-            let mut ct_0 = cks.encrypt_signed_radix(clear_0, num_block);
-            let mut ct_1 = cks.encrypt_signed_radix(clear_1, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<i128>();
-                let ct_2 = cks.encrypt_signed_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 = clear_0.wrapping_add(clear_2);
-            }
-
-            while ct_1.block_carries_are_empty() {
-                let clear_2 = rng.gen::<i128>();
-                let ct_2 = cks.encrypt_signed_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_1, &ct_2);
-                clear_1 = clear_1.wrapping_add(clear_2);
-            }
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: i128 = cks.decrypt_signed_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            assert!(!ct_1.block_carries_are_empty());
-            let encrypted_result = smart_comparator_method(&comparator, &mut ct_0, &mut ct_1);
-            assert!(ct_0.block_carries_are_empty());
-            assert!(ct_1.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: i128 = cks.decrypt_signed_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            let decrypted_result: i128 = cks.decrypt_signed_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    /// Function to test a "default" comparator function for signed inputs.
-    ///
-    /// This calls the `comparator_method` with non-fresh ciphertexts,
-    /// that is ciphertexts that have non-zero carries, and compares that the result is
-    /// the same as the one of`clear_fn`.
-    fn test_signed_default_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        default_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a SignedRadixCiphertext,
-            &'a SignedRadixCiphertext,
-        ) -> SignedRadixCiphertext,
-        ClearF: Fn(i128, i128) -> i128,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (128f64 / (param.message_modulus.0.ilog2() as f64).ceil()) as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<i128>();
-            let mut clear_1 = rng.gen::<i128>();
-            let mut ct_0 = cks.encrypt_signed_radix(clear_0, num_block);
-            let mut ct_1 = cks.encrypt_signed_radix(clear_1, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<i128>();
-                let ct_2 = cks.encrypt_signed_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 = clear_0.wrapping_add(clear_2);
-            }
-
-            while ct_1.block_carries_are_empty() {
-                let clear_2 = rng.gen::<i128>();
-                let ct_2 = cks.encrypt_signed_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_1, &ct_2);
-                clear_1 = clear_1.wrapping_add(clear_2);
-            }
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: i128 = cks.decrypt_signed_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            assert!(!ct_1.block_carries_are_empty());
-            let encrypted_result = default_comparator_method(&comparator, &ct_0, &ct_1);
-            assert!(encrypted_result.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-
-                let b: i128 = cks.decrypt_signed_radix(&ct_1);
-                assert_eq!(b, clear_1);
-            }
-
-            let decrypted_result: i128 = cks.decrypt_signed_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    fn integer_signed_unchecked_min_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_unchecked_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.unchecked_min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn integer_signed_unchecked_max_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_unchecked_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.unchecked_max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    fn integer_signed_smart_min_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_smart_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.smart_min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn integer_signed_smart_max_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_smart_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.smart_max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    fn integer_signed_min_parallelized_128_bits(params: crate::shortint::ClassicPBSParameters) {
-        test_signed_default_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn integer_signed_max_parallelized_128_bits(params: crate::shortint::ClassicPBSParameters) {
-        test_signed_default_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    /// This macro generates the tests for a given comparison fn
-    ///
-    /// All our comparison function have 5 variants:
-    /// - unchecked_$comparison_name
-    /// - unchecked_$comparison_name_parallelized
-    /// - smart_$comparison_name
-    /// - smart_$comparison_name_parallelized
-    /// - $comparison_name_parallelized
-    ///
-    /// So, for example, for the `gt` comparison fn, this macro will generate the tests for
-    /// the 5 variants described above
-    macro_rules! define_signed_comparison_test_functions {
-        ($comparison_name:ident) => {
-            paste::paste!{
-                // Fist we "specialialize" the test_signed fns
-
-                fn [<integer_signed_unchecked_ $comparison_name _128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_signed_unchecked_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<unchecked_ $comparison_name>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs) as i128),
-                    )
-                }
-
-                fn [<integer_signed_unchecked_ $comparison_name _parallelized_128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_signed_unchecked_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<unchecked_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs) as i128),
-                    )
-                }
-
-                fn [<integer_signed_smart_ $comparison_name _128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_signed_smart_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<smart_ $comparison_name>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs) as i128),
-                    )
-                }
-
-                fn [<integer_signed_smart_ $comparison_name _parallelized_128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_signed_smart_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<smart_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs) as i128),
-                    )
-                }
-
-                fn [<integer_signed_ $comparison_name _parallelized_128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_signed_default_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<$comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs) as i128),
-                    )
-                }
-
-                // Then call our create_parametrized_test macro onto or specialialized fns
-
-                create_parametrized_test!([<integer_signed_unchecked_ $comparison_name _128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<integer_signed_unchecked_ $comparison_name _parallelized_128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<integer_signed_smart_ $comparison_name _128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as smart test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<integer_signed_smart_ $comparison_name _parallelized_128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as smart test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<integer_signed_ $comparison_name _parallelized_128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as default test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-            }
-        };
-    }
-
-    define_signed_comparison_test_functions!(eq);
-    define_signed_comparison_test_functions!(ne);
-    define_signed_comparison_test_functions!(lt);
-    define_signed_comparison_test_functions!(le);
-    define_signed_comparison_test_functions!(gt);
-    define_signed_comparison_test_functions!(ge);
-
-    create_parametrized_test!(integer_signed_unchecked_max_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_unchecked_min_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_smart_max_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_smart_min_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_max_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_min_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-
-    //=============================================================
-    // Scalar comparison tests
-    //=============================================================
-
-    /// Function to test an "unchecked_scalar" compartor function.
-    ///
-    /// This calls the `unchecked_scalar_comparator_method` with fresh ciphertexts
-    /// and compares that it gives the same results as the `clear_fn`.
-    fn test_unchecked_scalar_function<UncheckedFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        unchecked_comparator_method: UncheckedFn,
-        clear_fn: ClearF,
-    ) where
-        UncheckedFn:
-            for<'a, 'b> Fn(&'a Comparator<'b>, &'a RadixCiphertext, U256) -> RadixCiphertext,
-        ClearF: Fn(U256, U256) -> U256,
-    {
-        let mut rng = rand::thread_rng();
-
-        let num_block = (256f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-
-        let (cks, sks) = gen_keys(param);
-        let comparator = Comparator::new(&sks);
-
-        for _ in 0..num_test {
-            let clear_a = rng.gen::<U256>();
-            let clear_b = rng.gen::<U256>();
-
-            let a = cks.encrypt_radix(clear_a, num_block);
-
-            {
-                let result = unchecked_comparator_method(&comparator, &a, clear_b);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_b);
-                assert_eq!(decrypted, expected_result);
-            }
-
-            {
-                // Force case where lhs == rhs
-                let result = unchecked_comparator_method(&comparator, &a, clear_a);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_a);
-                assert_eq!(decrypted, expected_result);
-            }
-        }
-    }
-
-    /// Function to test a "smart_scalar" comparator function.
-    fn test_smart_scalar_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        smart_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn:
-            for<'a, 'b> Fn(&'a Comparator<'b>, &'a mut RadixCiphertext, U256) -> RadixCiphertext,
-        ClearF: Fn(U256, U256) -> U256,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (256f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<U256>();
-            let clear_1 = rng.gen::<U256>();
-            let mut ct_0 = cks.encrypt_radix(clear_0, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<U256>();
-                let ct_2 = cks.encrypt_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 += clear_2;
-            }
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            let encrypted_result = smart_comparator_method(&comparator, &mut ct_0, clear_1);
-            assert!(ct_0.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            let decrypted_result: U256 = cks.decrypt_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    /// Function to test a "default_scalar" comparator function.
-    fn test_default_scalar_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        default_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn: for<'a, 'b> Fn(&'a Comparator<'b>, &'a RadixCiphertext, U256) -> RadixCiphertext,
-        ClearF: Fn(U256, U256) -> U256,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (256f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<U256>();
-            let clear_1 = rng.gen::<U256>();
-
-            let mut ct_0 = cks.encrypt_radix(clear_0, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<U256>();
-                let ct_2 = cks.encrypt_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 += clear_2;
-            }
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            let encrypted_result = default_comparator_method(&comparator, &ct_0, clear_1);
-            assert!(encrypted_result.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: U256 = cks.decrypt_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            let decrypted_result: U256 = cks.decrypt_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    /// This macro generates the tests for a given scalar comparison fn
-    ///
-    /// All our scalar comparison function have 3 variants:
-    /// - unchecked_scalar_$comparison_name_parallelized
-    /// - smart_scalar_$comparison_name_parallelized
-    /// - scalar_$comparison_name_parallelized
-    ///
-    /// So, for example, for the `gt` comparison fn,
-    /// this macro will generate the tests for the 3 variants described above
-    macro_rules! define_scalar_comparison_test_functions {
-        ($comparison_name:ident) => {
-            paste::paste!{
-
-                fn [<unchecked_scalar_ $comparison_name _parallelized_256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_unchecked_scalar_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<unchecked_scalar_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                fn [<smart_scalar_ $comparison_name _parallelized_256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_smart_scalar_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<smart_scalar_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                fn [<scalar_ $comparison_name _parallelized_256_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 1;
-                    test_default_scalar_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<scalar_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| U256::from(<U256>::$comparison_name(&lhs, &rhs) as u128),
-                    )
-                }
-
-                create_parametrized_test!([<unchecked_scalar_ $comparison_name _parallelized_256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<smart_scalar_ $comparison_name _parallelized_256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as smart test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<scalar_ $comparison_name _parallelized_256_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as default test might overflow values
-                    // and when using 3_3 to represent 256 we actually have more than 256 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-            }
-        };
-    }
-
-    define_scalar_comparison_test_functions!(eq);
-    define_scalar_comparison_test_functions!(ne);
-    define_scalar_comparison_test_functions!(lt);
-    define_scalar_comparison_test_functions!(le);
-    define_scalar_comparison_test_functions!(gt);
-    define_scalar_comparison_test_functions!(ge);
-
-    fn test_unchecked_scalar_min_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_unchecked_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.unchecked_min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn test_unchecked_scalar_max_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_unchecked_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.unchecked_max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    fn test_scalar_min_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_default_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn test_scalar_max_parallelized_256_bits(
-        params: crate::shortint::ClassicPBSParameters,
-        num_tests: usize,
-    ) {
-        test_default_function(
-            params,
-            num_tests,
-            |comparator, lhs, rhs| comparator.max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    //================
-    // Scalar Min
-    //================
-
-    #[test]
-    fn test_unchecked_scalar_min_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_unchecked_scalar_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_scalar_min_parallelized_256_bits_param_message_3_carry_3_ks_pbs() {
-        test_unchecked_scalar_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_scalar_min_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_unchecked_scalar_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_scalar_min_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_scalar_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_scalar_min_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_scalar_min_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    //================
-    // Scalar Max
-    //================
-
-    #[test]
-    fn test_unchecked_scalar_max_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_unchecked_scalar_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_scalar_max_parallelized_256_bits_param_message_3_carry_3_ks_pbs() {
-        test_unchecked_scalar_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_unchecked_scalar_max_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_unchecked_scalar_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    #[test]
-    fn test_scalar_max_parallelized_256_bits_param_message_2_carry_2_ks_pbs() {
-        test_scalar_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-            4,
-        )
-    }
-
-    #[test]
-    fn test_scalar_max_parallelized_256_bits_param_message_4_carry_4_ks_pbs() {
-        test_scalar_max_parallelized_256_bits(
-            crate::shortint::parameters::PARAM_MESSAGE_4_CARRY_4_KS_PBS,
-            2,
-        )
-    }
-
-    /// The goal of this function is to ensure that scalar comparisons
-    /// work when the scalar type used is either bigger or smaller (in bit size)
-    /// compared to the ciphertext
-    fn test_unchecked_scalar_comparisons_edge(param: ClassicPBSParameters) {
-        let mut rng = rand::thread_rng();
-
-        let num_block = (128f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-
-        let (cks, sks) = gen_keys(param);
-        let comparator = Comparator::new(&sks);
-
-        for _ in 0..4 {
-            let clear_a = rng.gen::<u128>();
-            let smaller_clear = rng.gen::<u64>();
-            let bigger_clear = rng.gen::<U256>();
-
-            let a = cks.encrypt_radix(clear_a, num_block);
-
-            // >=
-            {
-                let result = comparator.unchecked_scalar_ge_parallelized(&a, smaller_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(
-                    decrypted,
-                    U256::from(U256::from(clear_a) >= U256::from(smaller_clear))
-                );
-
-                let result = comparator.unchecked_scalar_ge_parallelized(&a, bigger_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) >= bigger_clear));
-            }
-
-            // >
-            {
-                let result = comparator.unchecked_scalar_gt_parallelized(&a, smaller_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(
-                    decrypted,
-                    U256::from(U256::from(clear_a) > U256::from(smaller_clear))
-                );
-
-                let result = comparator.unchecked_scalar_gt_parallelized(&a, bigger_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) > bigger_clear));
-            }
-
-            // <=
-            {
-                let result = comparator.unchecked_scalar_le_parallelized(&a, smaller_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(
-                    decrypted,
-                    U256::from(U256::from(clear_a) <= U256::from(smaller_clear))
-                );
-
-                let result = comparator.unchecked_scalar_le_parallelized(&a, bigger_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) <= bigger_clear));
-            }
-
-            // <
-            {
-                let result = comparator.unchecked_scalar_lt_parallelized(&a, smaller_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(
-                    decrypted,
-                    U256::from(U256::from(clear_a) < U256::from(smaller_clear))
-                );
-
-                let result = comparator.unchecked_scalar_lt_parallelized(&a, bigger_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) < bigger_clear));
-            }
-
-            // ==
-            {
-                let result = comparator.unchecked_scalar_eq_parallelized(&a, smaller_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(
-                    decrypted,
-                    U256::from(U256::from(clear_a) == U256::from(smaller_clear))
-                );
-
-                let result = comparator.unchecked_scalar_eq_parallelized(&a, bigger_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) == bigger_clear));
-            }
-
-            // !=
-            {
-                let result = comparator.unchecked_scalar_ne_parallelized(&a, smaller_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(
-                    decrypted,
-                    U256::from(U256::from(clear_a) != U256::from(smaller_clear))
-                );
-
-                let result = comparator.unchecked_scalar_ne_parallelized(&a, bigger_clear);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) != bigger_clear));
-            }
-
-            // Here the goal is to test, the branching
-            // made in the scalar sign function
-            //
-            // We are forcing one of the two branches to work on empty slices
-            {
-                let result = comparator.unchecked_scalar_lt_parallelized(&a, U256::ZERO);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) < U256::ZERO));
-
-                let result = comparator.unchecked_scalar_lt_parallelized(&a, U256::MAX);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) < U256::MAX));
-
-                // == (as it does not share same code)
-                let result = comparator.unchecked_scalar_eq_parallelized(&a, U256::ZERO);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) == U256::ZERO));
-
-                // != (as it does not share same code)
-                let result = comparator.unchecked_scalar_ne_parallelized(&a, U256::MAX);
-                let decrypted: U256 = cks.decrypt_radix(&result);
-                assert_eq!(decrypted, U256::from(U256::from(clear_a) != U256::MAX));
-            }
-        }
-    }
-
-    create_parametrized_test!(test_unchecked_scalar_comparisons_edge {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-
-    fn integer_is_scalar_out_of_bounds(param: ClassicPBSParameters) {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (128f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-
-        let mut rng = rand::thread_rng();
-
-        let clear_0 = rng.gen::<u128>();
-        let ct = cks.encrypt_radix(clear_0, num_block);
-
-        // Positive scalars
-        {
-            // This one is in range
-            let scalar = U256::from(u128::MAX);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, None);
-
-            let scalar = U256::from(u128::MAX) + U256::ONE;
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Greater));
-
-            let scalar = U256::from(u128::MAX) + U256::from(rng.gen_range(2u128..=u128::MAX));
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Greater));
-
-            let scalar = U256::from(u128::MAX) + U256::from(u128::MAX);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Greater));
-        }
-
-        // Negative scalars
-        {
-            let res = sks.is_scalar_out_of_bounds(&ct, -1i128);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) - I256::ONE;
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) + I256::from(rng.gen_range(i128::MIN..=-2));
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) + I256::from(i128::MIN);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) - I256::from(rng.gen_range(2..=i128::MAX));
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) - I256::from(i128::MAX);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-        }
-    }
-
-    create_parametrized_test!(integer_is_scalar_out_of_bounds {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as the test relies on the ciphertext to encrypt 128bits
-        // but with param 3_3 we actually encrypt more that 128bits
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-
-    //=============================================================
-    // Scalar signed comparison tests
-    //=============================================================
-
-    /// Function to test an "unchecked_scalar" compartor function.
-    ///
-    /// This calls the `unchecked_scalar_comparator_method` with fresh ciphertexts
-    /// and compares that it gives the same results as the `clear_fn`.
-    fn test_signed_unchecked_scalar_function<UncheckedFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        unchecked_comparator_method: UncheckedFn,
-        clear_fn: ClearF,
-    ) where
-        UncheckedFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a SignedRadixCiphertext,
-            i128,
-        ) -> SignedRadixCiphertext,
-        ClearF: Fn(i128, i128) -> i128,
-    {
-        let mut rng = rand::thread_rng();
-
-        let num_block = (128f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-
-        let (cks, sks) = gen_keys(param);
-        let comparator = Comparator::new(&sks);
-
-        for _ in 0..num_test {
-            let clear_a = rng.gen::<i128>();
-            let clear_b = rng.gen::<i128>();
-
-            let a = cks.encrypt_signed_radix(clear_a, num_block);
-
-            {
-                let result = unchecked_comparator_method(&comparator, &a, clear_b);
-                let decrypted: i128 = cks.decrypt_signed_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_b);
-                assert_eq!(decrypted, expected_result);
-            }
-
-            {
-                // Force case where lhs == rhs
-                let result = unchecked_comparator_method(&comparator, &a, clear_a);
-                let decrypted: i128 = cks.decrypt_signed_radix(&result);
-                let expected_result = clear_fn(clear_a, clear_a);
-                assert_eq!(decrypted, expected_result);
-            }
-        }
-    }
-
-    /// Function to test a "smart_scalar" comparator function.
-    fn test_signed_smart_scalar_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        smart_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a mut SignedRadixCiphertext,
-            i128,
-        ) -> SignedRadixCiphertext,
-        ClearF: Fn(i128, i128) -> i128,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (128f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<i128>();
-            let clear_1 = rng.gen::<i128>();
-            let mut ct_0 = cks.encrypt_signed_radix(clear_0, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<i128>();
-                let ct_2 = cks.encrypt_signed_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 = clear_0.wrapping_add(clear_2);
-            }
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            let encrypted_result = smart_comparator_method(&comparator, &mut ct_0, clear_1);
-            assert!(ct_0.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            let decrypted_result: i128 = cks.decrypt_signed_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    /// Function to test a "default_scalar" comparator function.
-    fn test_signed_default_scalar_function<SmartFn, ClearF>(
-        param: ClassicPBSParameters,
-        num_test: usize,
-        default_comparator_method: SmartFn,
-        clear_fn: ClearF,
-    ) where
-        SmartFn: for<'a, 'b> Fn(
-            &'a Comparator<'b>,
-            &'a SignedRadixCiphertext,
-            i128,
-        ) -> SignedRadixCiphertext,
-        ClearF: Fn(i128, i128) -> i128,
-    {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (128f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-        let comparator = Comparator::new(&sks);
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..num_test {
-            let mut clear_0 = rng.gen::<i128>();
-            let clear_1 = rng.gen::<i128>();
-
-            let mut ct_0 = cks.encrypt_signed_radix(clear_0, num_block);
-
-            // Raise the degree, so as to ensure worst case path in operations
-            while ct_0.block_carries_are_empty() {
-                let clear_2 = rng.gen::<i128>();
-                let ct_2 = cks.encrypt_signed_radix(clear_2, num_block);
-                sks.unchecked_add_assign(&mut ct_0, &ct_2);
-                clear_0 = clear_0.wrapping_add(clear_2);
-            }
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            assert!(!ct_0.block_carries_are_empty());
-            let encrypted_result = default_comparator_method(&comparator, &ct_0, clear_1);
-            assert!(encrypted_result.block_carries_are_empty());
-
-            // Sanity decryption checks
-            {
-                let a: i128 = cks.decrypt_signed_radix(&ct_0);
-                assert_eq!(a, clear_0);
-            }
-
-            let decrypted_result: i128 = cks.decrypt_signed_radix(&encrypted_result);
-
-            let expected_result = clear_fn(clear_0, clear_1);
-            assert_eq!(decrypted_result, expected_result);
-        }
-    }
-
-    /// This macro generates the tests for a given scalar comparison fn
-    ///
-    /// All our scalar comparison function have 3 variants:
-    /// - unchecked_scalar_$comparison_name_parallelized
-    /// - smart_scalar_$comparison_name_parallelized
-    /// - scalar_$comparison_name_parallelized
-    ///
-    /// So, for example, for the `gt` comparison fn,
-    /// this macro will generate the tests for the 3 variants described above
-    macro_rules! define_signed_scalar_comparison_test_functions {
-        ($comparison_name:ident) => {
-            paste::paste!{
-                fn [<integer_signed_unchecked_scalar_ $comparison_name _parallelized_128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 2;
-                    test_signed_unchecked_scalar_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<unchecked_scalar_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs)),
-                    )
-                }
-
-                fn [<integer_signed_smart_scalar_ $comparison_name _parallelized_128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 2;
-                    test_signed_smart_scalar_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<smart_scalar_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs)),
-                    )
-                }
-
-                fn [<integer_signed_scalar_ $comparison_name _parallelized_128_bits>](params:  crate::shortint::ClassicPBSParameters) {
-                    let num_tests = 2;
-                    test_signed_default_scalar_function(
-                        params,
-                        num_tests,
-                        |comparator, lhs, rhs| comparator.[<scalar_ $comparison_name _parallelized>](lhs, rhs),
-                        |lhs, rhs| i128::from(<i128>::$comparison_name(&lhs, &rhs)),
-                    )
-                }
-
-                create_parametrized_test!([<integer_signed_unchecked_scalar_ $comparison_name _parallelized_128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<integer_signed_smart_scalar_ $comparison_name _parallelized_128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as smart test might overflow values
-                    // and when using 3_3 to represent 128 we actually have more than 128 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-
-                create_parametrized_test!([<integer_signed_scalar_ $comparison_name _parallelized_128_bits>]
-                {
-                    PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-                    // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-                    // as default test might overflow values
-                    // and when using 3_3 to represent 128 we actually have more than 128 bits
-                    // of message so the overflow behaviour is not the same, leading to false negatives
-                    PARAM_MESSAGE_4_CARRY_4_KS_PBS
-                });
-            }
-        };
-    }
-
-    define_signed_scalar_comparison_test_functions!(eq);
-    define_signed_scalar_comparison_test_functions!(ne);
-    define_signed_scalar_comparison_test_functions!(lt);
-    define_signed_scalar_comparison_test_functions!(le);
-    define_signed_scalar_comparison_test_functions!(gt);
-    define_signed_scalar_comparison_test_functions!(ge);
-
-    fn integer_signed_unchecked_scalar_min_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_unchecked_scalar_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.unchecked_scalar_min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn integer_signed_unchecked_scalar_max_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_unchecked_scalar_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.unchecked_scalar_max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    fn integer_signed_smart_scalar_min_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_smart_scalar_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.smart_scalar_min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn integer_signed_smart_scalar_max_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_smart_scalar_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.smart_scalar_max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    fn integer_signed_scalar_min_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_default_scalar_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.scalar_min_parallelized(lhs, rhs),
-            std::cmp::min,
-        )
-    }
-
-    fn integer_signed_scalar_max_parallelized_128_bits(
-        params: crate::shortint::ClassicPBSParameters,
-    ) {
-        test_signed_default_scalar_function(
-            params,
-            2,
-            |comparator, lhs, rhs| comparator.scalar_max_parallelized(lhs, rhs),
-            std::cmp::max,
-        )
-    }
-
-    create_parametrized_test!(integer_signed_unchecked_scalar_max_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_unchecked_scalar_min_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_smart_scalar_max_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_smart_scalar_min_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_scalar_max_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-    create_parametrized_test!(integer_signed_scalar_min_parallelized_128_bits {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as default test might overflow values
-        // and when using 3_3 to represent 256 we actually have more than 256 bits
-        // of message so the overflow behaviour is not the same, leading to false negatives
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
-
-    fn integer_signed_is_scalar_out_of_bounds(param: ClassicPBSParameters) {
-        let (cks, sks) = gen_keys(param);
-        let num_block = (128f64 / (param.message_modulus.0 as f64).log(2.0)).ceil() as usize;
-
-        let mut rng = rand::thread_rng();
-
-        let clear_0 = rng.gen::<i128>();
-        let ct = cks.encrypt_signed_radix(clear_0, num_block);
-
-        // Positive scalars
-        {
-            // This one is in range
-            let scalar = I256::from(i128::MAX);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, None);
-
-            let scalar = I256::from(i128::MAX) + I256::ONE;
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Greater));
-
-            let scalar = I256::from(i128::MAX) + I256::from(rng.gen_range(2i128..=i128::MAX));
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Greater));
-
-            let scalar = I256::from(i128::MAX) + I256::from(i128::MAX);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Greater));
-        }
-
-        // Negative scalars
-        {
-            // This one is in range
-            let scalar = I256::from(i128::MIN);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, None);
-
-            let scalar = I256::from(i128::MIN) - I256::ONE;
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) + I256::from(rng.gen_range(i128::MIN..=-2));
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) + I256::from(i128::MIN);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) - I256::from(rng.gen_range(2..=i128::MAX));
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-
-            let scalar = I256::from(i128::MIN) - I256::from(i128::MAX);
-            let res = sks.is_scalar_out_of_bounds(&ct, scalar);
-            assert_eq!(res, Some(std::cmp::Ordering::Less));
-        }
-    }
-
-    create_parametrized_test!(integer_signed_is_scalar_out_of_bounds {
-        PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-        // We don't use PARAM_MESSAGE_3_CARRY_3_KS_PBS,
-        // as the test relies on the ciphertext to encrypt 128bits
-        // but with param 3_3 we actually encrypt more that 128bits
-        PARAM_MESSAGE_4_CARRY_4_KS_PBS
-    });
 }

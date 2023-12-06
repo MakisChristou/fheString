@@ -6,11 +6,12 @@ use tfhe::shortint::Ciphertext;
 #[derive(Clone)]
 pub struct FheAsciiChar {
     pub inner: BaseRadixCiphertext<Ciphertext>,
+    num_blocks: usize,
 }
 
 impl FheAsciiChar {
     pub fn new(value: BaseRadixCiphertext<Ciphertext>) -> Self {
-        FheAsciiChar { inner: value }
+        FheAsciiChar { inner: value, num_blocks: 4}
     }
 
     pub fn encrypt_trivial(
@@ -34,34 +35,32 @@ impl FheAsciiChar {
 
     pub fn eq(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.eq_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
+        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
     }
 
     pub fn ne(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
-        let res: BaseRadixCiphertext<Ciphertext> =
-            server_key.ne_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
+        let res = server_key.ne_parallelized(&self.inner, &other.inner);
+        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
     }
 
     pub fn le(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.le_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
+        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
     }
 
     pub fn lt(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.lt_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
+        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
     }
 
     pub fn ge(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
-        let res: BaseRadixCiphertext<Ciphertext> =
-            server_key.ge_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
+        let res =server_key.ge_parallelized(&self.inner, &other.inner);
+        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
     }
 
     pub fn gt(&self, server_key: &tfhe::integer::ServerKey, other: &FheAsciiChar) -> FheAsciiChar {
         let res = server_key.gt_parallelized(&self.inner, &other.inner);
-        FheAsciiChar::new(res)
+        FheAsciiChar::new(res.into_radix(self.num_blocks, server_key))
     }
 
     pub fn bitand(
@@ -98,8 +97,10 @@ impl FheAsciiChar {
         true_value: &FheAsciiChar,
         false_value: &FheAsciiChar,
     ) -> FheAsciiChar {
+        let condition = server_key.scalar_ne_parallelized(&self.inner, 0);
+        
         let res = server_key.if_then_else_parallelized(
-            &self.inner,
+            &condition,
             &true_value.inner,
             &false_value.inner,
         );

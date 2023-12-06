@@ -1,7 +1,12 @@
 use super::*;
 
+#[cfg(not(feature = "__coverage"))]
+const NB_TESTS: usize = 10;
+#[cfg(feature = "__coverage")]
+const NB_TESTS: usize = 1;
+
 fn lwe_encrypt_ks_decrypt_custom_mod<Scalar: UnsignedTorus + Send + Sync>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let lwe_dimension = params.lwe_dimension;
     let lwe_modular_std_dev = params.lwe_modular_std_dev;
@@ -15,7 +20,6 @@ fn lwe_encrypt_ks_decrypt_custom_mod<Scalar: UnsignedTorus + Send + Sync>(
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -46,7 +50,7 @@ fn lwe_encrypt_ks_decrypt_custom_mod<Scalar: UnsignedTorus + Send + Sync>(
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(
+            assert!(check_encrypted_content_respects_mod(
                 &ksk_big_to_small,
                 ciphertext_modulus
             ));
@@ -61,7 +65,10 @@ fn lwe_encrypt_ks_decrypt_custom_mod<Scalar: UnsignedTorus + Send + Sync>(
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&ct, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &ct,
+                ciphertext_modulus
+            ));
 
             let mut output_ct = LweCiphertext::new(
                 Scalar::ZERO,
@@ -77,7 +84,10 @@ fn lwe_encrypt_ks_decrypt_custom_mod<Scalar: UnsignedTorus + Send + Sync>(
 
             keyswitch_lwe_ciphertext(&ksk_big_to_small, &ct, &mut output_ct);
 
-            assert!(check_content_respects_mod(&output_ct, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &output_ct,
+                ciphertext_modulus
+            ));
 
             par_keyswitch_lwe_ciphertext(&ksk_big_to_small, &ct, &mut output_ct_parallel);
             assert_eq!(output_ct.as_ref(), output_ct_parallel.as_ref());
@@ -88,6 +98,11 @@ fn lwe_encrypt_ks_decrypt_custom_mod<Scalar: UnsignedTorus + Send + Sync>(
 
             assert_eq!(msg, decoded);
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 

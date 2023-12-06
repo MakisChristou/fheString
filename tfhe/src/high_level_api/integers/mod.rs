@@ -10,6 +10,9 @@ pub(in crate::high_level_api) use keys::{
     IntegerCompressedServerKey, IntegerConfig, IntegerServerKey,
 };
 
+pub(in crate::high_level_api) use parameters::IntegerId;
+pub(in crate::high_level_api) use types::GenericInteger;
+
 mod client_key;
 mod keys;
 mod parameters;
@@ -22,8 +25,10 @@ mod types;
 
 #[cfg(feature = "safe-deserialization")]
 pub mod safe_serialize {
-    use super::parameters::IntegerParameter;
+    use super::parameters::IntegerId;
     use super::types::compact::GenericCompactInteger;
+    use super::types::compressed::CompressedGenericInteger;
+    use super::types::GenericInteger;
     use crate::conformance::ParameterSetConformant;
     use crate::integer::parameters::RadixCiphertextConformanceParams;
     use crate::named::Named;
@@ -62,18 +67,61 @@ pub mod safe_serialize {
         )
     }
 
-    pub fn safe_deserialize_conformant_compact_integer<P, Id>(
+    pub fn safe_deserialize_conformant_integer<Id>(
         reader: impl std::io::Read,
         serialized_size_limit: u64,
         sk: &ServerKey,
-    ) -> Result<GenericCompactInteger<P>, String>
+    ) -> Result<GenericInteger<Id>, String>
     where
-        P: IntegerParameter<Id = Id>,
-        Id: DeserializeOwned,
+        Id: IntegerId + DeserializeOwned,
+        Id::InnerCiphertext: ParameterSetConformant<ParameterSet = RadixCiphertextConformanceParams>
+            + DeserializeOwned,
     {
         let parameter_set = RadixCiphertextConformanceParams {
             shortint_params: sk.integer_key.pbs_key().key.conformance_params(),
-            num_blocks_per_integer: P::num_blocks(),
+            num_blocks_per_integer: Id::num_blocks(),
+        };
+
+        crate::safe_deserialization::safe_deserialize_conformant(
+            reader,
+            serialized_size_limit,
+            &parameter_set,
+        )
+    }
+
+    pub fn safe_deserialize_conformant_compressed_integer<Id>(
+        reader: impl std::io::Read,
+        serialized_size_limit: u64,
+        sk: &ServerKey,
+    ) -> Result<CompressedGenericInteger<Id>, String>
+    where
+        Id: IntegerId + DeserializeOwned,
+        Id::InnerCompressedCiphertext: ParameterSetConformant<ParameterSet = RadixCiphertextConformanceParams>
+            + DeserializeOwned,
+    {
+        let parameter_set = RadixCiphertextConformanceParams {
+            shortint_params: sk.integer_key.pbs_key().key.conformance_params(),
+            num_blocks_per_integer: Id::num_blocks(),
+        };
+
+        crate::safe_deserialization::safe_deserialize_conformant(
+            reader,
+            serialized_size_limit,
+            &parameter_set,
+        )
+    }
+
+    pub fn safe_deserialize_conformant_compact_integer<Id>(
+        reader: impl std::io::Read,
+        serialized_size_limit: u64,
+        sk: &ServerKey,
+    ) -> Result<GenericCompactInteger<Id>, String>
+    where
+        Id: IntegerId + DeserializeOwned,
+    {
+        let parameter_set = RadixCiphertextConformanceParams {
+            shortint_params: sk.integer_key.pbs_key().key.conformance_params(),
+            num_blocks_per_integer: Id::num_blocks(),
         };
 
         crate::safe_deserialization::safe_deserialize_conformant(

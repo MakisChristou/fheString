@@ -1,8 +1,8 @@
 use crate::integer::block_decomposition::{BlockDecomposer, DecomposableInto};
 use crate::integer::ciphertext::IntegerRadixCiphertext;
 use crate::integer::server_key::CheckError;
-use crate::integer::server_key::CheckError::CarryFull;
 use crate::integer::ServerKey;
+use crate::shortint::ciphertext::{Degree, MaxDegree};
 
 impl ServerKey {
     /// Computes homomorphically an addition between a scalar and a ciphertext.
@@ -84,11 +84,9 @@ impl ServerKey {
     /// let ct2 = cks.encrypt(msg);
     ///
     /// // Check if we can perform an addition
-    /// let res = sks.is_scalar_add_possible(&ct1, scalar);
-    ///
-    /// assert_eq!(true, res);
+    /// sks.is_scalar_add_possible(&ct1, scalar).unwrap();
     /// ```
-    pub fn is_scalar_add_possible<T, C>(&self, ct: &C, scalar: T) -> bool
+    pub fn is_scalar_add_possible<T, C>(&self, ct: &C, scalar: T) -> Result<(), CheckError>
     where
         T: DecomposableInto<u8>,
         C: IntegerRadixCiphertext,
@@ -97,19 +95,29 @@ impl ServerKey {
         let decomposer =
             BlockDecomposer::with_early_stop_at_zero(scalar, bits_in_message).iter_as::<u8>();
 
-        ct.blocks()
-            .iter()
-            .zip(decomposer)
-            .all(|(ciphertext_block, scalar_block)| {
-                self.key
-                    .is_scalar_add_possible(ciphertext_block, scalar_block)
-            })
+        // Assumes message_modulus and carry_modulus matches between pairs of block
+        let mut preceding_block_carry = Degree::new(0);
+        for (left_block, scalar_block_value) in ct.blocks().iter().zip(decomposer) {
+            let degree_after_add = left_block.degree + Degree::new(scalar_block_value as usize);
+
+            // Also need to take into account preceding_carry
+            let max_degree = MaxDegree::from_msg_carry_modulus(
+                left_block.message_modulus,
+                left_block.carry_modulus,
+            );
+
+            max_degree.validate(degree_after_add + preceding_block_carry)?;
+
+            preceding_block_carry =
+                Degree::new(degree_after_add.get() / left_block.message_modulus.0);
+        }
+        Ok(())
     }
 
     /// Computes homomorphically an addition between a scalar and a ciphertext.
     ///
     /// If the operation can be performed, the result is returned in a new ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -141,28 +149,22 @@ impl ServerKey {
         T: DecomposableInto<u8>,
         C: IntegerRadixCiphertext,
     {
-        if self.is_scalar_add_possible(ct, scalar) {
-            Ok(self.unchecked_scalar_add(ct, scalar))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_scalar_add_possible(ct, scalar)?;
+        Ok(self.unchecked_scalar_add(ct, scalar))
     }
 
     /// Computes homomorphically an addition between a scalar and a ciphertext.
     ///
     /// If the operation can be performed, the result is stored in the `ct_left` ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned, and `ct_left` is not modified.
+    /// Otherwise a [CheckError] is returned, and `ct_left` is not modified.
     pub fn checked_scalar_add_assign<T, C>(&self, ct: &mut C, scalar: T) -> Result<(), CheckError>
     where
         T: DecomposableInto<u8>,
         C: IntegerRadixCiphertext,
     {
-        if self.is_scalar_add_possible(ct, scalar) {
-            self.unchecked_scalar_add_assign(ct, scalar);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_scalar_add_possible(ct, scalar)?;
+        self.unchecked_scalar_add_assign(ct, scalar);
+        Ok(())
     }
 
     /// Computes homomorphically the addition of ciphertext with a scalar.
@@ -196,9 +198,11 @@ impl ServerKey {
         T: DecomposableInto<u8>,
         C: IntegerRadixCiphertext,
     {
-        if !self.is_scalar_add_possible(ct, scalar) {
+        if self.is_scalar_add_possible(ct, scalar).is_err() {
             self.full_propagate(ct);
         }
+
+        self.is_scalar_add_possible(ct, scalar).unwrap();
 
         let mut ct = ct.clone();
         self.unchecked_scalar_add_assign(&mut ct, scalar);
@@ -236,9 +240,10 @@ impl ServerKey {
         T: DecomposableInto<u8>,
         C: IntegerRadixCiphertext,
     {
-        if !self.is_scalar_add_possible(ct, scalar) {
+        if self.is_scalar_add_possible(ct, scalar).is_err() {
             self.full_propagate(ct);
         }
+        self.is_scalar_add_possible(ct, scalar).unwrap();
         self.unchecked_scalar_add_assign(ct, scalar);
     }
 }

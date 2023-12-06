@@ -24,7 +24,7 @@ To use the `FheUint8` type, the `integer` feature must be activated:
 
 [dependencies]
 # Default configuration for x86 Unix machines:
-tfhe = { version = "0.4.0", features = ["integer", "x86_64-unix"]}
+tfhe = { version = "0.5.0", features = ["integer", "x86_64-unix"]}
 ```
 
 Other configurations can be found [here](../getting_started/installation.md).
@@ -69,7 +69,7 @@ use tfhe::FheUint8;
 pub const UP_LOW_DISTANCE: u8 = 32;
 
 fn to_lower(c: &FheUint8) -> FheUint8 {
-    c + (c.gt(64) & c.lt(91)) * UP_LOW_DISTANCE
+    c + FheUint8::cast_from(c.gt(64) & c.lt(91)) * UP_LOW_DISTANCE
 }
 ```
 
@@ -86,11 +86,11 @@ struct FheAsciiString {
 }
 
 fn to_upper(c: &FheUint8) -> FheUint8 {
-    c - (c.gt(96) & c.lt(123)) * UP_LOW_DISTANCE
+    c - FheUint8::cast_from(c.gt(96) & c.lt(123)) * UP_LOW_DISTANCE
 }
 
 fn to_lower(c: &FheUint8) -> FheUint8 {
-    c + (c.gt(64) & c.lt(91)) * UP_LOW_DISTANCE
+    c + FheUint8::cast_from(c.gt(64) & c.lt(91)) * UP_LOW_DISTANCE
 }
 
 impl FheAsciiString {
@@ -131,8 +131,7 @@ impl FheAsciiString {
 }
 
 fn main() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
+    let config = ConfigBuilder::default()
         .build();
 
     let (client_key, server_key) = generate_keys(config);

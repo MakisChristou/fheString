@@ -1,8 +1,8 @@
 use crate::core_crypto::prelude::misc::divide_ceil;
 use crate::integer::ciphertext::IntegerRadixCiphertext;
 use crate::integer::server_key::CheckError;
-use crate::integer::server_key::CheckError::CarryFull;
 use crate::integer::ServerKey;
+use crate::shortint::ciphertext::{Degree, MaxDegree};
 
 impl ServerKey {
     /// Homomorphically computes the opposite of a ciphertext encrypting an integer message.
@@ -66,7 +66,7 @@ impl ServerKey {
                 self.key.unchecked_scalar_add_assign(block, z_b);
             }
             z = self.key.unchecked_neg_assign_with_correcting_term(block);
-            block.degree.0 = z as usize - z_b as usize;
+            block.degree = Degree::new(z as usize - z_b as usize);
 
             z_b = (z / self.key.message_modulus.0 as u64) as u8;
         }
@@ -90,41 +90,38 @@ impl ServerKey {
     /// let ctxt = cks.encrypt(msg);
     ///
     /// // Check if we can perform a negation
-    /// let res = sks.is_neg_possible(&ctxt);
-    ///
-    /// assert_eq!(true, res);
+    /// sks.is_neg_possible(&ctxt).unwrap();
     /// ```
-    pub fn is_neg_possible<T>(&self, ctxt: &T) -> bool
+    pub fn is_neg_possible<T>(&self, ctxt: &T) -> Result<(), CheckError>
     where
         T: IntegerRadixCiphertext,
     {
-        let mut preceding_block_carry = 0;
+        let mut preceding_block_carry = Degree::new(0);
         let mut preceding_scaled_z = 0;
         for block in ctxt.blocks().iter() {
             let msg_mod = block.message_modulus.0;
-            let carry_mod = block.carry_modulus.0;
-            let total_modulus = msg_mod * carry_mod;
+            let max_degree =
+                MaxDegree::from_msg_carry_modulus(block.message_modulus, block.carry_modulus);
 
             // z = ceil( degree / 2^p ) x 2^p
-            let mut z = divide_ceil(block.degree.0, msg_mod);
+            let mut z = divide_ceil(block.degree.get(), msg_mod);
             z = z.wrapping_mul(msg_mod);
             // In the actual operation, preceding_scaled_z is added to the ciphertext
             // before doing lwe_ciphertext_opposite:
             // i.e the code does -(ciphertext + preceding_scaled_z) + z
             // here we do -ciphertext -preceding_scaled_z + z
             // which is easier to express degree
-            let block_degree_after_negation = z - preceding_scaled_z;
+            let block_degree_after_negation = Degree::new(z - preceding_scaled_z);
 
             // We want to be able to add together the negated block and the carry
             // from preceding negated block to make sure carry propagation would be correct.
-            if (block_degree_after_negation + preceding_block_carry) >= total_modulus {
-                return false;
-            }
 
-            preceding_block_carry = block_degree_after_negation / msg_mod;
+            max_degree.validate(block_degree_after_negation + preceding_block_carry)?;
+
+            preceding_block_carry = Degree::new(block_degree_after_negation.get() / msg_mod);
             preceding_scaled_z = z / msg_mod;
         }
-        true
+        Ok(())
     }
 
     /// Homomorphically computes the opposite of a ciphertext encrypting an integer message.
@@ -165,13 +162,10 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
     {
         //If the ciphertext cannot be negated without exceeding the capacity of a ciphertext
-        if self.is_neg_possible(ctxt) {
-            let mut result = ctxt.clone();
-            self.unchecked_neg_assign(&mut result);
-            Ok(result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_neg_possible(ctxt)?;
+        let mut result = ctxt.clone();
+        self.unchecked_neg_assign(&mut result);
+        Ok(result)
     }
 
     /// Homomorphically computes the opposite of a ciphertext encrypting an integer message.
@@ -206,12 +200,9 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
     {
         //If the ciphertext cannot be negated without exceeding the capacity of a ciphertext
-        if self.is_neg_possible(ctxt) {
-            self.unchecked_neg_assign(ctxt);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_neg_possible(ctxt)?;
+        self.unchecked_neg_assign(ctxt);
+        Ok(())
     }
 
     /// Homomorphically computes the opposite of a ciphertext encrypting an integer message.
@@ -244,9 +235,10 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_neg_possible(ctxt) {
+        if self.is_neg_possible(ctxt).is_err() {
             self.full_propagate(ctxt);
         }
+        self.is_neg_possible(ctxt).unwrap();
         self.unchecked_neg(ctxt)
     }
 }

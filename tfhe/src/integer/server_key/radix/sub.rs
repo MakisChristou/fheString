@@ -1,8 +1,9 @@
 use crate::core_crypto::algorithms::misc::divide_ceil;
 use crate::integer::ciphertext::IntegerRadixCiphertext;
+use crate::integer::server_key::radix_parallel::sub::SignedOperation;
 use crate::integer::server_key::CheckError;
-use crate::integer::server_key::CheckError::CarryFull;
-use crate::integer::{RadixCiphertext, ServerKey};
+use crate::integer::{BooleanBlock, RadixCiphertext, ServerKey, SignedRadixCiphertext};
+use crate::shortint::ciphertext::{Degree, MaxDegree, NoiseLevel};
 use crate::shortint::Ciphertext;
 
 impl ServerKey {
@@ -104,51 +105,55 @@ impl ServerKey {
     /// let ctxt_2 = cks.encrypt(msg_2);
     ///
     /// // Check if we can perform a subtraction
-    /// let res = sks.is_sub_possible(&ctxt_1, &ctxt_2);
-    ///
-    /// assert_eq!(true, res);
+    /// sks.is_sub_possible(&ctxt_1, &ctxt_2).unwrap();
     /// ```
-    pub fn is_sub_possible<T>(&self, ctxt_left: &T, ctxt_right: &T) -> bool
+    pub fn is_sub_possible<T>(&self, ctxt_left: &T, ctxt_right: &T) -> Result<(), CheckError>
     where
         T: IntegerRadixCiphertext,
     {
-        let mut preceding_block_carry = 0;
+        let mut preceding_block_carry = Degree::new(0);
         let mut preceding_scaled_z = 0;
+        let mut extracted_carry_noise_level = NoiseLevel::ZERO;
         for (left_block, right_block) in ctxt_left.blocks().iter().zip(ctxt_right.blocks().iter()) {
             // Assumes message_modulus and carry_modulus matches between pairs of block
             let msg_mod = left_block.message_modulus.0;
-            let carry_mod = left_block.carry_modulus.0;
-            let total_modulus = msg_mod * carry_mod;
+            let max_degree = MaxDegree::from_msg_carry_modulus(
+                left_block.message_modulus,
+                left_block.carry_modulus,
+            );
 
             // z = ceil( degree / 2^p ) x 2^p
-            let mut z = divide_ceil(right_block.degree.0, msg_mod);
+            let mut z = divide_ceil(right_block.degree.get(), msg_mod);
             z = z.wrapping_mul(msg_mod);
             // In the actual operation, preceding_scaled_z is added to the ciphertext
             // before doing lwe_ciphertext_opposite:
             // i.e the code does -(ciphertext + preceding_scaled_z) + z
             // here we do -ciphertext -preceding_scaled_z + z
             // which is easier to express degree
-            let right_block_degree_after_negation = z - preceding_scaled_z;
+            let right_block_degree_after_negation = Degree::new(z - preceding_scaled_z);
 
-            let degree_after_add = left_block.degree.0 + right_block_degree_after_negation;
+            let degree_after_add = left_block.degree + right_block_degree_after_negation;
 
             // We want to be able to add the left block, the negated right block
             // and we also want to be able to add the carry from preceding block addition
             // to make sure carry propagation would be correct.
-            if (degree_after_add + preceding_block_carry) >= total_modulus {
-                return false;
-            }
+            max_degree.validate(degree_after_add + preceding_block_carry)?;
 
-            preceding_block_carry = degree_after_add / msg_mod;
+            self.key.max_noise_level.validate(
+                left_block.noise_level() + right_block.noise_level() + extracted_carry_noise_level,
+            )?;
+
+            preceding_block_carry = Degree::new(degree_after_add.get() / msg_mod);
             preceding_scaled_z = z / msg_mod;
+            extracted_carry_noise_level = NoiseLevel::NOMINAL;
         }
-        true
+        Ok(())
     }
 
     /// Computes homomorphically a subtraction between two ciphertexts encrypting integer values.
     ///
     /// If the operation can be performed, the result is returned in a new ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// The result is returned as a new ciphertext.
     ///
@@ -183,17 +188,14 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if self.is_sub_possible(ctxt_left, ctxt_right) {
-            Ok(self.unchecked_sub(ctxt_left, ctxt_right))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_sub_possible(ctxt_left, ctxt_right)?;
+        Ok(self.unchecked_sub(ctxt_left, ctxt_right))
     }
 
     /// Computes homomorphically a subtraction between two ciphertexts encrypting integer values.
     ///
     /// If the operation can be performed, the result is returned in a new ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// The result is assigned to the `ct_left` ciphertext.
     ///
@@ -215,9 +217,7 @@ impl ServerKey {
     /// let ct2 = cks.encrypt(msg2 as u64);
     ///
     /// // Compute homomorphically an addition:
-    /// let res = sks.checked_sub_assign(&mut ct1, &ct2);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_sub_assign(&mut ct1, &ct2).unwrap();
     ///
     /// let clear: u64 = cks.decrypt(&ct1);
     /// assert_eq!(msg1.wrapping_sub(msg2) as u64, clear);
@@ -226,12 +226,9 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if self.is_sub_possible(ct_left, ct_right) {
-            self.unchecked_sub_assign(ct_left, ct_right);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_sub_possible(ct_left, ct_right)?;
+        self.unchecked_sub_assign(ct_left, ct_right);
+        Ok(())
     }
 
     /// Computes homomorphically the subtraction between ct_left and ct_right.
@@ -265,15 +262,17 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
     {
         // If the ciphertext cannot be negated without exceeding the capacity of a ciphertext
-        if !self.is_neg_possible(ctxt_right) {
+        if self.is_neg_possible(ctxt_right).is_err() {
             self.full_propagate(ctxt_right);
         }
 
         // If the ciphertext cannot be added together without exceeding the capacity of a ciphertext
-        if !self.is_sub_possible(ctxt_left, ctxt_right) {
+        if self.is_sub_possible(ctxt_left, ctxt_right).is_err() {
             self.full_propagate(ctxt_left);
             self.full_propagate(ctxt_right);
         }
+
+        self.is_sub_possible(ctxt_left, ctxt_right).unwrap();
 
         let mut result = ctxt_left.clone();
         self.unchecked_sub_assign(&mut result, ctxt_right);
@@ -312,15 +311,17 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
     {
         // If the ciphertext cannot be negated without exceeding the capacity of a ciphertext
-        if !self.is_neg_possible(ctxt_right) {
+        if self.is_neg_possible(ctxt_right).is_err() {
             self.full_propagate(ctxt_right);
         }
 
         // If the ciphertext cannot be added together without exceeding the capacity of a ciphertext
-        if !self.is_sub_possible(ctxt_left, ctxt_right) {
+        if self.is_sub_possible(ctxt_left, ctxt_right).is_err() {
             self.full_propagate(ctxt_left);
             self.full_propagate(ctxt_right);
         }
+
+        self.is_sub_possible(ctxt_left, ctxt_right).unwrap();
 
         self.unchecked_sub_assign(ctxt_left, ctxt_right);
     }
@@ -349,7 +350,7 @@ impl ServerKey {
     ///
     /// // Decrypt:
     /// let decrypted_result: u8 = cks.decrypt(&result);
-    /// let decrypted_overflow = cks.decrypt_one_block(&overflowed) == 1;
+    /// let decrypted_overflow = cks.decrypt_bool(&overflowed);
     ///
     /// let (expected_result, expected_overflow) = msg_1.overflowing_sub(msg_2);
     /// assert_eq!(expected_result, decrypted_result);
@@ -359,7 +360,7 @@ impl ServerKey {
         &self,
         ctxt_left: &RadixCiphertext,
         ctxt_right: &RadixCiphertext,
-    ) -> (RadixCiphertext, Ciphertext) {
+    ) -> (RadixCiphertext, BooleanBlock) {
         let mut tmp_lhs;
         let mut tmp_rhs;
 
@@ -396,7 +397,7 @@ impl ServerKey {
         &self,
         lhs: &RadixCiphertext,
         rhs: &RadixCiphertext,
-    ) -> (RadixCiphertext, Ciphertext) {
+    ) -> (RadixCiphertext, BooleanBlock) {
         assert_eq!(
             lhs.blocks.len(),
             rhs.blocks.len(),
@@ -424,6 +425,7 @@ impl ServerKey {
                 &mut result_block.ct,
                 &borrow.ct,
             );
+            result_block.set_noise_level(result_block.noise_level() + borrow.noise_level());
             let (msg, new_borrow) = rayon::join(
                 || self.key.message_extract(&result_block),
                 || {
@@ -437,7 +439,164 @@ impl ServerKey {
         }
 
         // borrow of last block indicates overflow
-        let overflowed = borrow;
+        let overflowed = BooleanBlock::new_unchecked(borrow);
         (RadixCiphertext::from(new_blocks), overflowed)
+    }
+
+    pub(crate) fn unchecked_signed_overflowing_add_or_sub(
+        &self,
+        lhs: &SignedRadixCiphertext,
+        rhs: &SignedRadixCiphertext,
+        signed_operation: SignedOperation,
+    ) -> (SignedRadixCiphertext, BooleanBlock) {
+        let mut result = lhs.clone();
+
+        let num_blocks = result.blocks.len();
+        if num_blocks == 0 {
+            return (result, self.create_trivial_boolean_block(false));
+        }
+
+        fn block_add_assign_returning_carry(
+            sks: &ServerKey,
+            lhs: &mut Ciphertext,
+            rhs: &Ciphertext,
+        ) -> Ciphertext {
+            sks.key.unchecked_add_assign(lhs, rhs);
+            let (carry, message) = rayon::join(
+                || sks.key.carry_extract(lhs),
+                || sks.key.message_extract(lhs),
+            );
+
+            *lhs = message;
+
+            carry
+        }
+
+        // 2_2, 3_3, 4_4
+        // If we have at least 2 bits and at least as much carries
+        if self.key.message_modulus.0 >= 4 && self.key.carry_modulus.0 >= self.key.message_modulus.0
+        {
+            if signed_operation == SignedOperation::Subtraction {
+                self.unchecked_sub_assign(&mut result, rhs);
+            } else {
+                self.unchecked_add_assign(&mut result, rhs);
+            }
+
+            let mut input_carry = self.key.create_trivial(0);
+
+            // For the first block do the first step of overflow computation in parallel
+            let (_, last_block_inner_propagation) = rayon::join(
+                || {
+                    input_carry =
+                        block_add_assign_returning_carry(self, &mut result.blocks[0], &input_carry);
+                },
+                || {
+                    self.generate_last_block_inner_propagation(
+                        &lhs.blocks[num_blocks - 1],
+                        &rhs.blocks[num_blocks - 1],
+                        signed_operation,
+                    )
+                },
+            );
+
+            for block in result.blocks[1..num_blocks - 1].iter_mut() {
+                input_carry = block_add_assign_returning_carry(self, block, &input_carry);
+            }
+
+            // Treat the last block separately to handle last step of overflow behavior
+            let output_carry = block_add_assign_returning_carry(
+                self,
+                &mut result.blocks[num_blocks - 1],
+                &input_carry,
+            );
+            let overflowed = self.resolve_signed_overflow(
+                last_block_inner_propagation,
+                &BooleanBlock::new_unchecked(input_carry),
+                &BooleanBlock::new_unchecked(output_carry),
+            );
+
+            return (result, overflowed);
+        }
+
+        // 1_X parameters
+        //
+        // Same idea as other algorithms, however since we have 1 bit per block
+        // we do not have to resolve any inner propagation but it adds one more
+        // sequential PBS
+        if self.key.message_modulus.0 == 2 {
+            if signed_operation == SignedOperation::Subtraction {
+                self.unchecked_sub_assign(&mut result, rhs);
+            } else {
+                self.unchecked_add_assign(&mut result, rhs);
+            }
+
+            let mut input_carry = self.key.create_trivial(0);
+            for block in result.blocks[..num_blocks - 1].iter_mut() {
+                input_carry = block_add_assign_returning_carry(self, block, &input_carry);
+            }
+
+            let output_carry = block_add_assign_returning_carry(
+                self,
+                &mut result.blocks[num_blocks - 1],
+                &input_carry,
+            );
+
+            // Encode the rule
+            // "Overflow occurred if the carry into the last bit is different than the carry out
+            // of the last bit"
+            let overflowed = self.key.not_equal(&output_carry, &input_carry);
+            return (result, BooleanBlock::new_unchecked(overflowed));
+        }
+
+        panic!(
+            "Invalid combo of message modulus ({}) and carry modulus ({}) \n\
+            This function requires the message modulus >= 2 and carry modulus >= message_modulus \n\
+            I.e. PARAM_MESSAGE_X_CARRY_Y where X >= 1 and Y >= X.",
+            self.key.message_modulus.0, self.key.carry_modulus.0
+        );
+    }
+    pub fn unchecked_signed_overflowing_sub(
+        &self,
+        lhs: &SignedRadixCiphertext,
+        rhs: &SignedRadixCiphertext,
+    ) -> (SignedRadixCiphertext, BooleanBlock) {
+        self.unchecked_signed_overflowing_add_or_sub(lhs, rhs, SignedOperation::Subtraction)
+    }
+
+    pub fn signed_overflowing_sub(
+        &self,
+        ctxt_left: &SignedRadixCiphertext,
+        ctxt_right: &SignedRadixCiphertext,
+    ) -> (SignedRadixCiphertext, BooleanBlock) {
+        let mut tmp_lhs;
+        let mut tmp_rhs;
+
+        let (lhs, rhs) = match (
+            ctxt_left.block_carries_are_empty(),
+            ctxt_right.block_carries_are_empty(),
+        ) {
+            (true, true) => (ctxt_left, ctxt_right),
+            (true, false) => {
+                tmp_rhs = ctxt_right.clone();
+                self.full_propagate(&mut tmp_rhs);
+                (ctxt_left, &tmp_rhs)
+            }
+            (false, true) => {
+                tmp_lhs = ctxt_left.clone();
+                self.full_propagate(&mut tmp_lhs);
+                (&tmp_lhs, ctxt_right)
+            }
+            (false, false) => {
+                tmp_lhs = ctxt_left.clone();
+                tmp_rhs = ctxt_right.clone();
+                rayon::join(
+                    || self.full_propagate(&mut tmp_lhs),
+                    || self.full_propagate(&mut tmp_rhs),
+                );
+                (&tmp_lhs, &tmp_rhs)
+            }
+        };
+
+        self.unchecked_signed_overflowing_sub(lhs, rhs)
     }
 }

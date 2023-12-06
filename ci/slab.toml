@@ -3,30 +3,35 @@ region = "eu-west-3"
 image_id = "ami-051942e4055555752"
 instance_type = "m6i.32xlarge"
 
+[profile.cpu-big_fallback]
+region = "us-east-1"
+image_id = "ami-04e3bb9aebb6786df"
+instance_type = "m6i.32xlarge"
+
 [profile.cpu-small]
 region = "eu-west-3"
 image_id = "ami-051942e4055555752"
 instance_type = "m6i.4xlarge"
 
 [profile.bench]
-region = "eu-west-3"
-image_id = "ami-051942e4055555752"
-instance_type = "m6i.metal"
+region = "eu-west-1"
+image_id = "ami-0e88d98b86aff13de"
+instance_type = "hpc7a.96xlarge"
 
 [command.cpu_test]
 workflow = "aws_tfhe_tests.yml"
 profile = "cpu-big"
 check_run_name = "CPU AWS Tests"
 
-[command.cpu_integer_test]
+[command.cpu_unsigned_integer_test]
 workflow = "aws_tfhe_integer_tests.yml"
 profile = "cpu-big"
-check_run_name = "CPU Integer AWS Tests"
+check_run_name = "CPU Unsigned Integer AWS Tests"
 
-[command.cpu_multi_bit_test]
-workflow = "aws_tfhe_multi_bit_tests.yml"
+[command.cpu_signed_integer_test]
+workflow = "aws_tfhe_signed_integer_tests.yml"
 profile = "cpu-big"
-check_run_name = "CPU AWS Multi Bit Tests"
+check_run_name = "CPU Signed Integer AWS Tests"
 
 [command.cpu_wasm_test]
 workflow = "aws_tfhe_wasm_tests.yml"
@@ -43,6 +48,11 @@ workflow = "integer_full_benchmark.yml"
 profile = "bench"
 check_run_name = "Integer CPU AWS Benchmarks Full Suite"
 
+[command.signed_integer_full_bench]
+workflow = "signed_integer_full_benchmark.yml"
+profile = "bench"
+check_run_name = "Signed Integer CPU AWS Benchmarks Full Suite"
+
 [command.integer_bench]
 workflow = "integer_benchmark.yml"
 profile = "bench"
@@ -52,6 +62,16 @@ check_run_name = "Integer CPU AWS Benchmarks"
 workflow = "integer_multi_bit_benchmark.yml"
 profile = "bench"
 check_run_name = "Integer multi bit CPU AWS Benchmarks"
+
+[command.signed_integer_bench]
+workflow = "signed_integer_benchmark.yml"
+profile = "bench"
+check_run_name = "Signed integer CPU AWS Benchmarks"
+
+[command.signed_integer_multi_bit_bench]
+workflow = "signed_integer_multi_bit_benchmark.yml"
+profile = "bench"
+check_run_name = "Signed integer multi bit CPU AWS Benchmarks"
 
 [command.shortint_full_bench]
 workflow = "shortint_full_benchmark.yml"

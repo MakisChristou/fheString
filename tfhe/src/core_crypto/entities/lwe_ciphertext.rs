@@ -3,7 +3,7 @@
 use crate::conformance::ParameterSetConformant;
 use crate::core_crypto::commons::parameters::*;
 use crate::core_crypto::commons::traits::*;
-use crate::core_crypto::prelude::misc::check_content_respects_mod;
+use crate::core_crypto::prelude::misc::check_encrypted_content_respects_mod;
 
 /// A convenience structure to easily manipulate the body of an [`LweCiphertext`].
 #[derive(Clone, Debug)]
@@ -238,7 +238,7 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> LweMask<C> {
     /// assert_eq!(lwe_mask.ciphertext_modulus(), ciphertext_modulus);
     /// ```
     pub fn from_container(container: C, ciphertext_modulus: CiphertextModulus<C::Element>) -> Self {
-        LweMask {
+        Self {
             data: container,
             ciphertext_modulus,
         }
@@ -497,7 +497,7 @@ impl<Scalar: UnsignedInteger, C: ContainerMut<Element = Scalar>> ContiguousEntit
 ///
 /// **Remark:** Observe that the decryption is followed by a decoding phase that will contain a
 /// rounding.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LweCiphertext<C: Container>
 where
     C::Element: UnsignedInteger,
@@ -515,6 +515,19 @@ impl<T: UnsignedInteger, C: Container<Element = T>> AsRef<[T]> for LweCiphertext
 impl<T: UnsignedInteger, C: ContainerMut<Element = T>> AsMut<[T]> for LweCiphertext<C> {
     fn as_mut(&mut self) -> &mut [T] {
         self.data.as_mut()
+    }
+}
+
+// This accessor is used to create invalid objects and test the conformance functions
+// But these functions should not be used in other contexts, hence the `#[cfg(test)]`
+#[cfg(test)]
+#[allow(dead_code)]
+impl<C: Container> LweCiphertext<C>
+where
+    C::Element: UnsignedInteger,
+{
+    pub(crate) fn get_mut_ciphertext_modulus(&mut self) -> &mut CiphertextModulus<C::Element> {
+        &mut self.ciphertext_modulus
     }
 }
 
@@ -563,15 +576,12 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> LweCiphertext<C> {
     /// );
     /// assert_eq!(lwe.ciphertext_modulus(), ciphertext_modulus);
     /// ```
-    pub fn from_container(
-        container: C,
-        ciphertext_modulus: CiphertextModulus<C::Element>,
-    ) -> LweCiphertext<C> {
+    pub fn from_container(container: C, ciphertext_modulus: CiphertextModulus<C::Element>) -> Self {
         assert!(
             container.container_len() > 0,
             "Got an empty container to create an LweCiphertext"
         );
-        LweCiphertext {
+        Self {
             data: container,
             ciphertext_modulus,
         }
@@ -706,7 +716,7 @@ where
     type ParameterSet = LweCiphertextParameters<C::Element>;
 
     fn is_conformant(&self, lwe_ct_parameters: &LweCiphertextParameters<C::Element>) -> bool {
-        check_content_respects_mod(self, lwe_ct_parameters.ct_modulus)
+        check_encrypted_content_respects_mod(self, lwe_ct_parameters.ct_modulus)
             && self.lwe_size() == lwe_ct_parameters.lwe_dim.to_lwe_size()
             && self.ciphertext_modulus() == lwe_ct_parameters.ct_modulus
     }
@@ -727,8 +737,8 @@ impl<Scalar: UnsignedInteger> LweCiphertextOwned<Scalar> {
         fill_with: Scalar,
         lwe_size: LweSize,
         ciphertext_modulus: CiphertextModulus<Scalar>,
-    ) -> LweCiphertextOwned<Scalar> {
-        LweCiphertextOwned::from_container(vec![fill_with; lwe_size.0], ciphertext_modulus)
+    ) -> Self {
+        Self::from_container(vec![fill_with; lwe_size.0], ciphertext_modulus)
     }
 }
 
@@ -740,8 +750,8 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> CreateFrom<C> for 
     type Metadata = LweCiphertextCreationMetadata<C::Element>;
 
     #[inline]
-    fn create_from(from: C, meta: Self::Metadata) -> LweCiphertext<C> {
+    fn create_from(from: C, meta: Self::Metadata) -> Self {
         let LweCiphertextCreationMetadata(modulus) = meta;
-        LweCiphertext::from_container(from, modulus)
+        Self::from_container(from, modulus)
     }
 }

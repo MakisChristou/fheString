@@ -14,7 +14,7 @@ use crate::core_crypto::commons::traits::{
 };
 use crate::core_crypto::commons::utils::izip;
 use crate::core_crypto::entities::*;
-use crate::core_crypto::fft_impl::common::{pbs_modulus_switch, FourierBootstrapKey};
+use crate::core_crypto::fft_impl::common::{fast_pbs_modulus_switch, FourierBootstrapKey};
 use crate::core_crypto::fft_impl::fft64::math::fft::par_convert_polynomials_list_to_fourier;
 use crate::core_crypto::prelude::ContainerMut;
 use aligned_vec::{avec, ABox, CACHELINE_ALIGN};
@@ -149,7 +149,7 @@ impl FourierLweBootstrapKey<ABox<[c64]>> {
         polynomial_size: PolynomialSize,
         decomposition_base_log: DecompositionBaseLog,
         decomposition_level_count: DecompositionLevelCount,
-    ) -> FourierLweBootstrapKey<ABox<[c64]>> {
+    ) -> Self {
         let boxed = avec![
             c64::default();
             polynomial_size.to_fourier_polynomial_size().0
@@ -251,7 +251,7 @@ impl<'a> FourierLweBootstrapKeyView<'a> {
         let lut_poly_size = lut.polynomial_size();
         let ciphertext_modulus = lut.ciphertext_modulus();
         assert!(ciphertext_modulus.is_compatible_with_native_modulus());
-        let monomial_degree = MonomialDegree(pbs_modulus_switch(
+        let monomial_degree = MonomialDegree(fast_pbs_modulus_switch(
             *lwe_body,
             lut_poly_size,
             ModulusSwitchOffset(0),
@@ -267,7 +267,7 @@ impl<'a> FourierLweBootstrapKeyView<'a> {
 
                 let mut tmp_poly = Polynomial::from_container(&mut *tmp_poly);
                 tmp_poly.as_mut().copy_from_slice(poly.as_ref());
-                polynomial_wrapping_monic_monomial_div(&mut poly, &tmp_poly, monomial_degree)
+                polynomial_wrapping_monic_monomial_div(&mut poly, &tmp_poly, monomial_degree);
             });
 
         // We initialize the ct_0 used for the successive cmuxes
@@ -279,7 +279,7 @@ impl<'a> FourierLweBootstrapKeyView<'a> {
         for (lwe_mask_element, bootstrap_key_ggsw) in izip!(lwe_mask.iter(), self.into_ggsw_iter())
         {
             if *lwe_mask_element != Scalar::ZERO {
-                let monomial_degree = MonomialDegree(pbs_modulus_switch(
+                let monomial_degree = MonomialDegree(fast_pbs_modulus_switch(
                     *lwe_mask_element,
                     lut_poly_size,
                     ModulusSwitchOffset(0),
@@ -308,7 +308,7 @@ impl<'a> FourierLweBootstrapKeyView<'a> {
                 add_external_product_assign(
                     ct0.as_mut_view(),
                     bootstrap_key_ggsw,
-                    ct1.as_mut_view(),
+                    ct1.as_view(),
                     fft,
                     stack.rb_mut(),
                 );
@@ -432,6 +432,6 @@ where
             accumulator.as_view(),
             fft.as_view(),
             stack,
-        )
+        );
     }
 }

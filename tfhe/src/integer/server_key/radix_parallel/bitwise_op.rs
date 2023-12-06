@@ -57,12 +57,17 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
         self.unchecked_bitand_parallelized(ct_left, ct_right)
     }
 
@@ -70,12 +75,17 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
         self.unchecked_bitand_assign_parallelized(ct_left, ct_right);
     }
 
@@ -212,12 +222,18 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+
         self.unchecked_bitor_parallelized(ct_left, ct_right)
     }
 
@@ -225,12 +241,18 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+
         self.unchecked_bitor_assign_parallelized(ct_left, ct_right);
     }
 
@@ -367,12 +389,18 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+
         self.unchecked_bitxor_parallelized(ct_left, ct_right)
     }
 
@@ -380,12 +408,18 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_functional_bivariate_pbs_possible(ct_left, ct_right) {
+        if self
+            .is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .is_err()
+        {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+        self.is_functional_bivariate_pbs_possible(ct_left, ct_right)
+            .unwrap();
+
         self.unchecked_bitxor_assign_parallelized(ct_left, ct_right);
     }
 
@@ -524,6 +558,6 @@ impl ServerKey {
         let lut = self.key.generate_lookup_table(|x| (!x) % modulus);
         ct.blocks_mut()
             .par_iter_mut()
-            .for_each(|block| self.key.apply_lookup_table_assign(block, &lut))
+            .for_each(|block| self.key.apply_lookup_table_assign(block, &lut));
     }
 }

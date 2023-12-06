@@ -31,6 +31,13 @@ pub struct CiphertextModulus<Scalar: UnsignedInteger> {
     _scalar: PhantomData<Scalar>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CiphertextModulusKind {
+    Native,
+    NonNativePowerOfTwo,
+    Other,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SerialiazableLweCiphertextModulus {
     pub modulus: u128,
@@ -75,16 +82,18 @@ impl<'de, Scalar: UnsignedInteger> serde::Deserialize<'de> for CiphertextModulus
         }
 
         let res = if thing.modulus == 0 {
-            CiphertextModulus {
+            Self {
                 inner: CiphertextModulusInner::Native,
                 _scalar: PhantomData,
             }
         } else {
-            CiphertextModulus {
-                inner: CiphertextModulusInner::Custom(NonZeroU128::new(thing.modulus).ok_or(
-                    serde::de::Error::custom(
-                        "Got zero modulus for CiphertextModulusInner::Custom variant",
-                    ),
+            Self {
+                inner: CiphertextModulusInner::Custom(NonZeroU128::new(thing.modulus).ok_or_else(
+                    || {
+                        serde::de::Error::custom(
+                            "Got zero modulus for CiphertextModulusInner::Custom variant",
+                        )
+                    },
                 )?),
                 _scalar: PhantomData,
             }
@@ -106,26 +115,21 @@ impl<Scalar: UnsignedInteger> CiphertextModulus<Scalar> {
         if exponent > Scalar::BITS {
             Err("Modulus is bigger than the maximum value of the associated Scalar type")
         } else {
-            let res = match 1u128.checked_shl(exponent as u32) {
-                Some(modulus) => {
-                    let non_zero_modulus = match NonZeroU128::new(modulus) {
-                        Some(val) => val,
-                        None => {
-                            panic!("Got zero modulus for CiphertextModulusInner::Custom variant",)
-                        }
-                    };
-                    Self {
-                        inner: CiphertextModulusInner::Custom(non_zero_modulus),
-                        _scalar: PhantomData,
-                    }
+            let res = if let Some(modulus) = 1u128.checked_shl(exponent as u32) {
+                let Some(non_zero_modulus) = NonZeroU128::new(modulus) else {
+                    panic!("Got zero modulus for CiphertextModulusInner::Custom variant",)
+                };
+
+                Self {
+                    inner: CiphertextModulusInner::Custom(non_zero_modulus),
+                    _scalar: PhantomData,
                 }
-                None => {
-                    assert!(exponent == 128);
-                    assert!(Scalar::BITS == 128);
-                    Self {
-                        inner: CiphertextModulusInner::Native,
-                        _scalar: PhantomData,
-                    }
+            } else {
+                assert!(exponent == 128);
+                assert!(Scalar::BITS == 128);
+                Self {
+                    inner: CiphertextModulusInner::Native,
+                    _scalar: PhantomData,
                 }
             };
             Ok(res.canonicalize())
@@ -138,18 +142,22 @@ impl<Scalar: UnsignedInteger> CiphertextModulus<Scalar> {
             Err("Modulus is bigger than the maximum value of the associated Scalar type")
         } else {
             let res = match modulus {
-                0 => CiphertextModulus::new_native(),
+                0 => Self::new_native(),
                 modulus => {
                     let Some(non_zero_modulus) = NonZeroU128::new(modulus) else {
                         panic!("Got zero modulus for CiphertextModulusInner::Custom variant",)
                     };
-                    CiphertextModulus {
+                    Self {
                         inner: CiphertextModulusInner::Custom(non_zero_modulus),
                         _scalar: PhantomData,
                     }
                 }
             };
-            Ok(res.canonicalize())
+            let canonicalized_result = res.canonicalize();
+            if Scalar::BITS > 64 && !canonicalized_result.is_compatible_with_native_modulus() {
+                return Err("Non power of 2 moduli are not supported for types wider than u64");
+            }
+            Ok(canonicalized_result)
         }
     }
 
@@ -158,7 +166,7 @@ impl<Scalar: UnsignedInteger> CiphertextModulus<Scalar> {
             CiphertextModulusInner::Native => self,
             CiphertextModulusInner::Custom(modulus) => {
                 if Scalar::BITS < 128 && modulus.get() == (1 << Scalar::BITS) {
-                    CiphertextModulus::new_native()
+                    Self::new_native()
                 } else {
                     self
                 }
@@ -183,13 +191,16 @@ impl<Scalar: UnsignedInteger> CiphertextModulus<Scalar> {
         res.canonicalize()
     }
 
+    /// # Panic
+    /// Panics if the stored modulus is not a power of 2.
+    #[track_caller]
     pub fn get_power_of_two_scaling_to_native_torus(&self) -> Scalar {
         match self.inner {
             CiphertextModulusInner::Native => Scalar::ONE,
             CiphertextModulusInner::Custom(modulus) => {
                 assert!(
                     modulus.is_power_of_two(),
-                    "Cannot get scaling for non power of two modulus {modulus:}"
+                    "Cannot get scaling for non power of two modulus {modulus}"
                 );
                 Scalar::ONE.wrapping_shl(Scalar::BITS as u32 - modulus.ilog2())
             }
@@ -217,6 +228,13 @@ impl<Scalar: UnsignedInteger> CiphertextModulus<Scalar> {
 
     pub const fn is_compatible_with_native_modulus(&self) -> bool {
         self.is_native_modulus() || self.is_power_of_two()
+    }
+
+    pub const fn is_non_native_power_of_two(&self) -> bool {
+        match self.inner {
+            CiphertextModulusInner::Native => false,
+            CiphertextModulusInner::Custom(modulus) => modulus.is_power_of_two(),
+        }
     }
 
     pub const fn is_power_of_two(&self) -> bool {
@@ -255,9 +273,22 @@ impl<Scalar: UnsignedInteger> CiphertextModulus<Scalar> {
 
         Ok(CiphertextModulus {
             inner: new_inner,
-            _scalar: Default::default(),
+            _scalar: PhantomData,
         }
         .canonicalize())
+    }
+
+    pub const fn kind(&self) -> CiphertextModulusKind {
+        match self.inner {
+            CiphertextModulusInner::Native => CiphertextModulusKind::Native,
+            CiphertextModulusInner::Custom(modulus) => {
+                if modulus.is_power_of_two() {
+                    CiphertextModulusKind::NonNativePowerOfTwo
+                } else {
+                    CiphertextModulusKind::Other
+                }
+            }
+        }
     }
 }
 
@@ -292,10 +323,8 @@ mod tests {
         assert!(std::mem::align_of::<CiphertextModulus<u128>>() == std::mem::align_of::<u128>());
 
         {
-            let mod_32_res = CiphertextModulus::<u32>::try_new_power_of_2(32);
-            assert!(mod_32_res.is_ok());
+            let mod_32 = CiphertextModulus::<u32>::try_new_power_of_2(32).unwrap();
 
-            let mod_32 = mod_32_res.unwrap();
             assert!(mod_32.is_native_modulus());
 
             let std_fmt = format!("{mod_32}");
@@ -345,10 +374,8 @@ mod tests {
         }
 
         {
-            let mod_128_res = CiphertextModulus::<u128>::try_new_power_of_2(64);
-            assert!(mod_128_res.is_ok());
+            let mod_128 = CiphertextModulus::<u128>::try_new_power_of_2(64).unwrap();
 
-            let mod_128 = mod_128_res.unwrap();
             assert_eq!(mod_128.get_custom_modulus(), 1 << 64);
 
             let ser = bincode::serialize(&mod_128).unwrap();
@@ -380,16 +407,16 @@ mod tests {
         // Native (u64 -> u64) => Native
         let native_mod = CiphertextModulus::<u64>::try_new_power_of_2(64).unwrap();
         assert!(native_mod.is_native_modulus());
-        let converted: Result<CiphertextModulus<u64>, _> = native_mod.try_to();
-        assert!(converted.is_ok());
-        assert!(converted.unwrap().is_native_modulus());
+        let converted: CiphertextModulus<u64> = native_mod.try_to().unwrap();
+
+        assert!(converted.is_native_modulus());
 
         // Native (u64 -> u128) => Custom
         let native_mod = CiphertextModulus::<u64>::try_new_power_of_2(64).unwrap();
-        let converted: Result<CiphertextModulus<u128>, _> = native_mod.try_to();
-        assert!(converted.is_ok());
-        assert!(!converted.unwrap().is_native_modulus());
-        assert_eq!(converted.unwrap().get_custom_modulus(), 1u128 << 64);
+        let converted: CiphertextModulus<u128> = native_mod.try_to().unwrap();
+
+        assert!(!converted.is_native_modulus());
+        assert_eq!(converted.get_custom_modulus(), 1u128 << 64);
 
         // Native(u64 -> u32) => Impossible
         let native_mod = CiphertextModulus::<u64>::try_new_power_of_2(64).unwrap();
@@ -399,17 +426,16 @@ mod tests {
         // Custom(u64 -> u64) => Custom
         let custom_mod = CiphertextModulus::<u64>::try_new(64).unwrap();
         assert!(!custom_mod.is_native_modulus());
-        let converted: Result<CiphertextModulus<u64>, _> = custom_mod.try_to();
-        assert!(converted.is_ok());
-        assert!(!converted.unwrap().is_native_modulus());
-        assert_eq!(converted.unwrap().get_custom_modulus(), 64);
+        let converted: CiphertextModulus<u64> = custom_mod.try_to().unwrap();
+
+        assert!(!converted.is_native_modulus());
+        assert_eq!(converted.get_custom_modulus(), 64);
 
         // Custom(u64[with value == 2**32] -> u32) => Native
         let custom_mod = CiphertextModulus::<u64>::try_new_power_of_2(32).unwrap();
         assert!(!custom_mod.is_native_modulus());
-        let converted: Result<CiphertextModulus<u32>, _> = custom_mod.try_to();
-        assert!(converted.is_ok());
-        assert!(converted.unwrap().is_native_modulus());
+        let converted: CiphertextModulus<u32> = custom_mod.try_to().unwrap();
+        assert!(converted.is_native_modulus());
 
         // Custom (u64[with value > 2**32] -> u32) => Impossible
         let custom_mod = CiphertextModulus::<u64>::try_new(1 << 48).unwrap();
@@ -420,9 +446,8 @@ mod tests {
         // Custom (u64[with value < 2**32] -> u32) => Custom
         let custom_mod = CiphertextModulus::<u64>::try_new(1 << 21).unwrap();
         assert!(!custom_mod.is_native_modulus());
-        let converted: Result<CiphertextModulus<u32>, _> = custom_mod.try_to();
-        assert!(converted.is_ok());
-        assert!(!converted.unwrap().is_native_modulus());
-        assert_eq!(converted.unwrap().get_custom_modulus(), 1 << 21);
+        let converted: CiphertextModulus<u32> = custom_mod.try_to().unwrap();
+        assert!(!converted.is_native_modulus());
+        assert_eq!(converted.get_custom_modulus(), 1 << 21);
     }
 }

@@ -1,8 +1,9 @@
-use super::ServerKey;
-use crate::shortint::engine::ShortintEngine;
+use crate::core_crypto::algorithms::*;
+use crate::core_crypto::entities::*;
+use crate::core_crypto::prelude::misc::divide_ceil;
+use crate::shortint::ciphertext::Degree;
 use crate::shortint::server_key::CheckError;
-use crate::shortint::server_key::CheckError::CarryFull;
-use crate::shortint::Ciphertext;
+use crate::shortint::{Ciphertext, ServerKey};
 
 impl ServerKey {
     /// Compute homomorphically a negation of a ciphertext.
@@ -164,13 +165,15 @@ impl ServerKey {
     /// assert_eq!(modulus - msg, three);
     /// ```
     pub fn unchecked_neg(&self, ct: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| engine.unchecked_neg(self, ct).unwrap())
+        let mut result = ct.clone();
+        self.unchecked_neg_assign(&mut result);
+        result
     }
 
     pub fn unchecked_neg_with_correcting_term(&self, ct: &Ciphertext) -> (Ciphertext, u64) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_neg_with_correcting_term(self, ct).unwrap()
-        })
+        let mut result = ct.clone();
+        let z = self.unchecked_neg_assign_with_correcting_term(&mut result);
+        (result, z)
     }
 
     /// Homomorphically negates a message inplace without checks.
@@ -213,17 +216,32 @@ impl ServerKey {
     /// assert_eq!(modulus - msg, cks.decrypt(&ct));
     /// ```
     pub fn unchecked_neg_assign(&self, ct: &mut Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_neg_assign(self, ct).unwrap()
-        })
+        let _z = self.unchecked_neg_assign_with_correcting_term(ct);
     }
 
     pub fn unchecked_neg_assign_with_correcting_term(&self, ct: &mut Ciphertext) -> u64 {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_neg_assign_with_correcting_term(self, ct)
-                .unwrap()
-        })
+        // z = ceil( degree / 2^p ) * 2^p
+        let msg_mod = ct.message_modulus.0;
+        // Ensure z is always >= 1 (which would not be the case if degree == 0)
+        // some algorithms (e.g. overflowing_sub) require this even for trivial zeros
+        let mut z = divide_ceil(ct.degree.get(), msg_mod).max(1) as u64;
+        z *= msg_mod as u64;
+
+        // Value of the shift we multiply our messages by
+        let delta = (1_u64 << 63) / (self.message_modulus.0 * self.carry_modulus.0) as u64;
+
+        //Scaling + 1 on the padding bit
+        let w = Plaintext(z * delta);
+
+        // (0,Delta*z) - ct
+        lwe_ciphertext_opposite_assign(&mut ct.ct);
+
+        lwe_ciphertext_plaintext_add_assign(&mut ct.ct, w);
+
+        // Update the degree
+        ct.degree = Degree::new(z as usize);
+
+        z
     }
 
     /// Verify if a ciphertext can be negated.
@@ -245,9 +263,7 @@ impl ServerKey {
     /// let ct = cks.encrypt(msg);
     ///
     /// // Check if we can perform a negation
-    /// let can_be_negated = sks.is_neg_possible(&ct);
-    ///
-    /// assert_eq!(can_be_negated, true);
+    /// let can_be_negated = sks.is_neg_possible(&ct).unwrap();
     ///
     /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_PBS_KS);
     ///
@@ -255,23 +271,21 @@ impl ServerKey {
     /// let ct = cks.encrypt(msg);
     ///
     /// // Check if we can perform a negation
-    /// let can_be_negated = sks.is_neg_possible(&ct);
-    ///
-    /// assert_eq!(can_be_negated, true);
+    /// let can_be_negated = sks.is_neg_possible(&ct).unwrap();
     /// ```
-    pub fn is_neg_possible(&self, ct: &Ciphertext) -> bool {
+    pub fn is_neg_possible(&self, ct: &Ciphertext) -> Result<(), CheckError> {
         // z = ceil( degree / 2^p ) x 2^p
         let msg_mod = self.message_modulus.0;
-        let mut z = (ct.degree.0 + msg_mod - 1) / msg_mod;
+        let mut z = (ct.degree.get() + msg_mod - 1) / msg_mod;
         z = z.wrapping_mul(msg_mod);
 
-        z <= self.max_degree.0
+        self.max_degree.validate(Degree::new(z))
     }
 
     /// Compute homomorphically a negation of a ciphertext.
     ///
     /// If the operation can be performed, the result is returned a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -290,11 +304,9 @@ impl ServerKey {
     /// let ct = cks.encrypt(msg);
     ///
     /// // Compute homomorphically a negation:
-    /// let ct_res = sks.checked_neg(&ct);
+    /// let ct_res = sks.checked_neg(&ct).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let clear_res = cks.decrypt(&ct_res.unwrap());
+    /// let clear_res = cks.decrypt(&ct_res);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(clear_res, modulus - msg);
     ///
@@ -304,28 +316,23 @@ impl ServerKey {
     /// let ct = cks.encrypt(msg);
     ///
     /// // Compute homomorphically a negation:
-    /// let ct_res = sks.checked_neg(&ct);
+    /// let ct_res = sks.checked_neg(&ct).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let clear_res = cks.decrypt(&ct_res.unwrap());
+    /// let clear_res = cks.decrypt(&ct_res);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(clear_res, modulus - msg);
     /// ```
     pub fn checked_neg(&self, ct: &Ciphertext) -> Result<Ciphertext, CheckError> {
         // If the ciphertext cannot be negated without exceeding the capacity of a ciphertext
-        if self.is_neg_possible(ct) {
-            let ct_result = self.unchecked_neg(ct);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_neg_possible(ct)?;
+        let ct_result = self.unchecked_neg(ct);
+        Ok(ct_result)
     }
 
     /// Compute homomorphically a negation of a ciphertext.
     ///
     /// If the operation is possible, the result is stored _in_ the input ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned and the ciphertext is not .
+    /// Otherwise a [CheckError] is returned and the ciphertext is not .
     ///
     ///
     ///
@@ -346,9 +353,7 @@ impl ServerKey {
     /// let mut ct = cks.encrypt(msg);
     ///
     /// // Compute homomorphically the negation:
-    /// let res = sks.checked_neg_assign(&mut ct);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_neg_assign(&mut ct).unwrap();
     ///
     /// let clear_res = cks.decrypt(&ct);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
@@ -360,21 +365,16 @@ impl ServerKey {
     /// let mut ct = cks.encrypt(msg);
     ///
     /// // Compute homomorphically the negation:
-    /// let res = sks.checked_neg_assign(&mut ct);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_neg_assign(&mut ct).unwrap();
     ///
     /// let clear_res = cks.decrypt(&ct);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(clear_res, modulus - msg);
     /// ```
     pub fn checked_neg_assign(&self, ct: &mut Ciphertext) -> Result<(), CheckError> {
-        if self.is_neg_possible(ct) {
-            self.unchecked_neg_assign(ct);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_neg_possible(ct)?;
+        self.unchecked_neg_assign(ct);
+        Ok(())
     }
 
     /// Compute homomorphically a negation of a ciphertext.
@@ -420,7 +420,14 @@ impl ServerKey {
     /// assert_eq!(clear_res, modulus - msg);
     /// ```
     pub fn smart_neg(&self, ct: &mut Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| engine.smart_neg(self, ct).unwrap())
+        // If the ciphertext cannot be negated without exceeding the capacity of a ciphertext
+        if self.is_neg_possible(ct).is_err() {
+            self.message_extract_assign(ct);
+        }
+
+        self.is_neg_possible(ct).unwrap();
+
+        self.unchecked_neg(ct)
     }
 
     /// Compute homomorphically a negation of a ciphertext.
@@ -465,6 +472,11 @@ impl ServerKey {
     /// assert_eq!(clear_res, modulus - msg);
     /// ```
     pub fn smart_neg_assign(&self, ct: &mut Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| engine.smart_neg_assign(self, ct).unwrap())
+        // If the ciphertext cannot be negated without exceeding the capacity of a ciphertext
+        if self.is_neg_possible(ct).is_err() {
+            self.message_extract_assign(ct);
+        }
+        self.is_neg_possible(ct).unwrap();
+        self.unchecked_neg_assign(ct);
     }
 }

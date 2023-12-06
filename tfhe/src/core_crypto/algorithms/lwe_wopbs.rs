@@ -44,8 +44,7 @@ where
 {
     assert!(
         ciphertext_modulus.is_native_modulus(),
-        "This operation currently only supports native moduli, got modulus {:?}",
-        ciphertext_modulus
+        "This operation currently only supports native moduli, got modulus {ciphertext_modulus:?}"
     );
 
     let mut cbs_pfpksk_list = LwePrivateFunctionalPackingKeyswitchKeyListOwned::new(
@@ -185,8 +184,7 @@ where
 {
     assert!(
         ciphertext_modulus.is_native_modulus(),
-        "This operation currently only supports native moduli, got modulus {:?}",
-        ciphertext_modulus
+        "This operation currently only supports native moduli, got modulus {ciphertext_modulus:?}"
     );
 
     let mut cbs_pfpksk_list = LwePrivateFunctionalPackingKeyswitchKeyListOwned::new(
@@ -362,7 +360,7 @@ pub fn extract_bits_from_lwe_ciphertext_mem_optimized<
         number_of_bits_to_extract,
         fft,
         stack,
-    )
+    );
 }
 
 /// Return the required memory for [`extract_bits_from_lwe_ciphertext_mem_optimized`].
@@ -699,7 +697,7 @@ pub fn circuit_bootstrap_boolean_vertical_packing_lwe_ciphertext_list_mem_optimi
         base_log_cbs,
         fft,
         stack,
-    )
+    );
 }
 
 #[allow(clippy::too_many_arguments)]

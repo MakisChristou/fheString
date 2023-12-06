@@ -1,8 +1,7 @@
-use super::ServerKey;
-use crate::shortint::engine::ShortintEngine;
+use crate::shortint::ciphertext::Degree;
+use crate::shortint::server_key::scalar_mul::unchecked_scalar_mul_assign;
 use crate::shortint::server_key::CheckError;
-use crate::shortint::server_key::CheckError::CarryFull;
-use crate::shortint::Ciphertext;
+use crate::shortint::{Ciphertext, ServerKey};
 
 impl ServerKey {
     /// Compute homomorphically a right shift of the bits.
@@ -143,8 +142,7 @@ impl ServerKey {
     /// assert_eq!(msg >> shift, dec);
     /// ```
     pub fn scalar_right_shift_assign(&self, ct: &mut Ciphertext, shift: u8) {
-        let modulus = self.message_modulus.0 as u64;
-        let acc = self.generate_lookup_table(|x| (x >> shift) % modulus);
+        let acc = self.generate_msg_lookup_table(|x| x >> shift, self.message_modulus);
         self.apply_lookup_table_assign(ct, &acc);
     }
 
@@ -206,11 +204,9 @@ impl ServerKey {
     /// assert_eq!(msg >> shift, dec);
     /// ```
     pub fn unchecked_scalar_right_shift(&self, ct: &Ciphertext, shift: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_scalar_right_shift(self, ct, shift)
-                .unwrap()
-        })
+        let mut result = ct.clone();
+        self.unchecked_scalar_right_shift_assign(&mut result, shift);
+        result
     }
 
     /// Compute homomorphically a right shift of the bits without checks.
@@ -269,11 +265,10 @@ impl ServerKey {
     /// assert_eq!(msg >> shift, dec);
     /// ```
     pub fn unchecked_scalar_right_shift_assign(&self, ct: &mut Ciphertext, shift: u8) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_scalar_right_shift_assign(self, ct, shift)
-                .unwrap()
-        })
+        let acc = self.generate_msg_lookup_table(|x| x >> shift, ct.message_modulus);
+        self.apply_lookup_table_assign(ct, &acc);
+
+        ct.degree = Degree::new(ct.degree.get() >> shift);
     }
 
     /// Compute homomorphically a left shift of the bits.
@@ -482,11 +477,10 @@ impl ServerKey {
     /// assert_eq!((msg << shift) % modulus, msg_only);
     /// ```
     pub fn unchecked_scalar_left_shift(&self, ct: &Ciphertext, shift: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_scalar_left_shift(ct, shift).unwrap()
-        })
+        let mut result = ct.clone();
+        self.unchecked_scalar_left_shift_assign(&mut result, shift);
+        result
     }
-
     /// Compute homomorphically a left shift of the bits without checks
     ///
     /// # Example
@@ -549,11 +543,8 @@ impl ServerKey {
     /// assert_eq!((msg << shift) % modulus, msg_only);
     /// ```
     pub fn unchecked_scalar_left_shift_assign(&self, ct: &mut Ciphertext, shift: u8) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_scalar_left_shift_assign(ct, shift)
-                .unwrap()
-        })
+        let scalar = 1_u8 << shift;
+        unchecked_scalar_mul_assign(ct, scalar);
     }
 
     /// Checks if the left shift operation can be applied.
@@ -578,7 +569,7 @@ impl ServerKey {
     /// // Check if we can perform an addition
     /// let res = sks.is_scalar_left_shift_possible(&ct1, shift);
     ///
-    /// assert_eq!(false, res);
+    /// assert!(res.is_err());
     ///
     /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_PBS_KS);
     ///
@@ -588,17 +579,28 @@ impl ServerKey {
     /// // Check if we can perform an addition
     /// let res = sks.is_scalar_left_shift_possible(&ct1, shift);
     ///
-    /// assert_eq!(false, res);
+    /// assert!(res.is_err());
     /// ```
-    pub fn is_scalar_left_shift_possible(&self, ct1: &Ciphertext, shift: u8) -> bool {
-        let final_operation_count = ct1.degree.0 << shift as usize;
-        final_operation_count <= self.max_degree.0
+    pub fn is_scalar_left_shift_possible(
+        &self,
+        ct1: &Ciphertext,
+        shift: u8,
+    ) -> Result<(), CheckError> {
+        let final_operation_count = ct1.degree.get() << shift as usize;
+
+        self.max_degree
+            .validate(Degree::new(final_operation_count))?;
+
+        self.max_noise_level
+            .validate(ct1.noise_level() * (1 << shift))?;
+
+        Ok(())
     }
 
     /// Compute homomorphically a left shift of the bits.
     ///
     /// If the operation can be performed, a new ciphertext with the result is returned.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -626,9 +628,8 @@ impl ServerKey {
     ///
     /// // Shifting 2 times is ok
     /// let shift = 2;
-    /// let ct_res = sks.checked_scalar_left_shift(&ct1, shift);
-    /// assert!(ct_res.is_ok());
-    /// let ct_res = ct_res.unwrap();
+    /// let ct_res = sks.checked_scalar_left_shift(&ct1, shift).unwrap();
+    ///
     /// // |      ct_res     |
     /// // | carry | message |
     /// // |-------|---------|
@@ -657,9 +658,8 @@ impl ServerKey {
     ///
     /// // Shifting 2 times is ok
     /// let shift = 2;
-    /// let ct_res = sks.checked_scalar_left_shift(&ct1, shift);
-    /// assert!(ct_res.is_ok());
-    /// let ct_res = ct_res.unwrap();
+    /// let ct_res = sks.checked_scalar_left_shift(&ct1, shift).unwrap();
+    ///
     /// // |      ct_res     |
     /// // | carry | message |
     /// // |-------|---------|
@@ -678,12 +678,9 @@ impl ServerKey {
         ct: &Ciphertext,
         shift: u8,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_scalar_left_shift_possible(ct, shift) {
-            let ct_result = self.unchecked_scalar_left_shift(ct, shift);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_scalar_left_shift_possible(ct, shift)?;
+        let ct_result = self.unchecked_scalar_left_shift(ct, shift);
+        Ok(ct_result)
     }
 
     pub fn checked_scalar_left_shift_assign(
@@ -691,12 +688,9 @@ impl ServerKey {
         ct: &mut Ciphertext,
         shift: u8,
     ) -> Result<(), CheckError> {
-        if self.is_scalar_left_shift_possible(ct, shift) {
-            self.unchecked_scalar_left_shift_assign(ct, shift);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_scalar_left_shift_possible(ct, shift)?;
+        self.unchecked_scalar_left_shift_assign(ct, shift);
+        Ok(())
     }
 
     /// Compute homomorphically a left shift of the bits
@@ -761,17 +755,21 @@ impl ServerKey {
     /// assert_eq!(msg << shift, msg_and_carry);
     /// assert_eq!((msg << shift) % modulus, msg_only);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_scalar_left_shift(&self, ct: &mut Ciphertext, shift: u8) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_scalar_left_shift(self, ct, shift).unwrap()
-        })
+        let mut result = ct.clone();
+        self.smart_scalar_left_shift_assign(&mut result, shift);
+        result
     }
 
     pub fn smart_scalar_left_shift_assign(&self, ct: &mut Ciphertext, shift: u8) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_scalar_left_shift_assign(self, ct, shift)
-                .unwrap()
-        })
+        if self.is_scalar_left_shift_possible(ct, shift).is_ok() {
+            self.unchecked_scalar_left_shift_assign(ct, shift);
+        } else {
+            let modulus = self.message_modulus.0 as u64;
+            let acc = self.generate_msg_lookup_table(|x| x << shift, self.message_modulus);
+            self.apply_lookup_table_assign(ct, &acc);
+            ct.degree = ct.degree.after_left_shift(shift, modulus as usize);
+        }
     }
 }

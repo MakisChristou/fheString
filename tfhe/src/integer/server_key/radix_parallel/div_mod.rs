@@ -13,17 +13,17 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !T::IS_SIGNED {
-            let n = RadixCiphertext::from_blocks(numerator.blocks().to_vec());
-            let d = RadixCiphertext::from_blocks(divisor.blocks().to_vec());
-            let (q, r) = self.unsigned_unchecked_div_rem_parallelized(&n, &d);
+        if T::IS_SIGNED {
+            let n = SignedRadixCiphertext::from_blocks(numerator.blocks().to_vec());
+            let d = SignedRadixCiphertext::from_blocks(divisor.blocks().to_vec());
+            let (q, r) = self.signed_unchecked_div_rem_parallelized(&n, &d);
             let q = T::from_blocks(q.into_blocks());
             let r = T::from_blocks(r.into_blocks());
             (q, r)
         } else {
-            let n = SignedRadixCiphertext::from_blocks(numerator.blocks().to_vec());
-            let d = SignedRadixCiphertext::from_blocks(divisor.blocks().to_vec());
-            let (q, r) = self.signed_unchecked_div_rem_parallelized(&n, &d);
+            let n = RadixCiphertext::from_blocks(numerator.blocks().to_vec());
+            let d = RadixCiphertext::from_blocks(divisor.blocks().to_vec());
+            let (q, r) = self.unsigned_unchecked_div_rem_parallelized(&n, &d);
             let q = T::from_blocks(q.into_blocks());
             let r = T::from_blocks(r.into_blocks());
             (q, r)
@@ -38,7 +38,7 @@ impl ServerKey {
         let (quotient, remainder) = self.unchecked_div_rem_parallelized(numerator, divisor);
 
         let (remainder_is_not_zero, remainder_and_divisor_signs_disagrees) = rayon::join(
-            || self.unchecked_scalar_ne_parallelized(&remainder, 0).blocks[0].clone(),
+            || self.unchecked_scalar_ne_parallelized(&remainder, 0),
             || {
                 let sign_bit_pos = self.key.message_modulus.0.ilog2() - 1;
                 let compare_sign_bits = |x, y| {
@@ -56,7 +56,7 @@ impl ServerKey {
         );
 
         let condition = self.key.unchecked_add(
-            &remainder_is_not_zero,
+            &remainder_is_not_zero.0,
             &remainder_and_divisor_signs_disagrees,
         );
 
@@ -172,7 +172,7 @@ impl ServerKey {
             })
             .collect::<Vec<_>>();
 
-        for i in (0..=total_bits as usize - 1).rev() {
+        for i in (0..total_bits as usize).rev() {
             let block_of_bit = i / num_bits_in_message as usize;
             let pos_in_block = i % num_bits_in_message as usize;
 
@@ -372,7 +372,7 @@ impl ServerKey {
             drop(merged_interesting_remainder);
 
             let overflow_sum = self.key.unchecked_add(
-                &subtraction_overflowed,
+                subtraction_overflowed.as_ref(),
                 &at_least_one_upper_block_is_non_zero,
             );
             // Give name to closures to improve readability
@@ -381,8 +381,8 @@ impl ServerKey {
 
             // Here, we will do what zero_out_if does, but to stay within noise constraints,
             // we do it by hand so that we apply the factor (shift) to the correct block
-            assert!(overflow_sum.degree.0 <= 2); // at_least_one_upper_block_is_non_zero maybe be a trivial 0
-            let factor = MessageModulus(overflow_sum.degree.0 + 1);
+            assert!(overflow_sum.degree.get() <= 2); // at_least_one_upper_block_is_non_zero maybe be a trivial 0
+            let factor = MessageModulus(overflow_sum.degree.get() + 1);
             let mut conditionally_zero_out_merged_interesting_remainder = || {
                 let zero_out_if_overflow_did_not_happen =
                     self.key.generate_lookup_table_bivariate_with_factor(
@@ -430,7 +430,7 @@ impl ServerKey {
 
             let mut set_quotient_bit = || {
                 let did_not_overflow = self.key.unchecked_apply_lookup_table_bivariate(
-                    &subtraction_overflowed,
+                    subtraction_overflowed.as_ref(),
                     &at_least_one_upper_block_is_non_zero,
                     &merge_overflow_flags_luts[pos_in_block],
                 );
@@ -637,12 +637,12 @@ impl ServerKey {
         rayon::join(
             || {
                 if !numerator.block_carries_are_empty() {
-                    self.full_propagate_parallelized(numerator)
+                    self.full_propagate_parallelized(numerator);
                 }
             },
             || {
                 if !divisor.block_carries_are_empty() {
-                    self.full_propagate_parallelized(divisor)
+                    self.full_propagate_parallelized(divisor);
                 }
             },
         );

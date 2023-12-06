@@ -32,10 +32,11 @@ pub fn radix_decomposition(
     max_space: usize,
 ) -> Vec<RadixDecomposition> {
     let mut out: Vec<RadixDecomposition> = vec![];
-    let mut max = max_space;
-    if max_space > input_space {
-        max = input_space;
-    }
+    let max = if max_space > input_space {
+        input_space
+    } else {
+        max_space
+    };
     for msg_space in min_space..max + 1 {
         let mut block_number = input_space / msg_space;
         //Manual ceil of the division
@@ -45,7 +46,7 @@ pub fn radix_decomposition(
         out.push(RadixDecomposition {
             msg_space,
             block_number,
-        })
+        });
     }
     out
 }

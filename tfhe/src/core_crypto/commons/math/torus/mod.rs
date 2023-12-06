@@ -27,6 +27,8 @@ where
 {
     /// Consume `self` and returns its closest floating point representation.
     fn into_torus(self) -> F;
+    /// Consume `self` and returns its closest floating point representation for a given modulus.
+    fn into_torus_custom_mod(self, custom_modulus: Self) -> F;
 }
 
 /// A trait that converts a torus element in floating point representation into the closest torus
@@ -39,7 +41,7 @@ where
     /// Consume `input` and returns its closest unsigned integer representation.
     fn from_torus(input: F) -> Self;
     /// Consume `input` and returns its closest unsigned integer representation for a given modulus.
-    fn from_torus_custom_modulus(input: F, custom_modulus: F) -> Self;
+    fn from_torus_custom_mod(input: F, custom_modulus: Self) -> Self;
 }
 
 macro_rules! implement {
@@ -53,6 +55,12 @@ macro_rules! implement {
             fn into_torus(self) -> F {
                 let self_f: F = self.cast_into();
                 return self_f * (F::TWO.powi(-(<Self as Numeric>::BITS as i32)));
+            }
+            #[inline]
+            fn into_torus_custom_mod(self, custom_modulus: Self) -> F {
+                let self_f: F = self.cast_into();
+                let custom_modulus_f: F = custom_modulus.cast_into();
+                return self_f / custom_modulus_f;
             }
         }
         impl<F> FromTorus<F> for $Type
@@ -69,12 +77,35 @@ macro_rules! implement {
                 return signed.cast_into();
             }
             #[inline]
-            fn from_torus_custom_modulus(input: F, custom_modulus: F) -> Self {
+            fn from_torus_custom_mod(input: F, custom_modulus: Self) -> Self {
+                // TODO: there is a question around rounded Gaussian vs. discrete Gaussian that
+                // warrants a reflection on what the rounding behavior should be for q to scale the
+                // Gaussian value to the correct range.
+                let custom_modulus_float: F = custom_modulus.cast_into();
+
+                // This is in [-0.5, 0.5[
+                // We do not do the mapping to [0, 1[ here as some values can be extremely small
+                // (think 2^-127 for u128 and custom power of 2 moduli) and would be crushed by
+                // adding 1 to them, creating artificial zeros (not good for noise generation)
                 let mut fract = input - F::round(input);
-                fract *= custom_modulus;
+                // Scale to the modulus
+                fract *= custom_modulus_float;
                 fract = F::round(fract);
+
+                // Cast to signed integer to retain as much information as possible and apply an
+                // exact modulus in the integer domain, doing so in the float domain leads to
+                // approximations and values that can be out of range for the selected modulus,
+                // which is not good (depending on how the values are handled it could result in 0s)
                 let signed: Self::Signed = fract.cast_into();
-                return signed.cast_into();
+                if signed >= 0 {
+                    signed.cast_into()
+                } else {
+                    // Get the abs value of the signed value we got
+                    let unsigned: Self = (-signed).cast_into();
+                    // As it was a negative value we subtract it from the modulus to get the proper
+                    // representant under our modulus
+                    custom_modulus - unsigned
+                }
             }
         }
     };
@@ -91,7 +122,7 @@ pub trait UnsignedTorus:
     UnsignedInteger
     + FromTorus<f64>
     + IntoTorus<f64>
-    + RandomGenerable<Gaussian<f64>, CustomModulus = f64>
+    + RandomGenerable<Gaussian<f64>, CustomModulus = Self>
     + RandomGenerable<UniformBinary, CustomModulus = Self>
     + RandomGenerable<UniformTernary, CustomModulus = Self>
     + RandomGenerable<Uniform, CustomModulus = Self>

@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// ```rust
 /// use tfhe::integer::CrtClientKey;
-/// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+/// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
 ///
 /// let basis = vec![2, 3, 5];
-/// let cks = CrtClientKey::new(PARAM_MESSAGE_2_CARRY_2_KS_PBS, basis);
+/// let cks = CrtClientKey::new(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
 ///
 /// let msg = 13_u64;
 ///
@@ -53,8 +53,16 @@ impl CrtClientKey {
         self.key.encrypt_crt(message, self.moduli.clone())
     }
 
+    pub fn encrypt_native_crt(&self, message: u64) -> CrtCiphertext {
+        self.key.encrypt_native_crt(message, self.moduli.clone())
+    }
+
     pub fn decrypt(&self, ciphertext: &CrtCiphertext) -> u64 {
         self.key.decrypt_crt(ciphertext)
+    }
+
+    pub fn decrypt_native_crt(&self, ciphertext: &CrtCiphertext) -> u64 {
+        self.key.decrypt_native_crt(ciphertext)
     }
 
     /// Returns the parameters used by the client key.

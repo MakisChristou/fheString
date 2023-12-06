@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 pub use utils::radix_decomposition;
 
 use crate::integer::bigint::static_signed::StaticSignedBigInt;
+use crate::integer::ciphertext::boolean_value::BooleanBlock;
 pub use crt::CrtClientKey;
 pub use radix::RadixClientKey;
 
@@ -49,6 +50,35 @@ impl RecomposableSignedInteger for i128 {}
 
 impl<const N: usize> RecomposableSignedInteger for StaticSignedBigInt<N> {}
 
+/// This function takes a signed integer of type `T` for which `num_bits_set`
+/// have been set.
+///
+/// It will set the most significant bits to the value of the bit
+/// at pos `num_bits_set - 1`.
+///
+/// This is used to correctly decrypt a signed radix ciphertext into a clear type
+/// that has more bits than the original ciphertext.
+///
+/// This is like doing i8 as i16, i16 as i64, i6 as i8, etc
+pub(in crate::integer) fn sign_extend_partial_number<T>(unpadded_value: T, num_bits_set: u32) -> T
+where
+    T: RecomposableSignedInteger,
+{
+    if num_bits_set >= T::BITS as u32 {
+        return unpadded_value;
+    }
+
+    let sign_bit_pos = num_bits_set - 1;
+    let sign_bit_mask = T::cast_from(1u32 << sign_bit_pos);
+    let sign_bit = (unpadded_value & sign_bit_mask) >> sign_bit_pos;
+
+    // Creates a padding mask
+    // where bits above num_bits_set
+    // are 1s if sign bit is `1` else `0`
+    let padding = (T::MAX * sign_bit) << num_bits_set;
+    padding | unpadded_value
+}
+
 /// A structure containing the client key, which must be kept secret.
 ///
 /// This key can be used to encrypt both in Radix and CRT
@@ -68,14 +98,20 @@ impl From<ShortintClientKey> for ClientKey {
 }
 
 impl From<ClientKey> for ShortintClientKey {
-    fn from(key: ClientKey) -> ShortintClientKey {
+    fn from(key: ClientKey) -> Self {
         key.key
     }
 }
 
-impl AsRef<ClientKey> for ClientKey {
-    fn as_ref(&self) -> &ClientKey {
+impl AsRef<Self> for ClientKey {
+    fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+impl AsRef<ShortintClientKey> for ClientKey {
+    fn as_ref(&self) -> &ShortintClientKey {
+        &self.key
     }
 }
 
@@ -384,19 +420,7 @@ impl ClientKey {
 
         let num_bits_in_message = message_modulus.ilog2();
         let num_bits_in_ctxt = num_bits_in_message * ctxt.blocks.len() as u32;
-        if num_bits_in_ctxt >= T::BITS as u32 {
-            return unpadded_value;
-        }
-
-        let sign_bit_pos = num_bits_in_ctxt - 1;
-        let sign_bit_mask = T::cast_from(1u32 << sign_bit_pos);
-        let sign_bit = (unpadded_value & sign_bit_mask) >> sign_bit_pos;
-
-        // Creates a padding mask
-        // where bits above num_bits_in_ctxt
-        // are 1s if sign bit is one else 0
-        let padding = (T::MAX * sign_bit) << num_bits_in_ctxt;
-        padding | unpadded_value
+        sign_extend_partial_number(unpadded_value, num_bits_in_ctxt)
     }
 
     /// Encrypts one block.
@@ -425,11 +449,56 @@ impl ClientKey {
         self.key.encrypt(message)
     }
 
+    /// Encrypts a bool to a [BooleanBlock]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tfhe::integer::{gen_keys_radix, BooleanBlock};
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    ///
+    /// // We have 4 * 2 = 8 bits of message
+    /// let size = 4;
+    /// let (cks, sks) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, size);
+    ///
+    /// let a = cks.encrypt_bool(false);
+    /// let dec = cks.decrypt_bool(&a);
+    /// assert_eq!(dec, false);
+    ///
+    /// let a = a.into_radix(size, &sks);
+    /// let dec: u64 = cks.decrypt(&a);
+    /// assert_eq!(dec, 0);
+    /// ```
+    pub fn encrypt_bool(&self, msg: bool) -> BooleanBlock {
+        BooleanBlock::new_unchecked(self.encrypt_one_block(u64::from(msg)))
+    }
+
     /// Decrypts one block.
     ///
     /// This takes a shortint ciphertext as input.
     pub fn decrypt_one_block(&self, ct: &Ciphertext) -> u64 {
         self.key.decrypt(ct)
+    }
+
+    /// Decrypts a ciphertext marked as holding a boolean value to a bool
+    ///
+    /// Treats 0 as false and the rest as true
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tfhe::integer::{BooleanBlock, ClientKey};
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    ///
+    /// let cks = ClientKey::new(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    ///
+    /// let a = cks.encrypt_one_block(1u64);
+    /// let wrapped = BooleanBlock::new_unchecked(a);
+    /// let dec = cks.decrypt_bool(&wrapped);
+    /// assert_eq!(dec, true);
+    /// ```
+    pub fn decrypt_bool(&self, ct: &BooleanBlock) -> bool {
+        self.decrypt_one_block(&ct.0) != 0
     }
 
     /// Encrypts an integer using crt representation

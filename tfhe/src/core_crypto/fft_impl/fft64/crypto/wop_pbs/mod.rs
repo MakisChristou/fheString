@@ -520,9 +520,8 @@ pub fn cmux_tree_memory_optimized<Scalar: UnsignedTorus + CastInto<usize>>(
             let even = lut_polynomial_iter.next();
             let odd = lut_polynomial_iter.next();
 
-            let (lut_2i, lut_2i_plus_1) = match (even, odd) {
-                (Some(even), Some(odd)) => (even, odd),
-                _ => break,
+            let (Some(lut_2i), Some(lut_2i_plus_1)) = (even, odd) else {
+                break;
             };
 
             let mut t_iter = izip!(t_0.iter_mut(), t_1.iter_mut(),).enumerate();
@@ -551,7 +550,7 @@ pub fn cmux_tree_memory_optimized<Scalar: UnsignedTorus + CastInto<usize>>(
                         ciphertext_modulus,
                     );
 
-                    if j != nb_layer - 1 {
+                    if j < nb_layer - 1 {
                         let (j_counter_plus_1, (mut t_0_j_plus_1, mut t_1_j_plus_1)) =
                             t_iter.next().unwrap();
 
@@ -573,6 +572,7 @@ pub fn cmux_tree_memory_optimized<Scalar: UnsignedTorus + CastInto<usize>>(
 
                         (j_counter, t0_j, t1_j) = (j_counter_plus_1, t_0_j_plus_1, t_1_j_plus_1);
                     } else {
+                        assert_eq!(j, nb_layer - 1);
                         let mut output = output_glwe.as_mut_view();
                         output.as_mut().copy_from_slice(t0_j.as_ref());
                         add_external_product_assign(output, ggsw, diff, fft, stack);
@@ -849,7 +849,7 @@ pub fn vertical_packing<Scalar: UnsignedTorus + CastInto<usize>>(
     );
 
     // sample extract of the RLWE of the Vertical packing
-    extract_lwe_sample_from_glwe_ciphertext(&cmux_tree_lut_res, &mut lwe_out, MonomialDegree(0))
+    extract_lwe_sample_from_glwe_ciphertext(&cmux_tree_lut_res, &mut lwe_out, MonomialDegree(0));
 }
 
 pub fn blind_rotate_assign_scratch<Scalar>(
@@ -884,7 +884,7 @@ pub fn blind_rotate_assign<Scalar: UnsignedTorus + CastInto<usize>>(
         ct_1.as_mut_polynomial_list()
             .iter_mut()
             .for_each(|mut poly| {
-                polynomial_wrapping_monic_monomial_div_assign(&mut poly, monomial_degree)
+                polynomial_wrapping_monic_monomial_div_assign(&mut poly, monomial_degree);
             });
         monomial_degree.0 <<= 1;
         cmux(ct_0, ct_1, ggsw, fft, stack);
@@ -892,4 +892,4 @@ pub fn blind_rotate_assign<Scalar: UnsignedTorus + CastInto<usize>>(
 }
 
 #[cfg(test)]
-mod tests;
+pub mod tests;

@@ -112,8 +112,13 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> SeededGlweCipherte
         polynomial_size: PolynomialSize,
         compression_seed: CompressionSeed,
         ciphertext_modulus: CiphertextModulus<C::Element>,
-    ) -> SeededGlweCiphertextList<C> {
-        SeededGlweCiphertextList {
+    ) -> Self {
+        assert!(
+            ciphertext_modulus.is_compatible_with_native_modulus(),
+            "Seeded entities are not yet compatible with non power of 2 moduli."
+        );
+
+        Self {
             data: container,
             glwe_size,
             polynomial_size,
@@ -242,8 +247,8 @@ impl<Scalar: UnsignedInteger> SeededGlweCiphertextListOwned<Scalar> {
         ciphertext_count: GlweCiphertextCount,
         compression_seed: CompressionSeed,
         ciphertext_modulus: CiphertextModulus<Scalar>,
-    ) -> SeededGlweCiphertextListOwned<Scalar> {
-        SeededGlweCiphertextListOwned::from_container(
+    ) -> Self {
+        Self::from_container(
             vec![fill_with; ciphertext_count.0 * polynomial_size.0],
             glwe_size,
             polynomial_size,
@@ -269,20 +274,14 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> CreateFrom<C>
     type Metadata = SeededGlweCiphertextListCreationMetadata<C::Element>;
 
     #[inline]
-    fn create_from(from: C, meta: Self::Metadata) -> SeededGlweCiphertextList<C> {
+    fn create_from(from: C, meta: Self::Metadata) -> Self {
         let SeededGlweCiphertextListCreationMetadata(
             glwe_size,
             polynomial_size,
             compression_seed,
             modulus,
         ) = meta;
-        SeededGlweCiphertextList::from_container(
-            from,
-            glwe_size,
-            polynomial_size,
-            compression_seed,
-            modulus,
-        )
+        Self::from_container(from, glwe_size, polynomial_size, compression_seed, modulus)
     }
 }
 

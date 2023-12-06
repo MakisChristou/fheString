@@ -35,8 +35,7 @@ init_panic_hook();
 
 
 test('hlapi_client_key_encrypt_decrypt_int8_big', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers()
+    let config = TfheConfigBuilder.default()
         .build();
 
     let clientKey = TfheClientKey.generate(config);
@@ -50,11 +49,15 @@ test('hlapi_client_key_encrypt_decrypt_int8_big', (t) => {
     let deserialized = FheInt8.deserialize(serialized);
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, clear);
+
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt8.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, clear);
 });
 
 test('hlapi_compressed_public_client_int8_big', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers()
+    let config = TfheConfigBuilder.default()
         .build();
 
     let clientKey = TfheClientKey.generate(config);
@@ -67,13 +70,18 @@ test('hlapi_compressed_public_client_int8_big', (t) => {
 
     let decrypted = decompressed.decrypt(clientKey);
     assert.deepStrictEqual(decrypted, clear);
+
+    let compressed_safe_serialized = compressed_encrypted.safe_serialize(BigInt(10000000));
+    let compressed_safe_deserialized = CompressedFheInt8.safe_deserialize(compressed_safe_serialized, BigInt(10000000));
+    let safe_decompressed = compressed_safe_deserialized.decompress()
+
+    let safe_decrypted = safe_decompressed.decrypt(clientKey);
+    assert.deepStrictEqual(safe_decrypted, clear);
 });
 
 test('hlapi_public_key_encrypt_decrypt_int32_small', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers_small()
+    let config = TfheConfigBuilder.default_with_small_encryption()
         .build();
-
 
     let clientKey = TfheClientKey.generate(config);
     let publicKey = TfhePublicKey.new(clientKey);
@@ -86,11 +94,15 @@ test('hlapi_public_key_encrypt_decrypt_int32_small', (t) => {
     let deserialized = FheInt32.deserialize(serialized);
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I32_MIN);
+
+    let safe_serialized = encrypted.safe_serialize(BigInt(1000000));
+    let safe_deserialized = FheInt32.safe_deserialize(safe_serialized, BigInt(1000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I32_MIN);
 });
 
 test('hlapi_decompress_public_key_then_encrypt_decrypt_int32_small', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers_small()
+    let config = TfheConfigBuilder.default_with_small_encryption()
         .build();
 
 
@@ -116,11 +128,15 @@ test('hlapi_decompress_public_key_then_encrypt_decrypt_int32_small', (t) => {
     let deserialized = FheInt32.deserialize(serialized);
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I32_MIN);
+
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt32.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I32_MIN);
 });
 
 test('hlapi_client_key_encrypt_decrypt_int128_big', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers()
+    let config = TfheConfigBuilder.default()
         .build();
 
     let clientKey = TfheClientKey.generate(config);
@@ -134,6 +150,11 @@ test('hlapi_client_key_encrypt_decrypt_int128_big', (t) => {
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I128_MIN);
 
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt128.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I128_MIN);
+
     // Compressed
     let compressed_encrypted = CompressedFheInt128.encrypt_with_client_key(I128_MIN, clientKey);
     let compressed_serialized = compressed_encrypted.serialize();
@@ -142,13 +163,18 @@ test('hlapi_client_key_encrypt_decrypt_int128_big', (t) => {
 
     decrypted = decompressed.decrypt(clientKey);
     assert.deepStrictEqual(decrypted, I128_MIN);
+
+    let compressed_safe_serialized = compressed_encrypted.safe_serialize(BigInt(10000000));
+    let compressed_safe_deserialized = CompressedFheInt128.safe_deserialize(compressed_safe_serialized, BigInt(10000000));
+    let safe_decompressed = compressed_safe_deserialized.decompress()
+
+    safe_decrypted = safe_decompressed.decrypt(clientKey);
+    assert.deepStrictEqual(safe_decrypted, I128_MIN);
 });
 
 test('hlapi_client_key_encrypt_decrypt_int128_small', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers_small()
+    let config = TfheConfigBuilder.default_with_small_encryption()
         .build();
-
 
     let clientKey = TfheClientKey.generate(config);
 
@@ -161,6 +187,11 @@ test('hlapi_client_key_encrypt_decrypt_int128_small', (t) => {
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I128_MIN);
 
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt128.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I128_MIN);
+
     // Compressed
     let compressed_encrypted = CompressedFheInt128.encrypt_with_client_key(I128_MIN, clientKey);
     let compressed_serialized = compressed_encrypted.serialize();
@@ -169,11 +200,17 @@ test('hlapi_client_key_encrypt_decrypt_int128_small', (t) => {
 
     decrypted = decompressed.decrypt(clientKey);
     assert.deepStrictEqual(decrypted, I128_MIN);
+
+    let compressed_safe_serialized = compressed_encrypted.safe_serialize(BigInt(10000000));
+    let compressed_safe_deserialized = CompressedFheInt128.safe_deserialize(compressed_safe_serialized, BigInt(10000000));
+    let safe_decompressed = compressed_safe_deserialized.decompress()
+
+    safe_decrypted = safe_decompressed.decrypt(clientKey);
+    assert.deepStrictEqual(safe_decrypted, I128_MIN);
 });
 
 test('hlapi_client_key_encrypt_decrypt_int256_big', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers()
+    let config = TfheConfigBuilder.default()
         .build();
 
 
@@ -190,6 +227,11 @@ test('hlapi_client_key_encrypt_decrypt_int256_big', (t) => {
         let deserialized_decrypted = deserialized.decrypt(clientKey);
         assert.deepStrictEqual(deserialized_decrypted, value);
 
+        let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+        let safe_deserialized = FheInt256.safe_deserialize(safe_serialized, BigInt(10000000));
+        let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+        assert.deepStrictEqual(safe_deserialized_decrypted, value);
+
         // Compressed
         let compressed_encrypted = CompressedFheInt256.encrypt_with_client_key(value, clientKey);
         let compressed_serialized = compressed_encrypted.serialize();
@@ -198,6 +240,13 @@ test('hlapi_client_key_encrypt_decrypt_int256_big', (t) => {
 
         decrypted = decompressed.decrypt(clientKey);
         assert.deepStrictEqual(decrypted, value);
+
+        let compressed_safe_serialized = compressed_encrypted.safe_serialize(BigInt(10000000));
+        let compressed_safe_deserialized = CompressedFheInt256.safe_deserialize(compressed_safe_serialized, BigInt(10000000));
+        let safe_decompressed = compressed_safe_deserialized.decompress()
+
+        safe_decrypted = safe_decompressed.decrypt(clientKey);
+        assert.deepStrictEqual(safe_decrypted, value);
     };
 
 
@@ -210,8 +259,7 @@ test('hlapi_client_key_encrypt_decrypt_int256_big', (t) => {
 });
 
 test('hlapi_client_key_encrypt_decrypt_int256_small', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers_small()
+    let config = TfheConfigBuilder.default_with_small_encryption()
         .build();
 
 
@@ -227,6 +275,11 @@ test('hlapi_client_key_encrypt_decrypt_int256_small', (t) => {
         let deserialized_decrypted = deserialized.decrypt(clientKey);
         assert.deepStrictEqual(deserialized_decrypted, value);
 
+        let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+        let safe_deserialized = FheInt256.safe_deserialize(safe_serialized, BigInt(10000000));
+        let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+        assert.deepStrictEqual(safe_deserialized_decrypted, value);
+
         // Compressed
         let compressed_encrypted = CompressedFheInt256.encrypt_with_client_key(value, clientKey);
         let compressed_serialized = compressed_encrypted.serialize();
@@ -235,6 +288,13 @@ test('hlapi_client_key_encrypt_decrypt_int256_small', (t) => {
 
         decrypted = decompressed.decrypt(clientKey);
         assert.deepStrictEqual(decrypted, value);
+
+        let compressed_safe_serialized = compressed_encrypted.safe_serialize(BigInt(10000000));
+        let compressed_safe_deserialized = CompressedFheInt256.safe_deserialize(compressed_safe_serialized, BigInt(10000000));
+        let safe_decompressed = compressed_safe_deserialized.decompress()
+
+        safe_decrypted = safe_decompressed.decrypt(clientKey);
+        assert.deepStrictEqual(safe_decrypted, value);
     }
 
     round_trip_encrypt(I256_MIN);
@@ -246,8 +306,7 @@ test('hlapi_client_key_encrypt_decrypt_int256_small', (t) => {
 });
 
 test('hlapi_decompress_public_key_then_encrypt_decrypt_int256_small', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers_small()
+    let config = TfheConfigBuilder.default_with_small_encryption()
         .build();
 
 
@@ -264,13 +323,15 @@ test('hlapi_decompress_public_key_then_encrypt_decrypt_int256_small', (t) => {
     let deserialized = FheInt256.deserialize(serialized);
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I256_MIN);
+
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt256.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I256_MIN);
 });
 
 test('hlapi_public_key_encrypt_decrypt_int256_small', (t) => {
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_default_integers_small()
-        .build();
-
+    let config = TfheConfigBuilder.default_with_small_encryption().build();
 
     let clientKey = TfheClientKey.generate(config);
     let publicKey = TfhePublicKey.new(clientKey);
@@ -283,6 +344,11 @@ test('hlapi_public_key_encrypt_decrypt_int256_small', (t) => {
     let deserialized = FheInt256.deserialize(serialized);
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I256_MIN);
+
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt256.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I256_MIN);
 });
 
 
@@ -303,12 +369,17 @@ function hlapi_compact_public_key_encrypt_decrypt_int32_single(config) {
     let deserialized = FheInt32.deserialize(serialized);
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I32_MIN);
+
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt32.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I32_MIN);
 }
 
 test('hlapi_compact_public_key_encrypt_decrypt_int32_big_single', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int32_single(config);
@@ -316,8 +387,8 @@ test('hlapi_compact_public_key_encrypt_decrypt_int32_big_single', (t) => {
 
 test('hlapi_compact_public_key_encrypt_decrypt_int32_small_single', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int32_single(config);
@@ -336,12 +407,17 @@ function hlapi_compact_public_key_encrypt_decrypt_int32_single_compact(config) {
     let deserialized = CompactFheInt32.deserialize(serialized);
     let deserialized_decrypted = deserialized.expand().decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I32_MIN);
+
+    let safe_serialized = compact_encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = CompactFheInt32.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.expand().decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I32_MIN);
 }
 
 test('hlapi_compact_public_key_encrypt_decrypt_int32_small_single_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int32_single_compact(config);
@@ -349,8 +425,8 @@ test('hlapi_compact_public_key_encrypt_decrypt_int32_small_single_compact', (t) 
 
 test('hlapi_compact_public_key_encrypt_decrypt_int32_big_single_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int32_single_compact(config);
@@ -369,8 +445,7 @@ function hlapi_compact_public_key_encrypt_decrypt_int32_list_compact(config) {
 
         assert.deepStrictEqual(encrypted_list.length, values.length);
 
-        for (let i = 0; i < values.length; i++)
-        {
+        for (let i = 0; i < values.length; i++) {
             let decrypted = encrypted_list[i].decrypt(clientKey);
             assert.deepStrictEqual(decrypted, values[i]);
         }
@@ -381,8 +456,7 @@ function hlapi_compact_public_key_encrypt_decrypt_int32_list_compact(config) {
     let encrypted_list = deserialized_list.expand();
     assert.deepStrictEqual(encrypted_list.length, values.length);
 
-    for (let i = 0; i < values.length; i++)
-    {
+    for (let i = 0; i < values.length; i++) {
         let decrypted = encrypted_list[i].decrypt(clientKey);
         assert.deepStrictEqual(decrypted, values[i]);
     }
@@ -390,8 +464,8 @@ function hlapi_compact_public_key_encrypt_decrypt_int32_list_compact(config) {
 
 test('hlapi_compact_public_key_encrypt_decrypt_int32_small_list_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int32_list_compact(config);
@@ -399,8 +473,8 @@ test('hlapi_compact_public_key_encrypt_decrypt_int32_small_list_compact', (t) =>
 
 test('hlapi_compact_public_key_encrypt_decrypt_int32_big_list_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int32_list_compact(config);
@@ -423,12 +497,17 @@ function hlapi_compact_public_key_encrypt_decrypt_int256_single(config) {
     let deserialized = FheInt256.deserialize(serialized);
     let deserialized_decrypted = deserialized.decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I256_MIN);
+
+    let safe_serialized = encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = FheInt256.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I256_MIN);
 }
 
 test('hlapi_compact_public_key_encrypt_decrypt_int256_big_single', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int256_single(config);
@@ -436,8 +515,8 @@ test('hlapi_compact_public_key_encrypt_decrypt_int256_big_single', (t) => {
 
 test('hlapi_compact_public_key_encrypt_decrypt_int256_small_single', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int256_single(config);
@@ -456,12 +535,17 @@ function hlapi_compact_public_key_encrypt_decrypt_int256_single_compact(config) 
     let deserialized = CompactFheInt256.deserialize(serialized);
     let deserialized_decrypted = deserialized.expand().decrypt(clientKey);
     assert.deepStrictEqual(deserialized_decrypted, I256_MIN);
+
+    let safe_serialized = compact_encrypted.safe_serialize(BigInt(10000000));
+    let safe_deserialized = CompactFheInt256.safe_deserialize(safe_serialized, BigInt(10000000));
+    let safe_deserialized_decrypted = safe_deserialized.expand().decrypt(clientKey);
+    assert.deepStrictEqual(safe_deserialized_decrypted, I256_MIN);
 }
 
 test('hlapi_compact_public_key_encrypt_decrypt_int256_small_single_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int256_single_compact(config);
@@ -469,8 +553,8 @@ test('hlapi_compact_public_key_encrypt_decrypt_int256_small_single_compact', (t)
 
 test('hlapi_compact_public_key_encrypt_decrypt_int256_big_single_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int256_single_compact(config);
@@ -489,8 +573,7 @@ function hlapi_compact_public_key_encrypt_decrypt_int256_list_compact(config) {
 
         assert.deepStrictEqual(encrypted_list.length, values.length);
 
-        for (let i = 0; i < values.length; i++)
-        {
+        for (let i = 0; i < values.length; i++) {
             let decrypted = encrypted_list[i].decrypt(clientKey);
             assert.deepStrictEqual(decrypted, values[i]);
         }
@@ -501,8 +584,7 @@ function hlapi_compact_public_key_encrypt_decrypt_int256_list_compact(config) {
     let encrypted_list = deserialized_list.expand();
     assert.deepStrictEqual(encrypted_list.length, values.length);
 
-    for (let i = 0; i < values.length; i++)
-    {
+    for (let i = 0; i < values.length; i++) {
         let decrypted = encrypted_list[i].decrypt(clientKey);
         assert.deepStrictEqual(decrypted, values[i]);
     }
@@ -510,8 +592,8 @@ function hlapi_compact_public_key_encrypt_decrypt_int256_list_compact(config) {
 
 test('hlapi_compact_public_key_encrypt_decrypt_int256_small_list_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int256_list_compact(config);
@@ -519,8 +601,8 @@ test('hlapi_compact_public_key_encrypt_decrypt_int256_small_list_compact', (t) =
 
 test('hlapi_compact_public_key_encrypt_decrypt_int256_big_list_compact', (t) => {
     const block_params = new ShortintParameters(ShortintParametersName.PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS);
-    let config = TfheConfigBuilder.all_disabled()
-        .enable_custom_integers(block_params)
+    let config = TfheConfigBuilder.default()
+        .use_custom_parameters(block_params)
         .build();
 
     hlapi_compact_public_key_encrypt_decrypt_int256_list_compact(config);

@@ -6,7 +6,7 @@ TARGET_ARCH_FEATURE:=$(shell ./scripts/get_arch_feature.sh)
 RS_BUILD_TOOLCHAIN:=stable
 CARGO_RS_BUILD_TOOLCHAIN:=+$(RS_BUILD_TOOLCHAIN)
 CARGO_PROFILE?=release
-MIN_RUST_VERSION:=$(shell grep rust-version tfhe/Cargo.toml | cut -d '=' -f 2 | xargs)
+MIN_RUST_VERSION:=$(shell grep '^rust-version[[:space:]]*=' tfhe/Cargo.toml | cut -d '=' -f 2 | xargs)
 AVX512_SUPPORT?=OFF
 WASM_RUSTFLAGS:=
 BIG_TESTS_INSTANCE?=FALSE
@@ -16,6 +16,17 @@ PARSE_INTEGER_BENCH_CSV_FILE?=tfhe_rs_integer_benches.csv
 FAST_TESTS?=FALSE
 FAST_BENCH?=FALSE
 BENCH_OP_FLAVOR?=DEFAULT
+NODE_VERSION=20
+# sed: -n, do not print input stream, -e means a script/expression
+# 1,/version/ indicates from the first line, to the line matching version at the start of the line
+# p indicates to print, so we keep only the start of the Cargo.toml until we hit the first version
+# entry which should be the version of tfhe
+TFHE_CURRENT_VERSION:=\
+$(shell sed -n -e '1,/^version/p' tfhe/Cargo.toml | \
+grep '^version[[:space:]]*=' | cut -d '=' -f 2 | xargs)
+# Cargo has a hard time distinguishing between our package from the workspace and a package that
+# could be a dependency, so we build an unambiguous spec here
+TFHE_SPEC:=tfhe@$(TFHE_CURRENT_VERSION)
 # This is done to avoid forgetting it, we still precise the RUSTFLAGS in the commands to be able to
 # copy paste the command in the terminal and change them if required without forgetting the flags
 export RUSTFLAGS?=-C target-cpu=native
@@ -99,7 +110,7 @@ install_wasm_pack: install_rs_build_toolchain
 install_node:
 	curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | $(SHELL)
 	source ~/.bashrc
-	$(SHELL) -i -c 'nvm install node' || \
+	$(SHELL) -i -c 'nvm install $(NODE_VERSION)' || \
 	( echo "Unable to install node, unknown error." && exit 1 )
 
 .PHONY: install_dieharder # Install dieharder for apt distributions or macOS
@@ -120,7 +131,7 @@ install_tarpaulin: install_rs_build_toolchain
 .PHONY: check_linelint_installed # Check if linelint newline linter is installed
 check_linelint_installed:
 	@printf "\n" | linelint - > /dev/null 2>&1 || \
-	( echo "Unable to locate linelint. Try installing it:  https://github.com/fernandrone/linelint/releases" && exit 1 )
+	( echo "Unable to locate linelint. Try installing it: https://github.com/fernandrone/linelint/releases" && exit 1 )
 
 .PHONY: fmt # Format rust code
 fmt: install_rs_check_toolchain
@@ -142,46 +153,46 @@ check_newline: check_linelint_installed
 clippy_core: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
 		--features=$(TARGET_ARCH_FEATURE) \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
 		--features=$(TARGET_ARCH_FEATURE),experimental \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy_boolean # Run clippy lints enabling the boolean features
 clippy_boolean: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
 		--features=$(TARGET_ARCH_FEATURE),boolean \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy_shortint # Run clippy lints enabling the shortint features
 clippy_shortint: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
 		--features=$(TARGET_ARCH_FEATURE),shortint \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy_integer # Run clippy lints enabling the integer features
 clippy_integer: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
 		--features=$(TARGET_ARCH_FEATURE),integer \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy # Run clippy lints enabling the boolean, shortint, integer
 clippy: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy --all-targets \
 		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy_c_api # Run clippy lints enabling the boolean, shortint and the C API
 clippy_c_api: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
 		--features=$(TARGET_ARCH_FEATURE),boolean-c-api,shortint-c-api \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy_js_wasm_api # Run clippy lints enabling the boolean, shortint, integer and the js wasm API
 clippy_js_wasm_api: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
 		--features=boolean-client-js-wasm-api,shortint-client-js-wasm-api,integer-client-js-wasm-api \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy_tasks # Run clippy lints on helper tasks crate.
 clippy_tasks:
@@ -190,15 +201,14 @@ clippy_tasks:
 
 .PHONY: clippy_trivium # Run clippy lints on Trivium app
 clippy_trivium: install_rs_check_toolchain
-	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy -p tfhe-trivium \
-		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer \
-		-p tfhe -- --no-deps -D warnings
+	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy \
+		-p tfhe-trivium -- --no-deps -D warnings
 
 .PHONY: clippy_all_targets # Run clippy lints on all targets (benches, examples, etc.)
 clippy_all_targets:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo "$(CARGO_RS_CHECK_TOOLCHAIN)" clippy --all-targets \
 		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer,internal-keycache,safe-deserialization \
-		-p tfhe -- --no-deps -D warnings
+		-p $(TFHE_SPEC) -- --no-deps -D warnings
 
 .PHONY: clippy_concrete_csprng # Run clippy lints on concrete-csprng
 clippy_concrete_csprng:
@@ -214,62 +224,55 @@ clippy_js_wasm_api clippy_tasks clippy_core clippy_concrete_csprng clippy_triviu
 clippy_fast: clippy clippy_all_targets clippy_c_api clippy_js_wasm_api clippy_tasks clippy_core \
 clippy_concrete_csprng
 
-.PHONY: gen_key_cache # Run the script to generate keys and cache them for shortint tests
-gen_key_cache: install_rs_build_toolchain
-	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) run --profile $(CARGO_PROFILE) \
-		--example generates_test_keys \
-		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,internal-keycache -p tfhe -- \
-		$(MULTI_BIT_ONLY) $(COVERAGE_ONLY)
-
 .PHONY: build_core # Build core_crypto without experimental features
 build_core: install_rs_build_toolchain install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE) -p tfhe
+		--features=$(TARGET_ARCH_FEATURE) -p $(TFHE_SPEC)
 	@if [[ "$(AVX512_SUPPORT)" == "ON" ]]; then \
 		RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-			--features=$(TARGET_ARCH_FEATURE),$(AVX512_FEATURE) -p tfhe; \
+			--features=$(TARGET_ARCH_FEATURE),$(AVX512_FEATURE) -p $(TFHE_SPEC); \
 	fi
 
 .PHONY: build_core_experimental # Build core_crypto with experimental features
 build_core_experimental: install_rs_build_toolchain install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),experimental -p tfhe
+		--features=$(TARGET_ARCH_FEATURE),experimental -p $(TFHE_SPEC)
 	@if [[ "$(AVX512_SUPPORT)" == "ON" ]]; then \
 		RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-			--features=$(TARGET_ARCH_FEATURE),experimental,$(AVX512_FEATURE) -p tfhe; \
+			--features=$(TARGET_ARCH_FEATURE),experimental,$(AVX512_FEATURE) -p $(TFHE_SPEC); \
 	fi
 
 .PHONY: build_boolean # Build with boolean enabled
 build_boolean: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),boolean -p tfhe --all-targets
+		--features=$(TARGET_ARCH_FEATURE),boolean -p $(TFHE_SPEC) --all-targets
 
 .PHONY: build_shortint # Build with shortint enabled
 build_shortint: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),shortint -p tfhe --all-targets
+		--features=$(TARGET_ARCH_FEATURE),shortint -p $(TFHE_SPEC) --all-targets
 
 .PHONY: build_integer # Build with integer enabled
 build_integer: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),integer -p tfhe --all-targets
+		--features=$(TARGET_ARCH_FEATURE),integer -p $(TFHE_SPEC) --all-targets
 
 .PHONY: build_tfhe_full # Build with boolean, shortint and integer enabled
 build_tfhe_full: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer -p tfhe --all-targets
+		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer -p $(TFHE_SPEC) --all-targets
 
 .PHONY: build_c_api # Build the C API for boolean, shortint and integer
 build_c_api: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
 		--features=$(TARGET_ARCH_FEATURE),boolean-c-api,shortint-c-api,high-level-c-api,safe-deserialization \
-		-p tfhe
+		-p $(TFHE_SPEC)
 
 .PHONY: build_c_api_experimental_deterministic_fft # Build the C API for boolean, shortint and integer with experimental deterministic FFT
 build_c_api_experimental_deterministic_fft: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) build --profile $(CARGO_PROFILE) \
 		--features=$(TARGET_ARCH_FEATURE),boolean-c-api,shortint-c-api,high-level-c-api,safe-deserialization,experimental-force_fft_algo_dif4 \
-		-p tfhe
+		-p $(TFHE_SPEC)
 
 .PHONY: build_web_js_api # Build the js API targeting the web browser
 build_web_js_api: install_rs_build_toolchain install_wasm_pack
@@ -302,16 +305,31 @@ build_concrete_csprng: install_rs_build_toolchain
 .PHONY: test_core_crypto # Run the tests of the core_crypto module including experimental ones
 test_core_crypto: install_rs_build_toolchain install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),experimental -p tfhe -- core_crypto::
+		--features=$(TARGET_ARCH_FEATURE),experimental -p $(TFHE_SPEC) -- core_crypto::
 	@if [[ "$(AVX512_SUPPORT)" == "ON" ]]; then \
 		RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
-			--features=$(TARGET_ARCH_FEATURE),experimental,$(AVX512_FEATURE) -p tfhe -- core_crypto::; \
+			--features=$(TARGET_ARCH_FEATURE),experimental,$(AVX512_FEATURE) -p $(TFHE_SPEC) -- core_crypto::; \
+	fi
+
+.PHONY: test_core_crypto_cov # Run the tests of the core_crypto module with code coverage
+test_core_crypto_cov: install_rs_build_toolchain install_rs_check_toolchain install_tarpaulin
+	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) tarpaulin --profile $(CARGO_PROFILE) \
+		--out xml --output-dir coverage/core_crypto --line --engine llvm --timeout 500 \
+		--implicit-test-threads $(COVERAGE_EXCLUDED_FILES) \
+		--features=$(TARGET_ARCH_FEATURE),experimental,internal-keycache,__coverage \
+		-p $(TFHE_SPEC) -- core_crypto::
+	@if [[ "$(AVX512_SUPPORT)" == "ON" ]]; then \
+		RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) tarpaulin --profile $(CARGO_PROFILE) \
+			--out xml --output-dir coverage/core_crypto_avx512 --line --engine llvm --timeout 500 \
+			--implicit-test-threads $(COVERAGE_EXCLUDED_FILES) \
+			--features=$(TARGET_ARCH_FEATURE),experimental,internal-keycache,__coverage,$(AVX512_FEATURE) \
+			-p $(TFHE_SPEC) -- core_crypto::; \
 	fi
 
 .PHONY: test_boolean # Run the tests of the boolean module
 test_boolean: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),boolean -p tfhe -- boolean::
+		--features=$(TARGET_ARCH_FEATURE),boolean -p $(TFHE_SPEC) -- boolean::
 
 .PHONY: test_boolean_cov # Run the tests of the boolean module with code coverage
 test_boolean_cov: install_rs_check_toolchain install_tarpaulin
@@ -319,13 +337,13 @@ test_boolean_cov: install_rs_check_toolchain install_tarpaulin
 		--out xml --output-dir coverage/boolean --line --engine llvm --timeout 500 \
 		$(COVERAGE_EXCLUDED_FILES) \
 		--features=$(TARGET_ARCH_FEATURE),boolean,internal-keycache,__coverage \
-		-p tfhe -- boolean::
+		-p $(TFHE_SPEC) -- boolean::
 
 .PHONY: test_c_api_rs # Run the rust tests for the C API
 test_c_api_rs: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
 		--features=$(TARGET_ARCH_FEATURE),boolean-c-api,shortint-c-api,high-level-c-api,safe-deserialization \
-		-p tfhe \
+		-p $(TFHE_SPEC) \
 		c_api
 
 .PHONY: test_c_api_c # Run the C tests for the C API
@@ -352,7 +370,7 @@ test_shortint_multi_bit_ci: install_rs_build_toolchain install_cargo_nextest
 .PHONY: test_shortint # Run all the tests for shortint
 test_shortint: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),shortint,internal-keycache -p tfhe -- shortint::
+		--features=$(TARGET_ARCH_FEATURE),shortint,internal-keycache -p $(TFHE_SPEC) -- shortint::
 
 .PHONY: test_shortint_cov # Run the tests of the shortint module with code coverage
 test_shortint_cov: install_rs_check_toolchain install_tarpaulin
@@ -360,42 +378,74 @@ test_shortint_cov: install_rs_check_toolchain install_tarpaulin
 		--out xml --output-dir coverage/shortint --line --engine llvm --timeout 500 \
 		$(COVERAGE_EXCLUDED_FILES) \
 		--features=$(TARGET_ARCH_FEATURE),shortint,internal-keycache,__coverage \
-		-p tfhe -- shortint::
+		-p $(TFHE_SPEC) -- shortint::
 
 .PHONY: test_integer_ci # Run the tests for integer ci
-test_integer_ci: install_rs_build_toolchain install_cargo_nextest
+test_integer_ci: install_rs_check_toolchain install_cargo_nextest
 	BIG_TESTS_INSTANCE="$(BIG_TESTS_INSTANCE)" \
 	FAST_TESTS="$(FAST_TESTS)" \
-		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_BUILD_TOOLCHAIN) \
-		--cargo-profile "$(CARGO_PROFILE)"
+		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_CHECK_TOOLCHAIN) \
+		--cargo-profile "$(CARGO_PROFILE)" --avx512-support "$(AVX512_SUPPORT)"
+
+.PHONY: test_unsigned_integer_ci # Run the tests for unsigned integer ci
+test_unsigned_integer_ci: install_rs_check_toolchain install_cargo_nextest
+	BIG_TESTS_INSTANCE="$(BIG_TESTS_INSTANCE)" \
+	FAST_TESTS="$(FAST_TESTS)" \
+		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_CHECK_TOOLCHAIN) \
+		--cargo-profile "$(CARGO_PROFILE)" --avx512-support "$(AVX512_SUPPORT)" \
+		--unsigned-only
+
+.PHONY: test_signed_integer_ci # Run the tests for signed integer ci
+test_signed_integer_ci: install_rs_check_toolchain install_cargo_nextest
+	BIG_TESTS_INSTANCE="$(BIG_TESTS_INSTANCE)" \
+	FAST_TESTS="$(FAST_TESTS)" \
+		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_CHECK_TOOLCHAIN) \
+		--cargo-profile "$(CARGO_PROFILE)" --avx512-support "$(AVX512_SUPPORT)" \
+		--signed-only
 
 .PHONY: test_integer_multi_bit_ci # Run the tests for integer ci running only multibit tests
-test_integer_multi_bit_ci: install_rs_build_toolchain install_cargo_nextest
+test_integer_multi_bit_ci: install_rs_check_toolchain install_cargo_nextest
 	BIG_TESTS_INSTANCE="$(BIG_TESTS_INSTANCE)" \
 	FAST_TESTS="$(FAST_TESTS)" \
-		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_BUILD_TOOLCHAIN) \
-		--cargo-profile "$(CARGO_PROFILE)" --multi-bit
+		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_CHECK_TOOLCHAIN) \
+		--cargo-profile "$(CARGO_PROFILE)" --multi-bit --avx512-support "$(AVX512_SUPPORT)"
+
+.PHONY: test_unsigned_integer_multi_bit_ci # Run the tests for nsigned integer ci running only multibit tests
+test_unsigned_integer_multi_bit_ci: install_rs_check_toolchain install_cargo_nextest
+	BIG_TESTS_INSTANCE="$(BIG_TESTS_INSTANCE)" \
+	FAST_TESTS="$(FAST_TESTS)" \
+		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_CHECK_TOOLCHAIN) \
+		--cargo-profile "$(CARGO_PROFILE)" --multi-bit --avx512-support "$(AVX512_SUPPORT)" \
+		--unsigned-only
+
+.PHONY: test_signed_integer_multi_bit_ci # Run the tests for nsigned integer ci running only multibit tests
+test_signed_integer_multi_bit_ci: install_rs_check_toolchain install_cargo_nextest
+	BIG_TESTS_INSTANCE="$(BIG_TESTS_INSTANCE)" \
+	FAST_TESTS="$(FAST_TESTS)" \
+		./scripts/integer-tests.sh --rust-toolchain $(CARGO_RS_CHECK_TOOLCHAIN) \
+		--cargo-profile "$(CARGO_PROFILE)" --multi-bit --avx512-support "$(AVX512_SUPPORT)" \
+		--signed-only
 
 .PHONY: test_safe_deserialization # Run the tests for safe deserialization
 test_safe_deserialization: install_rs_build_toolchain install_cargo_nextest
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer,internal-keycache,safe-deserialization -p tfhe -- safe_deserialization::
+		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer,internal-keycache,safe-deserialization -p $(TFHE_SPEC) -- safe_deserialization::
 
 .PHONY: test_integer # Run all the tests for integer
 test_integer: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache -p tfhe -- integer::
+		--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache -p $(TFHE_SPEC) -- integer::
 
 .PHONY: test_high_level_api # Run all the tests for high_level_api
 test_high_level_api: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
-		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer,internal-keycache -p tfhe \
+		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer,internal-keycache -p $(TFHE_SPEC) \
 		-- high_level_api::
 
 .PHONY: test_user_doc # Run tests from the .md documentation
 test_user_doc: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) --doc \
-		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer,internal-keycache -p tfhe \
+		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,integer,internal-keycache -p $(TFHE_SPEC) \
 		-- test_user_docs::
 
 .PHONY: test_regex_engine # Run tests for regex_engine example
@@ -468,17 +518,17 @@ format_doc_latex:
 check_compile_tests:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --no-run \
 		--features=$(TARGET_ARCH_FEATURE),experimental,boolean,shortint,integer,internal-keycache,safe-deserialization \
-		-p tfhe
+		-p $(TFHE_SPEC)
 
 	@if [[ "$(OS)" == "Linux" || "$(OS)" == "Darwin" ]]; then \
-		"$(MAKE)" build_c_api; \
+		"$(MAKE)" build_c_api && \
 		./scripts/c_api_tests.sh --build-only; \
 	fi
 
 .PHONY: build_nodejs_test_docker # Build a docker image with tools to run nodejs tests for wasm API
 build_nodejs_test_docker:
 	DOCKER_BUILDKIT=1 docker build --build-arg RUST_TOOLCHAIN="$(RS_BUILD_TOOLCHAIN)" \
-		-f docker/Dockerfile.wasm_tests -t tfhe-wasm-tests .
+		-f docker/Dockerfile.wasm_tests --build-arg NODE_VERSION=$(NODE_VERSION) -t tfhe-wasm-tests .
 
 .PHONY: test_nodejs_wasm_api_in_docker # Run tests for the nodejs on wasm API in a docker container
 test_nodejs_wasm_api_in_docker: build_nodejs_test_docker
@@ -502,7 +552,8 @@ test_web_js_api_parallel: build_web_js_api_parallel
 .PHONY: ci_test_web_js_api_parallel # Run tests for the web wasm api
 ci_test_web_js_api_parallel: build_web_js_api_parallel
 	source ~/.nvm/nvm.sh && \
-	nvm use node && \
+	nvm install $(NODE_VERSION) && \
+	nvm use $(NODE_VERSION) && \
 	$(MAKE) -C tfhe/web_wasm_parallel_tests test-ci
 
 .PHONY: no_tfhe_typo # Check we did not invert the h and f in tfhe
@@ -521,27 +572,42 @@ dieharder_csprng: install_dieharder build_concrete_csprng
 # Benchmarks
 #
 
-.PHONY: bench_integer # Run benchmarks for integer
+.PHONY: bench_integer # Run benchmarks for unsigned integer
 bench_integer: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" __TFHE_RS_BENCH_OP_FLAVOR=$(BENCH_OP_FLAVOR) __TFHE_RS_FAST_BENCH=$(FAST_BENCH) \
 	cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
 	--bench integer-bench \
-	--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache,$(AVX512_FEATURE) -p tfhe --
+	--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC) --
 
-.PHONY: bench_integer_multi_bit # Run benchmarks for integer using multi-bit parameters
+.PHONY: bench_integer_multi_bit # Run benchmarks for unsigned integer using multi-bit parameters
 bench_integer_multi_bit: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" __TFHE_RS_BENCH_TYPE=MULTI_BIT \
 	__TFHE_RS_BENCH_OP_FLAVOR=$(BENCH_OP_FLAVOR) __TFHE_RS_FAST_BENCH=$(FAST_BENCH) \
 	cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
 	--bench integer-bench \
-	--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache,$(AVX512_FEATURE) -p tfhe --
+	--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC) --
+
+.PHONY: bench_signed_integer # Run benchmarks for signed integer
+bench_signed_integer: install_rs_check_toolchain
+	RUSTFLAGS="$(RUSTFLAGS)" __TFHE_RS_BENCH_OP_FLAVOR=$(BENCH_OP_FLAVOR) __TFHE_RS_FAST_BENCH=$(FAST_BENCH) \
+	cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
+	--bench integer-signed-bench \
+	--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC) --
+
+.PHONY: bench_signed_integer_multi_bit # Run benchmarks for signed integer using multi-bit parameters
+bench_signed_integer_multi_bit: install_rs_check_toolchain
+	RUSTFLAGS="$(RUSTFLAGS)" __TFHE_RS_BENCH_TYPE=MULTI_BIT \
+	__TFHE_RS_BENCH_OP_FLAVOR=$(BENCH_OP_FLAVOR) __TFHE_RS_FAST_BENCH=$(FAST_BENCH) \
+	cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
+	--bench integer-signed-bench \
+	--features=$(TARGET_ARCH_FEATURE),integer,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC) --
 
 .PHONY: bench_shortint # Run benchmarks for shortint
 bench_shortint: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" __TFHE_RS_BENCH_OP_FLAVOR=$(BENCH_OP_FLAVOR) \
 	cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
 	--bench shortint-bench \
-	--features=$(TARGET_ARCH_FEATURE),shortint,internal-keycache,$(AVX512_FEATURE) -p tfhe
+	--features=$(TARGET_ARCH_FEATURE),shortint,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC)
 
 .PHONY: bench_shortint_multi_bit # Run benchmarks for shortint using multi-bit parameters
 bench_shortint_multi_bit: install_rs_check_toolchain
@@ -549,20 +615,20 @@ bench_shortint_multi_bit: install_rs_check_toolchain
 	__TFHE_RS_BENCH_OP_FLAVOR=$(BENCH_OP_FLAVOR) \
 	cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
 	--bench shortint-bench \
-	--features=$(TARGET_ARCH_FEATURE),shortint,internal-keycache,$(AVX512_FEATURE) -p tfhe --
+	--features=$(TARGET_ARCH_FEATURE),shortint,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC) --
 
 
 .PHONY: bench_boolean # Run benchmarks for boolean
 bench_boolean: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
 	--bench boolean-bench \
-	--features=$(TARGET_ARCH_FEATURE),boolean,internal-keycache,$(AVX512_FEATURE) -p tfhe
+	--features=$(TARGET_ARCH_FEATURE),boolean,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC)
 
 .PHONY: bench_pbs # Run benchmarks for PBS
 bench_pbs: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) bench \
 	--bench pbs-bench \
-	--features=$(TARGET_ARCH_FEATURE),boolean,shortint,internal-keycache,$(AVX512_FEATURE) -p tfhe
+	--features=$(TARGET_ARCH_FEATURE),boolean,shortint,internal-keycache,$(AVX512_FEATURE) -p $(TFHE_SPEC)
 
 .PHONY: bench_web_js_api_parallel # Run benchmarks for the web wasm api
 bench_web_js_api_parallel: build_web_js_api_parallel
@@ -577,6 +643,18 @@ ci_bench_web_js_api_parallel: build_web_js_api_parallel
 #
 # Utility tools
 #
+.PHONY: gen_key_cache # Run the script to generate keys and cache them for shortint tests
+gen_key_cache: install_rs_build_toolchain
+	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) run --profile $(CARGO_PROFILE) \
+		--example generates_test_keys \
+		--features=$(TARGET_ARCH_FEATURE),boolean,shortint,internal-keycache -- \
+		$(MULTI_BIT_ONLY) $(COVERAGE_ONLY)
+
+.PHONY: gen_key_cache_core_crypto # Run function to generate keys and cache them for core_crypto tests
+gen_key_cache_core_crypto: install_rs_build_toolchain
+	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --tests --profile $(CARGO_PROFILE) \
+		--features=$(TARGET_ARCH_FEATURE),experimental,internal-keycache -p $(TFHE_SPEC) -- --nocapture \
+		core_crypto::keycache::generate_keys
 
 .PHONY: measure_hlapi_compact_pk_ct_sizes # Measure sizes of public keys and ciphertext for high-level API
 measure_hlapi_compact_pk_ct_sizes: install_rs_check_toolchain

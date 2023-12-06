@@ -143,8 +143,8 @@ impl<C: Container<Element = c64>> FourierGgswLevelMatrix<C> {
         );
         Self {
             data,
-            polynomial_size,
             glwe_size,
+            polynomial_size,
             row_count,
             decomposition_level,
         }
@@ -199,8 +199,8 @@ impl<C: Container<Element = c64>> FourierGgswLevelRow<C> {
         );
         Self {
             data,
-            polynomial_size,
             glwe_size,
+            polynomial_size,
             decomposition_level,
         }
     }
@@ -280,7 +280,7 @@ impl FourierGgswCiphertext<ABox<[c64]>> {
         polynomial_size: PolynomialSize,
         decomposition_base_log: DecompositionBaseLog,
         decomposition_level_count: DecompositionLevelCount,
-    ) -> FourierGgswCiphertext<ABox<[c64]>> {
+    ) -> Self {
         let boxed = avec![
             c64::default();
             polynomial_size.to_fourier_polynomial_size().0
@@ -474,15 +474,14 @@ pub fn add_external_product_assign_scratch<Scalar>(
 
 /// Perform the external product of `ggsw` and `glwe`, and adds the result to `out`.
 #[cfg_attr(__profiling, inline(never))]
-pub fn add_external_product_assign<Scalar, InputGlweCont>(
+pub fn add_external_product_assign<Scalar>(
     mut out: GlweCiphertextMutView<'_, Scalar>,
     ggsw: FourierGgswCiphertextView<'_>,
-    glwe: GlweCiphertext<InputGlweCont>,
+    glwe: GlweCiphertextView<Scalar>,
     fft: FftView<'_>,
     stack: PodStack<'_>,
 ) where
     Scalar: UnsignedTorus,
-    InputGlweCont: Container<Element = Scalar>,
 {
     // we check that the polynomial sizes match
     debug_assert_eq!(ggsw.polynomial_size(), glwe.polynomial_size());
@@ -684,7 +683,7 @@ pub(crate) fn update_with_fmadd(
                 self.fourier,
                 self.is_output_uninit,
                 self.fourier_poly_size,
-            )
+            );
         }
     }
 
@@ -694,7 +693,7 @@ pub(crate) fn update_with_fmadd(
         fourier,
         is_output_uninit,
         fourier_poly_size,
-    })
+    });
 }
 
 pub(crate) fn update_with_fmadd_factor(
@@ -751,7 +750,7 @@ pub(crate) fn update_with_fmadd_factor(
         factor,
         is_output_uninit,
         fourier_poly_size,
-    })
+    });
 }
 
 /// Return the required memory for [`cmux`].
@@ -774,5 +773,5 @@ pub fn cmux<Scalar: UnsignedTorus>(
     izip!(ct1.as_mut(), ct0.as_ref(),).for_each(|(c1, c0)| {
         *c1 = c1.wrapping_sub(*c0);
     });
-    add_external_product_assign(ct0, ggsw, ct1, fft, stack);
+    add_external_product_assign(ct0, ggsw, ct1.as_view(), fft, stack);
 }

@@ -10,11 +10,12 @@ impl ServerKey {
     ///
     ///```rust
     /// use tfhe::integer::gen_keys_crt;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
     /// let basis = vec![2, 3, 5];
-    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_2_CARRY_2_KS_PBS, basis);
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 14;
@@ -28,7 +29,7 @@ impl ServerKey {
     ///
     /// // Decrypt
     /// let res = cks.decrypt(&ctxt_1);
-    /// assert_eq!((clear_1 + clear_2) % 30, res);
+    /// assert_eq!((clear_1 + clear_2) % modulus, res);
     /// ```
     pub fn unchecked_crt_add_assign_parallelized(
         &self,
@@ -38,7 +39,7 @@ impl ServerKey {
         ct_left
             .blocks
             .par_iter_mut()
-            .zip(&ct_right.blocks)
+            .zip(ct_right.blocks.par_iter())
             .for_each(|(ct_left, ct_right)| {
                 self.key.unchecked_add_assign(ct_left, ct_right);
             });
@@ -64,12 +65,13 @@ impl ServerKey {
     ///
     /// ```rust
     /// use tfhe::integer::gen_keys_crt;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     /// let size = 4;
     ///
     /// // Generate the client key and the server key:
     /// let basis = vec![2, 3, 5];
-    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_2_CARRY_2_KS_PBS, basis);
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 29;
     /// let clear_2 = 29;
@@ -83,19 +85,21 @@ impl ServerKey {
     ///
     /// // Decrypt
     /// let res = cks.decrypt(&ctxt_1);
-    /// assert_eq!((clear_1 + clear_2) % 30, res);
+    /// assert_eq!((clear_1 + clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_add_assign_parallelized(
         &self,
         ct_left: &mut CrtCiphertext,
         ct_right: &mut CrtCiphertext,
     ) {
-        if !self.is_crt_add_possible(ct_left, ct_right) {
+        if self.is_crt_add_possible(ct_left, ct_right).is_err() {
             rayon::join(
                 || self.full_extract_message_assign(ct_left),
                 || self.full_extract_message_assign(ct_right),
             );
         }
+        self.is_crt_add_possible(ct_left, ct_right).unwrap();
+
         self.unchecked_crt_add_assign_parallelized(ct_left, ct_right);
     }
 
@@ -104,12 +108,14 @@ impl ServerKey {
         ct_left: &mut CrtCiphertext,
         ct_right: &mut CrtCiphertext,
     ) -> CrtCiphertext {
-        if !self.is_crt_add_possible(ct_left, ct_right) {
+        if self.is_crt_add_possible(ct_left, ct_right).is_err() {
             rayon::join(
                 || self.full_extract_message_assign(ct_left),
                 || self.full_extract_message_assign(ct_right),
             );
         }
+        self.is_crt_add_possible(ct_left, ct_right).unwrap();
+
         self.unchecked_crt_add_parallelized(ct_left, ct_right)
     }
 }

@@ -1,5 +1,4 @@
 use crate::integer::server_key::CheckError;
-use crate::integer::server_key::CheckError::CarryFull;
 use crate::integer::{CrtCiphertext, ServerKey};
 use rayon::prelude::*;
 
@@ -14,23 +13,24 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 7;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// sks.unchecked_crt_scalar_sub_assign_parallelized(&mut ctxt_1, clear_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 - clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 - clear_2) % modulus, res);
     /// ```
     pub fn unchecked_crt_scalar_sub_parallelized(
         &self,
@@ -53,37 +53,37 @@ impl ServerKey {
             .zip(ct.moduli.par_iter())
             .for_each(|(ct_i, mod_i)| {
                 let neg_scalar = (mod_i - scalar % mod_i) % mod_i;
-                self.key
-                    .unchecked_scalar_add_assign_crt(ct_i, neg_scalar as u8);
+                self.key.unchecked_scalar_add_assign(ct_i, neg_scalar as u8);
             });
     }
 
     /// Computes homomorphically a subtraction of a ciphertext by a scalar.
     ///
     /// If the operation can be performed, the result is returned in a new ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
     /// ```rust
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 8;
-    /// let basis = vec![2, 3, 5];
     ///
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// let ct_res = sks.checked_crt_scalar_sub_parallelized(&mut ctxt_1, clear_2)?;
     ///
     /// // Decrypt:
-    /// let dec = cks.decrypt_crt(&ct_res);
-    /// assert_eq!((clear_1 - clear_2) % 30, dec);
+    /// let dec = cks.decrypt(&ct_res);
+    /// assert_eq!((clear_1 - clear_2) % modulus, dec);
     /// # Ok(())
     /// # }
     /// ```
@@ -92,39 +92,37 @@ impl ServerKey {
         ct: &CrtCiphertext,
         scalar: u64,
     ) -> Result<CrtCiphertext, CheckError> {
-        if self.is_crt_scalar_sub_possible(ct, scalar) {
-            Ok(self.unchecked_crt_scalar_sub_parallelized(ct, scalar))
-        } else {
-            Err(CarryFull)
-        }
+        self.is_crt_scalar_sub_possible(ct, scalar)?;
+        Ok(self.unchecked_crt_scalar_sub_parallelized(ct, scalar))
     }
 
     /// Computes homomorphically a subtraction of a ciphertext by a scalar.
     ///
     /// If the operation can be performed, the result is returned in a new ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
     /// ```rust
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 7;
-    /// let basis = vec![2, 3, 5];
     ///
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// sks.checked_crt_scalar_sub_assign_parallelized(&mut ctxt_1, clear_2)?;
     ///
     /// // Decrypt:
-    /// let dec = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 - clear_2) % 30, dec);
+    /// let dec = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 - clear_2) % modulus, dec);
     /// # Ok(())
     /// # }
     /// ```
@@ -133,12 +131,9 @@ impl ServerKey {
         ct: &mut CrtCiphertext,
         scalar: u64,
     ) -> Result<(), CheckError> {
-        if self.is_crt_scalar_sub_possible(ct, scalar) {
-            self.unchecked_crt_scalar_sub_assign_parallelized(ct, scalar);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_crt_scalar_sub_possible(ct, scalar)?;
+        self.unchecked_crt_scalar_sub_assign_parallelized(ct, scalar);
+        Ok(())
     }
 
     /// Computes homomorphically a subtraction of a ciphertext by a scalar.
@@ -146,40 +141,44 @@ impl ServerKey {
     /// # Example
     ///
     ///```rust
-    /// use tfhe::integer::gen_keys;
-    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    /// use tfhe::integer::gen_keys_crt;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 14;
     /// let clear_2 = 7;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
     ///
     /// sks.smart_crt_scalar_sub_assign_parallelized(&mut ctxt_1, clear_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 - clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 - clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_scalar_sub_parallelized(
         &self,
         ct: &mut CrtCiphertext,
         scalar: u64,
     ) -> CrtCiphertext {
-        if !self.is_crt_scalar_sub_possible(ct, scalar) {
+        if self.is_crt_scalar_sub_possible(ct, scalar).is_err() {
             self.full_extract_message_assign_parallelized(ct);
         }
 
+        self.is_crt_scalar_sub_possible(ct, scalar).unwrap();
         self.unchecked_crt_scalar_sub_parallelized(ct, scalar)
     }
 
     pub fn smart_crt_scalar_sub_assign_parallelized(&self, ct: &mut CrtCiphertext, scalar: u64) {
-        if !self.is_crt_scalar_sub_possible(ct, scalar) {
+        if self.is_crt_scalar_sub_possible(ct, scalar).is_err() {
             self.full_extract_message_assign_parallelized(ct);
         }
+
+        self.is_crt_scalar_sub_possible(ct, scalar).unwrap();
 
         self.unchecked_crt_scalar_sub_assign_parallelized(ct, scalar);
     }

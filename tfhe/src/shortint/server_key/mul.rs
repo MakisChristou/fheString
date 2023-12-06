@@ -1,8 +1,8 @@
+use super::add::unchecked_add_assign;
 use super::ServerKey;
-use crate::shortint::ciphertext::Degree;
-use crate::shortint::engine::ShortintEngine;
+use crate::shortint::ciphertext::{Degree, MaxDegree};
 use crate::shortint::server_key::CheckError;
-use crate::shortint::server_key::CheckError::CarryFull;
+
 use crate::shortint::Ciphertext;
 
 impl ServerKey {
@@ -66,9 +66,9 @@ impl ServerKey {
     /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn unchecked_mul_lsb(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_mul_lsb(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_mul_lsb_assign(&mut result, ct_right);
+        result
     }
 
     /// Multiply two ciphertexts together without checks.
@@ -119,11 +119,17 @@ impl ServerKey {
     /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn unchecked_mul_lsb_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_mul_lsb_assign(self, ct_left, ct_right)
-                .unwrap()
-        })
+        if ct_left.degree.get() == 0 || ct_right.degree.get() == 0 {
+            // One of the ciphertext is a trivial 0
+            self.create_trivial_assign(ct_left, 0);
+            return;
+        }
+
+        //Modulus of the msg in the msg bits
+        let res_modulus = ct_left.message_modulus.0 as u64;
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |x, y| {
+            (x * y) % res_modulus
+        });
     }
 
     /// Multiply two ciphertexts together without checks.
@@ -188,17 +194,60 @@ impl ServerKey {
     /// assert_eq!((clear_1 * clear_2) / modulus, res);
     /// ```
     pub fn unchecked_mul_msb(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_mul_msb(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_mul_msb_assign(&mut result, ct_right);
+
+        result
     }
 
     pub fn unchecked_mul_msb_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_mul_msb_assign(self, ct_left, ct_right)
-                .unwrap()
-        })
+        if ct_left.degree.get() == 0 || ct_right.degree.get() == 0 {
+            // One of the ciphertext is a trivial 0
+            self.create_trivial_assign(ct_left, 0);
+            return;
+        }
+
+        // Modulus of the msg in the msg bits
+        let res_modulus = self.message_modulus.0 as u64;
+        self.unchecked_evaluate_bivariate_function_assign(ct_left, ct_right, |x, y| {
+            (x * y) / res_modulus
+        });
+    }
+
+    pub(crate) fn unchecked_mul_lsb_small_carry_modulus(
+        &self,
+        ct1: &Ciphertext,
+        ct2: &Ciphertext,
+    ) -> Ciphertext {
+        // ct1 + ct2
+        let mut ct_add = ct1.clone();
+
+        unchecked_add_assign(&mut ct_add, ct2);
+
+        // ct1 - ct2
+        let (mut ct_sub, z) = self.unchecked_sub_with_correcting_term(ct1, ct2);
+
+        //Modulus of the msg in the msg bits
+        let modulus = ct1.message_modulus.0 as u64;
+
+        let acc_add = self.generate_lookup_table(|x| ((x.wrapping_mul(x)) / 4) % modulus);
+        let acc_sub = self.generate_lookup_table(|x| {
+            (((x.wrapping_sub(z)).wrapping_mul(x.wrapping_sub(z))) / 4) % modulus
+        });
+
+        self.apply_lookup_table_assign(&mut ct_add, &acc_add);
+        self.apply_lookup_table_assign(&mut ct_sub, &acc_sub);
+
+        //Last subtraction might fill one bit of carry
+        self.unchecked_sub(&ct_add, &ct_sub)
+    }
+
+    pub(crate) fn unchecked_mul_lsb_small_carry_modulus_assign(
+        &self,
+        ct1: &mut Ciphertext,
+        ct2: &Ciphertext,
+    ) {
+        *ct1 = self.unchecked_mul_lsb_small_carry_modulus(ct1, ct2);
     }
 
     /// Verify if two ciphertexts can be multiplied together.
@@ -221,9 +270,7 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(msg);
     ///
     /// // Check if we can perform a multiplication
-    /// let res = sks.is_mul_possible(&ct_1, &ct_2);
-    ///
-    /// assert_eq!(true, res);
+    /// let res = sks.is_mul_possible(&ct_1, &ct_2).unwrap();
     ///
     /// let (cks, sks) = gen_keys(PARAM_MESSAGE_2_CARRY_2_PBS_KS);
     ///
@@ -232,11 +279,9 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(msg);
     ///
     /// // Check if we can perform a multiplication
-    /// let res = sks.is_mul_possible(&ct_1, &ct_2);
-    ///
-    /// assert_eq!(true, res);
+    /// let res = sks.is_mul_possible(&ct_1, &ct_2).unwrap();
     /// ```
-    pub fn is_mul_possible(&self, ct1: &Ciphertext, ct2: &Ciphertext) -> bool {
+    pub fn is_mul_possible(&self, ct1: &Ciphertext, ct2: &Ciphertext) -> Result<(), CheckError> {
         self.is_functional_bivariate_pbs_possible(ct1, ct2)
     }
 
@@ -246,7 +291,7 @@ impl ServerKey {
     /// message_modulus.
     ///
     /// If the operation can be performed, a _new_ ciphertext with the result is returned.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -264,11 +309,8 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(1);
     ///
     /// // Compute homomorphically a multiplication:
-    /// let ct_res = sks.checked_mul_lsb(&ct_1, &ct_2);
+    /// let ct_res = sks.checked_mul_lsb(&ct_1, &ct_2).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt_message_and_carry(&ct_res);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(clear_res % modulus, 2);
@@ -280,11 +322,8 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(1);
     ///
     /// // Compute homomorphically a multiplication:
-    /// let ct_res = sks.checked_mul_lsb(&ct_1, &ct_2);
+    /// let ct_res = sks.checked_mul_lsb(&ct_1, &ct_2).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt_message_and_carry(&ct_res);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(clear_res % modulus, 2);
@@ -294,12 +333,9 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_mul_possible(ct_left, ct_right) {
-            let ct_result = self.unchecked_mul_lsb(ct_left, ct_right);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_mul_possible(ct_left, ct_right)?;
+        let ct_result = self.unchecked_mul_lsb(ct_left, ct_right);
+        Ok(ct_result)
     }
 
     /// Multiply two ciphertexts together with checks.
@@ -309,7 +345,7 @@ impl ServerKey {
     ///
     /// If the operation can be performed, the result is assigned to the first ciphertext given
     /// as a parameter.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -327,9 +363,7 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(1);
     ///
     /// // Compute homomorphically a multiplication:
-    /// let ct_res = sks.checked_mul_lsb_assign(&mut ct_1, &ct_2);
-    ///
-    /// assert!(ct_res.is_ok());
+    /// sks.checked_mul_lsb_assign(&mut ct_1, &ct_2).unwrap();
     ///
     /// let clear_res = cks.decrypt_message_and_carry(&ct_1);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
@@ -342,9 +376,7 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(1);
     ///
     /// // Compute homomorphically a multiplication:
-    /// let ct_res = sks.checked_mul_lsb_assign(&mut ct_1, &ct_2);
-    ///
-    /// assert!(ct_res.is_ok());
+    /// sks.checked_mul_lsb_assign(&mut ct_1, &ct_2).unwrap();
     ///
     /// let clear_res = cks.decrypt_message_and_carry(&ct_1);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
@@ -355,12 +387,9 @@ impl ServerKey {
         ct_left: &mut Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<(), CheckError> {
-        if self.is_mul_possible(ct_left, ct_right) {
-            self.unchecked_mul_lsb_assign(ct_left, ct_right);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_mul_possible(ct_left, ct_right)?;
+        self.unchecked_mul_lsb_assign(ct_left, ct_right);
+        Ok(())
     }
 
     /// Multiply two ciphertexts together without checks.
@@ -369,7 +398,7 @@ impl ServerKey {
     /// buffer.
     ///
     /// If the operation can be performed, a _new_ ciphertext with the result is returned.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -390,8 +419,7 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(msg_2);
     ///
     /// // Compute homomorphically a multiplication:
-    /// let ct_res = sks.checked_mul_msb(&ct_1, &ct_2);
-    /// assert!(ct_res.is_ok());
+    /// let ct_res = sks.checked_mul_msb(&ct_1, &ct_2).unwrap();
     ///
     /// // 2*2 == 4 == 01_00 (base 2)
     /// // however the ciphertext will contain only the carry buffer
@@ -401,7 +429,6 @@ impl ServerKey {
     /// // |-------|---------|
     /// // |  0 0  |   0 1   |
     ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// assert_eq!(
     ///     clear_res,
@@ -415,8 +442,7 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(msg_2);
     ///
     /// // Compute homomorphically a multiplication:
-    /// let ct_res = sks.checked_mul_msb(&ct_1, &ct_2);
-    /// assert!(ct_res.is_ok());
+    /// let ct_res = sks.checked_mul_msb(&ct_1, &ct_2).unwrap();
     ///
     /// // 2*2 == 4 == 01_00 (base 2)
     /// // however the ciphertext will contain only the carry buffer
@@ -426,7 +452,6 @@ impl ServerKey {
     /// // |-------|---------|
     /// // |  0 0  |   0 1   |
     ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// assert_eq!(
     ///     clear_res,
@@ -438,12 +463,9 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_mul_possible(ct_left, ct_right) {
-            let ct_result = self.unchecked_mul_msb(ct_left, ct_right);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_mul_possible(ct_left, ct_right)?;
+        let ct_result = self.unchecked_mul_msb(ct_left, ct_right);
+        Ok(ct_result)
     }
 
     /// Multiply two ciphertexts together using one bit of carry only.
@@ -498,11 +520,7 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_mul_lsb_small_carry_modulus(self, ct_left, ct_right)
-                .unwrap()
-        })
+        self.unchecked_mul_lsb_small_carry_modulus(ct_left, ct_right)
     }
 
     pub fn unchecked_mul_lsb_small_carry_assign(
@@ -510,11 +528,7 @@ impl ServerKey {
         ct_left: &mut Ciphertext,
         ct_right: &Ciphertext,
     ) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_mul_lsb_small_carry_modulus_assign(self, ct_left, ct_right)
-                .unwrap()
-        })
+        self.unchecked_mul_lsb_small_carry_modulus_assign(ct_left, ct_right);
     }
 
     /// Verify if two ciphertexts can be multiplied together in the case where the carry
@@ -536,42 +550,42 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(msg);
     ///
     /// // Check if we can perform a multiplication
-    /// let mut res = sks.is_mul_small_carry_possible(&ct_1, &ct_2);
-    ///
-    /// assert_eq!(true, res);
+    /// sks.is_mul_small_carry_possible(&ct_1, &ct_2).unwrap();
     ///
     /// //Encryption with a full carry buffer
     /// let large_msg = 7;
     /// let ct_3 = cks.unchecked_encrypt(large_msg);
     ///
     /// //  Check if we can perform a multiplication
-    /// res = sks.is_mul_small_carry_possible(&ct_1, &ct_3);
+    /// let res = sks.is_mul_small_carry_possible(&ct_1, &ct_3);
     ///
-    /// assert_eq!(false, res);
+    /// assert!(res.is_err());
     ///
     /// // Encrypt two messages:
     /// let ct_1 = cks.encrypt(msg);
     /// let ct_2 = cks.encrypt(msg);
     ///
     /// // Check if we can perform a multiplication
-    /// let mut res = sks.is_mul_small_carry_possible(&ct_1, &ct_2);
-    ///
-    /// assert_eq!(true, res);
+    /// sks.is_mul_small_carry_possible(&ct_1, &ct_2).unwrap();
     ///
     /// //Encryption with a full carry buffer
     /// let large_msg = 7;
     /// let ct_3 = cks.unchecked_encrypt(large_msg);
     ///
     /// //  Check if we can perform a multiplication
-    /// res = sks.is_mul_small_carry_possible(&ct_1, &ct_3);
+    /// let res = sks.is_mul_small_carry_possible(&ct_1, &ct_3);
     ///
-    /// assert_eq!(false, res);
+    /// assert!(res.is_err());
     /// ```
-    pub fn is_mul_small_carry_possible(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> bool {
+    pub fn is_mul_small_carry_possible(
+        &self,
+        ct_left: &Ciphertext,
+        ct_right: &Ciphertext,
+    ) -> Result<(), CheckError> {
         // Check if an addition is possible
-        let b1 = self.is_add_possible(ct_left, ct_right);
-        let b2 = self.is_sub_possible(ct_left, ct_right);
-        b1 & b2
+        self.is_add_possible(ct_left, ct_right)?;
+        self.is_sub_possible(ct_left, ct_right)?;
+        Ok(())
     }
 
     /// Compute homomorphically a multiplication between two ciphertexts encrypting integer values.
@@ -579,7 +593,7 @@ impl ServerKey {
     /// The operation is done using a small carry buffer.
     ///
     /// If the operation can be performed, a _new_ ciphertext with the result of the
-    /// multiplication is returned. Otherwise [CheckError::CarryFull] is returned.
+    /// multiplication is returned. Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -600,11 +614,10 @@ impl ServerKey {
     /// let mut ct_2 = cks.encrypt(msg_2);
     ///
     /// // Compute homomorphically a multiplication
-    /// let ct_res = sks.checked_mul_lsb_with_small_carry(&mut ct_1, &mut ct_2);
+    /// let ct_res = sks
+    ///     .checked_mul_lsb_with_small_carry(&mut ct_1, &mut ct_2)
+    ///     .unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(clear_res % modulus, (msg_1 * msg_2) % modulus);
@@ -616,11 +629,10 @@ impl ServerKey {
     /// let mut ct_2 = cks.encrypt(msg_2);
     ///
     /// // Compute homomorphically a multiplication
-    /// let ct_res = sks.checked_mul_lsb_with_small_carry(&mut ct_1, &mut ct_2);
+    /// let ct_res = sks
+    ///     .checked_mul_lsb_with_small_carry(&mut ct_1, &mut ct_2)
+    ///     .unwrap();
     ///
-    /// assert!(ct_res.is_ok());
-    ///
-    /// let ct_res = ct_res.unwrap();
     /// let clear_res = cks.decrypt(&ct_res);
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// assert_eq!(clear_res % modulus, (msg_1 * msg_2) % modulus);
@@ -630,13 +642,10 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
-        if self.is_mul_small_carry_possible(ct_left, ct_right) {
-            let mut ct_result = self.unchecked_mul_lsb_small_carry(ct_left, ct_right);
-            ct_result.degree = Degree(ct_left.degree.0 * 2);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_mul_small_carry_possible(ct_left, ct_right)?;
+        let mut ct_result = self.unchecked_mul_lsb_small_carry(ct_left, ct_right);
+        ct_result.degree = Degree::new(ct_left.degree.get() * 2);
+        Ok(ct_result)
     }
 
     /// Multiply two ciphertexts together
@@ -868,16 +877,11 @@ impl ServerKey {
         };
 
         if ct_left.message_modulus.0 > ct_left.carry_modulus.0 {
-            ShortintEngine::with_thread_local_mut(|engine| {
-                engine
-                    .unchecked_mul_lsb_small_carry_modulus_assign(self, ct_left, rhs)
-                    .unwrap()
-            });
+            self.unchecked_mul_lsb_small_carry_modulus_assign(ct_left, rhs);
+
             self.message_extract_assign(ct_left);
         } else {
-            ShortintEngine::with_thread_local_mut(|engine| {
-                engine.unchecked_mul_lsb_assign(self, ct_left, rhs).unwrap()
-            });
+            self.unchecked_mul_lsb_assign(ct_left, rhs);
         }
     }
 
@@ -936,7 +940,7 @@ impl ServerKey {
     /// assert_eq!(res % modulus, (msg1 * msg2) % modulus);
     /// ```
     pub fn mul_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
-        self.mul_lsb_assign(ct_left, ct_right)
+        self.mul_lsb_assign(ct_left, ct_right);
     }
 
     /// Multiply two ciphertexts together
@@ -1006,9 +1010,7 @@ impl ServerKey {
             &tmp_rhs
         };
 
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_mul_msb_assign(self, ct_left, rhs).unwrap()
-        });
+        self.unchecked_mul_msb_assign(ct_left, rhs);
     }
 
     /// Multiply two ciphertexts together
@@ -1115,11 +1117,41 @@ impl ServerKey {
     /// assert_eq!(res % modulus, (msg1 * msg2) % modulus);
     /// ```
     pub fn smart_mul_lsb_assign(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_mul_lsb_assign(self, ct_left, ct_right)
-                .unwrap()
-        })
+        //Choice of the multiplication algorithm depending on the parameters
+        if ct_left.message_modulus.0 > ct_left.carry_modulus.0 {
+            //If the ciphertexts cannot be multiplied together without exceeding the capacity of a
+            // ciphertext
+            if self.is_mul_small_carry_possible(ct_left, ct_right).is_err() {
+                self.message_extract_assign(ct_left);
+                self.message_extract_assign(ct_right);
+            }
+            self.is_mul_small_carry_possible(ct_left, ct_right).unwrap();
+            self.unchecked_mul_lsb_small_carry_modulus_assign(ct_left, ct_right);
+        } else {
+            let max_degree =
+                MaxDegree::from_msg_carry_modulus(ct_right.message_modulus, ct_right.carry_modulus);
+
+            //If the ciphertexts cannot be multiplied together without exceeding the capacity of a
+            // ciphertext
+            if self.is_mul_possible(ct_left, ct_right).is_err() {
+                if max_degree
+                    .validate(ct_right.degree * (self.message_modulus.0 - 1))
+                    .is_ok()
+                {
+                    self.message_extract_assign(ct_left);
+                } else if max_degree
+                    .validate(ct_left.degree + Degree::new(self.message_modulus.0 - 1))
+                    .is_ok()
+                {
+                    self.message_extract_assign(ct_right);
+                } else {
+                    self.message_extract_assign(ct_left);
+                    self.message_extract_assign(ct_right);
+                }
+            }
+            self.is_mul_possible(ct_left, ct_right).unwrap();
+            self.unchecked_mul_lsb_assign(ct_left, ct_right);
+        }
     }
 
     /// Multiply two ciphertexts together
@@ -1168,11 +1200,14 @@ impl ServerKey {
     /// assert_eq!(res, ((msg1 * msg2) / modulus) % modulus);
     /// ```
     pub fn smart_mul_msb_assign(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_mul_msb_assign(self, ct_left, ct_right)
-                .unwrap()
-        })
+        if self.is_mul_possible(ct_left, ct_right).is_err() {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+
+        self.is_mul_possible(ct_left, ct_right).unwrap();
+
+        self.unchecked_mul_msb_assign(ct_left, ct_right);
     }
 
     /// Multiply two ciphertexts together
@@ -1243,9 +1278,44 @@ impl ServerKey {
     /// assert_eq!(res, (msg1 * msg2) % modulus as u64);
     /// ```
     pub fn smart_mul_lsb(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_mul_lsb(self, ct_left, ct_right).unwrap()
-        })
+        if ct_left.message_modulus.0 > ct_left.carry_modulus.0 {
+            //If the ciphertexts cannot be multiplied together without exceeding the capacity of a
+            // ciphertext
+            if self.is_mul_small_carry_possible(ct_left, ct_right).is_err() {
+                self.message_extract_assign(ct_left);
+                self.message_extract_assign(ct_right);
+            }
+
+            self.is_mul_small_carry_possible(ct_left, ct_right).unwrap();
+
+            self.unchecked_mul_lsb_small_carry_modulus(ct_left, ct_right)
+        } else {
+            let max_degree =
+                MaxDegree::from_msg_carry_modulus(ct_right.message_modulus, ct_right.carry_modulus);
+
+            //If the ciphertexts cannot be multiplied together without exceeding the capacity of a
+            // ciphertext
+            if self.is_mul_possible(ct_left, ct_right).is_err() {
+                if max_degree
+                    .validate(ct_right.degree * (self.message_modulus.0 - 1))
+                    .is_ok()
+                {
+                    self.message_extract_assign(ct_left);
+                } else if max_degree
+                    .validate(ct_left.degree + Degree::new(self.message_modulus.0 - 1))
+                    .is_ok()
+                {
+                    self.message_extract_assign(ct_right);
+                } else {
+                    self.message_extract_assign(ct_left);
+                    self.message_extract_assign(ct_right);
+                }
+            }
+
+            self.is_mul_possible(ct_left, ct_right).unwrap();
+
+            self.unchecked_mul_lsb(ct_left, ct_right)
+        }
     }
 
     /// Multiply two ciphertexts together
@@ -1291,9 +1361,10 @@ impl ServerKey {
     /// let modulus = sks.message_modulus.0 as u64;
     /// assert_eq!(res, ((msg1 * msg2) / modulus) % modulus);
     /// ```
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn smart_mul_msb(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_mul_msb(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.smart_mul_msb_assign(&mut result, ct_right);
+        result
     }
 }

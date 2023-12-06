@@ -79,10 +79,10 @@ impl<C: Container<Element = f64>> Fourier128GgswCiphertext<C> {
             data_re1,
             data_im0,
             data_im1,
+            polynomial_size,
             glwe_size,
             decomposition_base_log,
             decomposition_level_count,
-            polynomial_size,
         }
     }
 
@@ -326,7 +326,7 @@ where
                 );
             }
         }
-        implementation(self.as_mut_view(), coef_ggsw.as_view(), fft)
+        implementation(self.as_mut_view(), coef_ggsw.as_view(), fft);
     }
 }
 
@@ -522,7 +522,7 @@ pub fn add_external_product_assign<Scalar, ContOut, ContGgsw, ContGlwe>(
         glwe.as_view(),
         fft,
         stack,
-    )
+    );
 }
 
 fn collect_next_term<'a, Scalar: UnsignedTorus>(
@@ -798,5 +798,5 @@ pub fn cmux<Scalar, ContCt0, ContCt1, ContGgsw>(
         ggsw.as_view(),
         fft,
         stack,
-    )
+    );
 }

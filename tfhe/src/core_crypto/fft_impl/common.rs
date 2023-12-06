@@ -12,9 +12,18 @@ use dyn_stack::{PodStack, SizeOverflow, StackReq};
 /// This function switches modulus for a single coefficient of a ciphertext,
 /// only in the context of a PBS
 ///
-/// offset: the number of msb discarded
-/// lut_count_log: the right padding
-pub fn pbs_modulus_switch<Scalar: UnsignedTorus + CastInto<usize>>(
+/// - offset: the number of msb discarded
+/// - lut_count_log: the right padding
+///
+/// # Note
+///
+/// If you are switching to a modulus of $2N$ then this function may return the value $2N$ while a
+/// "true" modulus switch would return $0$ in that case. It turns out that this is not affecting
+/// other parts of the code relying on the modulus switch (as a rotation by $2N$ is effectively the
+/// same as rotation by $0$ for polynomials of size $N$ in the ring $X^N+1$) but it could be
+/// problematic for code requiring an output in the expected $[0; 2N[$ range. Also this saves a few
+/// instructions which can add up when this is being called hundreds or thousands of times per PBS.
+pub fn fast_pbs_modulus_switch<Scalar: UnsignedTorus + CastInto<usize>>(
     input: Scalar,
     poly_size: PolynomialSize,
     offset: ModulusSwitchOffset,
@@ -77,69 +86,88 @@ pub trait FourierBootstrapKey<Scalar: UnsignedInteger> {
 
 #[cfg(test)]
 pub mod tests {
+    pub(crate) use crate::core_crypto::algorithms::test::gen_keys_or_get_from_cache_if_enabled;
+
+    use crate::core_crypto::algorithms::test::{FftBootstrapKeys, FftTestParams, TestResources};
     use crate::core_crypto::commons::numeric::Numeric;
     use crate::core_crypto::fft_impl::common::FourierBootstrapKey;
+    use crate::core_crypto::keycache::KeyCacheAccess;
     use crate::core_crypto::prelude::*;
     use dyn_stack::{GlobalPodBuffer, PodStack};
+    use serde::de::DeserializeOwned;
+    use serde::Serialize;
 
-    pub fn test_bootstrap_generic<
-        Scalar: Numeric + UnsignedTorus + CastFrom<usize> + CastInto<usize> + Send + Sync,
-        K: FourierBootstrapKey<Scalar>,
+    pub fn generate_keys<
+        Scalar: UnsignedTorus
+            + Sync
+            + Send
+            + CastFrom<usize>
+            + CastInto<usize>
+            + Serialize
+            + DeserializeOwned,
     >(
-        lwe_modular_std_dev: StandardDev,
-        glwe_modular_std_dev: StandardDev,
-    ) {
-        // DISCLAIMER: these toy example parameters are not guaranteed to be secure or yield correct
-        // computations
-        // Define the parameters for a 4 bits message able to hold the doubled 2 bits message
-        let small_lwe_dimension = LweDimension(742);
-        let glwe_dimension = GlweDimension(1);
-        let polynomial_size = PolynomialSize(2048);
-        let pbs_base_log = DecompositionBaseLog(23);
-        let pbs_level = DecompositionLevelCount(1);
-        let ciphertext_modulus = CiphertextModulus::new_native();
-
-        // Request the best seeder possible, starting with hardware entropy sources and falling back
-        // to /dev/random on Unix systems if enabled via cargo features
-        let mut boxed_seeder = new_seeder();
-        // Get a mutable reference to the seeder as a trait object from the Box returned by
-        // new_seeder
-        let seeder = boxed_seeder.as_mut();
-
-        // Create a generator which uses a CSPRNG to generate secret keys
-        let mut secret_generator =
-            SecretRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed());
-
-        // Create a generator which uses two CSPRNGs to generate public masks and secret encryption
-        // noise
-        let mut encryption_generator =
-            EncryptionRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed(), seeder);
-
-        println!("Generating keys...");
-
+        params: FftTestParams<Scalar>,
+        rsc: &mut TestResources,
+    ) -> FftBootstrapKeys<Scalar> {
         // Generate an LweSecretKey with binary coefficients
-        let small_lwe_sk =
-            LweSecretKey::generate_new_binary(small_lwe_dimension, &mut secret_generator);
+        let small_lwe_sk = LweSecretKey::generate_new_binary(
+            params.lwe_dimension,
+            &mut rsc.secret_random_generator,
+        );
 
         // Generate a GlweSecretKey with binary coefficients
         let glwe_sk = GlweSecretKey::generate_new_binary(
-            glwe_dimension,
-            polynomial_size,
-            &mut secret_generator,
+            params.glwe_dimension,
+            params.polynomial_size,
+            &mut rsc.secret_random_generator,
         );
 
         // Create a copy of the GlweSecretKey re-interpreted as an LweSecretKey
         let big_lwe_sk = glwe_sk.clone().into_lwe_secret_key();
 
-        let std_bootstrapping_key = par_allocate_and_generate_new_lwe_bootstrap_key(
+        let bsk = par_allocate_and_generate_new_lwe_bootstrap_key(
             &small_lwe_sk,
             &glwe_sk,
-            pbs_base_log,
-            pbs_level,
-            glwe_modular_std_dev,
-            ciphertext_modulus,
-            &mut encryption_generator,
+            params.pbs_base_log,
+            params.pbs_level,
+            params.glwe_modular_std_dev,
+            params.ciphertext_modulus,
+            &mut rsc.encryption_random_generator,
         );
+
+        FftBootstrapKeys {
+            small_lwe_sk,
+            big_lwe_sk,
+            bsk,
+        }
+    }
+
+    pub fn test_bootstrap_generic<Scalar, K>(params: FftTestParams<Scalar>)
+    where
+        Scalar: Numeric
+            + UnsignedTorus
+            + CastFrom<usize>
+            + CastInto<usize>
+            + Send
+            + Sync
+            + Serialize
+            + DeserializeOwned,
+        K: FourierBootstrapKey<Scalar>,
+        FftTestParams<Scalar>: KeyCacheAccess<Keys = FftBootstrapKeys<Scalar>>,
+    {
+        let lwe_modular_std_dev = params.lwe_modular_std_dev;
+        let glwe_dimension = params.glwe_dimension;
+        let polynomial_size = params.polynomial_size;
+        let ciphertext_modulus = params.ciphertext_modulus;
+
+        let mut rsc = TestResources::new();
+
+        let fft = K::new_fft(polynomial_size);
+
+        let mut keys_gen = |params| generate_keys(params, &mut rsc);
+        let keys = gen_keys_or_get_from_cache_if_enabled(params, &mut keys_gen);
+        let (std_bootstrapping_key, small_lwe_sk, big_lwe_sk) =
+            (keys.bsk, keys.small_lwe_sk, keys.big_lwe_sk);
 
         // Create the empty bootstrapping key in the Fourier domain
         let mut fourier_bsk = K::new(
@@ -150,7 +178,6 @@ pub mod tests {
             std_bootstrapping_key.decomposition_level_count(),
         );
 
-        let fft = K::new_fft(polynomial_size);
         fourier_bsk.fill_with_forward_fourier(
             &std_bootstrapping_key,
             &fft,
@@ -177,14 +204,8 @@ pub mod tests {
             plaintext,
             lwe_modular_std_dev,
             ciphertext_modulus,
-            &mut encryption_generator,
+            &mut rsc.encryption_random_generator,
         );
-
-        // Now we will use a PBS to compute a multiplication by 2, it is NOT the recommended way of
-        // doing this operation in terms of performance as it's much more costly than a
-        // multiplication with a cleartext, however it resets the noise in a ciphertext to a
-        // nominal level and allows to evaluate arbitrary functions so depending on your use
-        // case it can be a better fit.
 
         // Here we will define a helper function to generate an accumulator for a PBS
         fn generate_accumulator<Scalar: Numeric + UnsignedTorus + CastFrom<usize>, F>(
@@ -233,7 +254,7 @@ pub mod tests {
             )
         }
 
-        let f = |x: Scalar| Scalar::TWO * x;
+        let f = |x: Scalar| x;
         let accumulator: GlweCiphertextOwned<Scalar> = generate_accumulator(
             polynomial_size,
             glwe_dimension.to_glwe_size(),
@@ -244,7 +265,7 @@ pub mod tests {
         );
 
         // Allocate the LweCiphertext to store the result of the PBS
-        let mut pbs_multiplication_ct: LweCiphertext<Vec<Scalar>> = LweCiphertext::new(
+        let mut pbs_ct: LweCiphertext<Vec<Scalar>> = LweCiphertext::new(
             Scalar::ZERO,
             big_lwe_sk.lwe_dimension().to_lwe_size(),
             ciphertext_modulus,
@@ -252,7 +273,7 @@ pub mod tests {
         println!("Computing PBS...");
 
         fourier_bsk.bootstrap(
-            &mut pbs_multiplication_ct,
+            &mut pbs_ct,
             &lwe_ciphertext_in,
             &accumulator,
             &fft,
@@ -266,9 +287,8 @@ pub mod tests {
             )),
         );
 
-        // Decrypt the PBS multiplication result
-        let pbs_multiplication_plaintext: Plaintext<Scalar> =
-            decrypt_lwe_ciphertext(&big_lwe_sk, &pbs_multiplication_ct);
+        // Decrypt the PBS result
+        let pbs_plaintext: Plaintext<Scalar> = decrypt_lwe_ciphertext(&big_lwe_sk, &pbs_ct);
 
         // Create a SignedDecomposer to perform the rounding of the decrypted plaintext
         // We pass a DecompositionBaseLog of 5 and a DecompositionLevelCount of 1 indicating we want
@@ -277,13 +297,9 @@ pub mod tests {
             SignedDecomposer::new(DecompositionBaseLog(5), DecompositionLevelCount(1));
 
         // Round and remove our encoding
-        let pbs_multiplication_result: Scalar =
-            signed_decomposer.closest_representable(pbs_multiplication_plaintext.0) / delta;
+        let pbs_result: Scalar = signed_decomposer.closest_representable(pbs_plaintext.0) / delta;
 
         println!("Checking result...");
-        assert_eq!(f(input_message), pbs_multiplication_result);
-        println!(
-            "Multiplication via PBS result is correct! Expected 6, got {pbs_multiplication_result}"
-        );
+        assert_eq!(f(input_message), pbs_result);
     }
 }

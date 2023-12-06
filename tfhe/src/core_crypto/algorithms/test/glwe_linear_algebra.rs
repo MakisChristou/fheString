@@ -1,6 +1,13 @@
 use super::*;
 
-fn glwe_encrypt_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams<Scalar>) {
+#[cfg(not(feature = "__coverage"))]
+const NB_TESTS: usize = 10;
+#[cfg(feature = "__coverage")]
+const NB_TESTS: usize = 1;
+
+fn glwe_encrypt_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
+    params: ClassicTestParams<Scalar>,
+) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
     let glwe_modular_std_dev = params.glwe_modular_std_dev;
@@ -10,7 +17,6 @@ fn glwe_encrypt_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: Tes
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -42,13 +48,19 @@ fn glwe_encrypt_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: Tes
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let rhs = glwe.clone();
 
             glwe_ciphertext_add_assign(&mut glwe, &rhs);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -64,12 +76,17 @@ fn glwe_encrypt_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: Tes
 
             assert!(decoded.iter().all(|&x| x == (msg + msg) % msg_modulus));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_add_assign_decrypt_custom_mod);
 
-fn glwe_encrypt_add_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams<Scalar>) {
+fn glwe_encrypt_add_decrypt_custom_mod<Scalar: UnsignedTorus>(params: ClassicTestParams<Scalar>) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
     let glwe_modular_std_dev = params.glwe_modular_std_dev;
@@ -79,7 +96,6 @@ fn glwe_encrypt_add_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -111,7 +127,10 @@ fn glwe_encrypt_add_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let rhs = glwe.clone();
 
@@ -119,7 +138,10 @@ fn glwe_encrypt_add_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
 
             glwe_ciphertext_add(&mut res, &glwe, &rhs);
 
-            assert!(check_content_respects_mod(&res, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &res,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(res.polynomial_size().0));
@@ -135,13 +157,18 @@ fn glwe_encrypt_add_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
 
             assert!(decoded.iter().all(|&x| x == (msg + msg) % msg_modulus));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_add_decrypt_custom_mod);
 
 fn glwe_encrypt_plaintext_list_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -152,7 +179,6 @@ fn glwe_encrypt_plaintext_list_add_assign_decrypt_custom_mod<Scalar: UnsignedTor
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -184,11 +210,17 @@ fn glwe_encrypt_plaintext_list_add_assign_decrypt_custom_mod<Scalar: UnsignedTor
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             glwe_ciphertext_plaintext_list_add_assign(&mut glwe, &plaintext_list);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -204,13 +236,18 @@ fn glwe_encrypt_plaintext_list_add_assign_decrypt_custom_mod<Scalar: UnsignedTor
 
             assert!(decoded.iter().all(|&x| x == (msg + msg) % msg_modulus));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_plaintext_list_add_assign_decrypt_custom_mod);
 
 fn glwe_encrypt_plaintext_list_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -221,7 +258,6 @@ fn glwe_encrypt_plaintext_list_sub_assign_decrypt_custom_mod<Scalar: UnsignedTor
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -253,11 +289,17 @@ fn glwe_encrypt_plaintext_list_sub_assign_decrypt_custom_mod<Scalar: UnsignedTor
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             glwe_ciphertext_plaintext_list_sub_assign(&mut glwe, &plaintext_list);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -273,13 +315,18 @@ fn glwe_encrypt_plaintext_list_sub_assign_decrypt_custom_mod<Scalar: UnsignedTor
 
             assert!(decoded.iter().all(|&x| x == Scalar::ZERO));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_plaintext_list_sub_assign_decrypt_custom_mod);
 
 fn glwe_encrypt_plaintext_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -290,7 +337,6 @@ fn glwe_encrypt_plaintext_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -323,11 +369,17 @@ fn glwe_encrypt_plaintext_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             glwe_ciphertext_plaintext_add_assign(&mut glwe, plaintext);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -343,13 +395,18 @@ fn glwe_encrypt_plaintext_add_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
 
             assert!(decoded.iter().all(|&x| x == (msg + msg) % msg_modulus));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_plaintext_add_assign_decrypt_custom_mod);
 
 fn glwe_encrypt_plaintext_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -360,7 +417,6 @@ fn glwe_encrypt_plaintext_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -393,11 +449,17 @@ fn glwe_encrypt_plaintext_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             glwe_ciphertext_plaintext_sub_assign(&mut glwe, plaintext);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -413,13 +475,18 @@ fn glwe_encrypt_plaintext_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
 
             assert!(decoded.iter().all(|&x| x == Scalar::ZERO));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_plaintext_sub_assign_decrypt_custom_mod);
 
 fn glwe_encrypt_opposite_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -430,7 +497,6 @@ fn glwe_encrypt_opposite_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -462,11 +528,17 @@ fn glwe_encrypt_opposite_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             glwe_ciphertext_opposite_assign(&mut glwe);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -484,13 +556,18 @@ fn glwe_encrypt_opposite_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 .iter()
                 .all(|&x| x == msg.wrapping_neg() % msg_modulus));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_opposite_assign_decrypt_custom_mod);
 
 fn glwe_encrypt_cleartext_mul_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -501,7 +578,6 @@ fn glwe_encrypt_cleartext_mul_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -534,11 +610,17 @@ fn glwe_encrypt_cleartext_mul_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             glwe_ciphertext_cleartext_mul_assign(&mut glwe, cleartext);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -556,13 +638,18 @@ fn glwe_encrypt_cleartext_mul_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 .iter()
                 .all(|&x| x == (msg * cleartext.0) % msg_modulus));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_cleartext_mul_assign_decrypt_custom_mod);
 
 fn glwe_encrypt_cleartext_mul_decrypt_custom_mod<Scalar: UnsignedTorus>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -573,7 +660,6 @@ fn glwe_encrypt_cleartext_mul_decrypt_custom_mod<Scalar: UnsignedTorus>(
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -606,13 +692,19 @@ fn glwe_encrypt_cleartext_mul_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut res = glwe.clone();
 
             glwe_ciphertext_cleartext_mul(&mut res, &glwe, cleartext);
 
-            assert!(check_content_respects_mod(&res, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &res,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(res.polynomial_size().0));
@@ -630,12 +722,19 @@ fn glwe_encrypt_cleartext_mul_decrypt_custom_mod<Scalar: UnsignedTorus>(
                 .iter()
                 .all(|&x| x == (msg * cleartext.0) % msg_modulus));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_cleartext_mul_decrypt_custom_mod);
 
-fn glwe_encrypt_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams<Scalar>) {
+fn glwe_encrypt_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(
+    params: ClassicTestParams<Scalar>,
+) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
     let glwe_modular_std_dev = params.glwe_modular_std_dev;
@@ -645,7 +744,6 @@ fn glwe_encrypt_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: Tes
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -677,13 +775,19 @@ fn glwe_encrypt_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: Tes
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let rhs = glwe.clone();
 
             glwe_ciphertext_sub_assign(&mut glwe, &rhs);
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(glwe.polynomial_size().0));
@@ -699,12 +803,17 @@ fn glwe_encrypt_sub_assign_decrypt_custom_mod<Scalar: UnsignedTorus>(params: Tes
 
             assert!(decoded.iter().all(|&x| x == Scalar::ZERO));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 
 create_parametrized_test!(glwe_encrypt_sub_assign_decrypt_custom_mod);
 
-fn glwe_encrypt_sub_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams<Scalar>) {
+fn glwe_encrypt_sub_decrypt_custom_mod<Scalar: UnsignedTorus>(params: ClassicTestParams<Scalar>) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
     let glwe_modular_std_dev = params.glwe_modular_std_dev;
@@ -714,7 +823,6 @@ fn glwe_encrypt_sub_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -746,7 +854,10 @@ fn glwe_encrypt_sub_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let rhs = glwe.clone();
 
@@ -754,7 +865,10 @@ fn glwe_encrypt_sub_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
 
             glwe_ciphertext_sub(&mut res, &glwe, &rhs);
 
-            assert!(check_content_respects_mod(&res, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &res,
+                ciphertext_modulus
+            ));
 
             let mut output_plaintext_list =
                 PlaintextList::new(Scalar::ZERO, PlaintextCount(res.polynomial_size().0));
@@ -770,6 +884,11 @@ fn glwe_encrypt_sub_decrypt_custom_mod<Scalar: UnsignedTorus>(params: TestParams
 
             assert!(decoded.iter().all(|&x| x == Scalar::ZERO));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 

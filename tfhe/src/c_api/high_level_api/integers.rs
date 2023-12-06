@@ -5,6 +5,7 @@ use std::ops::{
     Mul, MulAssign, Neg, Not, Rem, RemAssign, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign,
 };
 
+use crate::c_api::high_level_api::booleans::FheBool;
 use crate::c_api::high_level_api::i128::I128;
 use crate::c_api::high_level_api::i256::I256;
 use crate::c_api::high_level_api::u128::U128;
@@ -33,16 +34,24 @@ macro_rules! impl_operations_for_integer_type {
             bitand,
             bitor,
             bitxor,
-            eq,
-            ne,
-            ge,
-            gt,
-            le,
-            lt,
             min,
             max,
             div,
             rem,
+        );
+
+        // Handle comparisons separately as they return FheBool
+        impl_comparison_fn_on_type!(
+            lhs_type: $name,
+            rhs_type: $name,
+            comparison_fn_names: eq, ne, ge, gt, le, lt,
+        );
+
+        // Handle comparisons separately as they return FheBool
+        impl_scalar_comparison_fn_on_type!(
+            lhs_type: $name,
+            clear_type: $clear_scalar_type,
+            comparison_fn_names: eq, ne, ge, gt, le, lt,
         );
 
         // handle shift separately as they require
@@ -79,12 +88,6 @@ macro_rules! impl_operations_for_integer_type {
             bitand,
             bitor,
             bitxor,
-            eq,
-            ne,
-            ge,
-            gt,
-            le,
-            lt,
             min,
             max,
             div,
@@ -165,10 +168,12 @@ macro_rules! impl_operations_for_integer_type {
             }
         }
 
+        // Even though if_then_else/cmux is a method of FheBool, it still takes as
+        // integers inputs, so its easier to keep the definition here
         ::paste::paste! {
             #[no_mangle]
             pub unsafe extern "C" fn [<$name:snake _if_then_else>](
-                condition_ct: *const $name,
+                condition_ct: *const FheBool,
                 then_ct: *const $name,
                 else_ct: *const $name,
                 result: *mut *mut $name,
@@ -182,6 +187,16 @@ macro_rules! impl_operations_for_integer_type {
 
                     *result = Box::into_raw(Box::new($name(r)));
                 })
+            }
+
+             // map cmux to if_then_else
+             pub unsafe extern "C" fn [<$name:snake _cmux>](
+                condition_ct: *const FheBool,
+                then_ct: *const $name,
+                else_ct: *const $name,
+                result: *mut *mut $name,
+            ) -> c_int {
+                [<$name:snake _if_then_else>](condition_ct, then_ct, else_ct, result)
             }
         }
     };
@@ -215,6 +230,11 @@ macro_rules! create_integer_wrapper_type {
 
         impl_clone_on_type!($name);
 
+        impl_safe_serialize_on_type!($name);
+
+        impl_safe_deserialize_conformant_integer!($name, crate::high_level_api::safe_deserialize_conformant_integer);
+
+
         // The compressed version of the ciphertext type
         ::paste::paste! {
             pub struct [<Compressed $name>]($crate::high_level_api::[<Compressed $name>]);
@@ -224,6 +244,11 @@ macro_rules! create_integer_wrapper_type {
             impl_clone_on_type!([<Compressed $name>]);
 
             impl_serialize_deserialize_on_type!([<Compressed $name>]);
+
+            impl_safe_serialize_on_type!([<Compressed $name>]);
+
+            impl_safe_deserialize_conformant_integer!([<Compressed $name>], crate::high_level_api::safe_deserialize_conformant_compressed_integer);
+
 
             #[no_mangle]
             pub unsafe extern "C" fn [<compressed_ $name:snake _decompress>](
@@ -252,7 +277,7 @@ macro_rules! create_integer_wrapper_type {
 
             impl_safe_serialize_on_type!([<Compact $name>]);
 
-            impl_safe_deserialize_conformant_compact_integer!([<Compact $name>]);
+            impl_safe_deserialize_conformant_integer!([<Compact $name>], crate::high_level_api::safe_deserialize_conformant_compact_integer);
 
             #[no_mangle]
             pub unsafe extern "C" fn [<compact_ $name:snake _expand>](

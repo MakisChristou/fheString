@@ -4,13 +4,13 @@ use crate::integer::ciphertext::{CrtCiphertext, RadixCiphertext};
 use crate::integer::client_key::ClientKey;
 use crate::integer::encryption::{encrypt_crt, encrypt_words_radix_impl};
 use crate::integer::public_key::compressed::CompressedPublicKey;
-use crate::integer::SignedRadixCiphertext;
+use crate::integer::{BooleanBlock, SignedRadixCiphertext};
 use crate::shortint::parameters::MessageModulus;
 use crate::shortint::PublicKey as ShortintPublicKey;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PublicKey {
-    key: ShortintPublicKey,
+    pub(crate) key: ShortintPublicKey,
 }
 
 impl PublicKey {
@@ -68,6 +68,10 @@ impl PublicKey {
         encrypt_words_radix_impl(&self.key, message, num_blocks, ShortintPublicKey::encrypt)
     }
 
+    pub fn encrypt_bool(&self, message: bool) -> BooleanBlock {
+        BooleanBlock::new_unchecked(self.key.encrypt(u64::from(message)))
+    }
+
     pub fn encrypt_radix_without_padding(
         &self,
         message: u64,
@@ -93,6 +97,7 @@ impl From<CompressedPublicKey> for PublicKey {
 #[cfg(test)]
 mod tests {
     use crate::integer::keycache::KEY_CACHE;
+    use crate::integer::IntegerKeyKind;
     use crate::shortint::parameters::*;
     use crate::shortint::ClassicPBSParameters;
 
@@ -101,7 +106,7 @@ mod tests {
     });
 
     fn integer_public_key_decompression_small(param: ClassicPBSParameters) {
-        let (cks, sks) = KEY_CACHE.get_from_params(param);
+        let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
 
         let compressed_pk = crate::integer::CompressedPublicKey::new(&cks);
         let pk = crate::integer::PublicKey::from(compressed_pk);

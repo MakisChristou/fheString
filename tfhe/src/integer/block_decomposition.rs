@@ -65,7 +65,7 @@ impl<const N: usize> RecomposableFrom<u8> for StaticUnsignedBigInt<N> {}
 impl<const N: usize> DecomposableInto<u64> for StaticUnsignedBigInt<N> {}
 impl<const N: usize> DecomposableInto<u8> for StaticUnsignedBigInt<N> {}
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct BlockDecomposer<T> {
     data: T,
     bit_mask: T,
@@ -124,7 +124,7 @@ where
             return None;
         }
 
-        if self.limit.map(|limit| limit == self.data).unwrap_or(false) {
+        if self.limit.is_some_and(|limit| limit == self.data) {
             return None;
         }
 
@@ -153,7 +153,7 @@ where
         // The size_hint docs states that it is ok (not best thing
         // but won't break code)
         let max_remaining_iter = self.num_bits_valid / self.num_bits_in_mask;
-        let min_remaining_iter = if max_remaining_iter != 0 { 1 } else { 0 };
+        let min_remaining_iter = if max_remaining_iter == 0 { 0 } else { 1 };
         (min_remaining_iter, Some(max_remaining_iter as usize))
     }
 }
@@ -168,7 +168,7 @@ where
         T: CastInto<V>,
     {
         assert!(self.num_bits_in_mask <= V::BITS as u32);
-        self.map(|masked| masked.cast_into())
+        self.map(CastInto::cast_into)
     }
 
     pub fn next_as<V>(&mut self) -> Option<V>

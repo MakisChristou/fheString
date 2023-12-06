@@ -5,15 +5,13 @@ use crate::high_level_api::{generate_keys, set_server_key, ConfigBuilder, FheUin
 use crate::integer::U256;
 use crate::{
     CompactFheUint32, CompactFheUint32List, CompactPublicKey, CompressedFheUint16,
-    CompressedFheUint256, CompressedPublicKey, Config, FheInt32, FheInt8, FheUint128, FheUint16,
-    FheUint256, FheUint32, FheUint64,
+    CompressedFheUint256, CompressedPublicKey, Config, FheInt16, FheInt32, FheInt8, FheUint128,
+    FheUint16, FheUint256, FheUint32, FheUint64,
 };
 
 #[test]
 fn test_quickstart_uint8() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
 
     let (client_key, server_key) = generate_keys(config);
 
@@ -36,9 +34,7 @@ fn test_quickstart_uint8() {
 
 #[test]
 fn test_uint8_compare() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
 
     let (client_key, server_key) = generate_keys(config);
 
@@ -53,95 +49,93 @@ fn test_uint8_compare() {
     // Test comparing encrypted with encrypted
     {
         let result = &a.eq(&b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a == clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a == clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.eq(&a);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a == clear_a);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a == clear_a;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.ne(&b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a != clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a != clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.ne(&a);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a != clear_a);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a != clear_a;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.le(&b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a <= clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a <= clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.lt(&b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a < clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a < clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.ge(&b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a >= clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a >= clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.gt(&b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a > clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a > clear_b;
         assert_eq!(decrypted_result, clear_result);
     }
 
     // Test comparing encrypted with clear
     {
         let result = &a.eq(clear_b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a == clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a == clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.eq(clear_a);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a == clear_a);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a == clear_a;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.ne(clear_b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a != clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a != clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.ne(clear_a);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a != clear_a);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a != clear_a;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.le(clear_b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a <= clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a <= clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.lt(clear_b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a < clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a < clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.ge(clear_b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a >= clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a >= clear_b;
         assert_eq!(decrypted_result, clear_result);
 
         let result = &a.gt(clear_b);
-        let decrypted_result: u8 = result.decrypt(&client_key);
-        let clear_result = u8::from(clear_a > clear_b);
+        let decrypted_result = result.decrypt(&client_key);
+        let clear_result = clear_a > clear_b;
         assert_eq!(decrypted_result, clear_result);
     }
 }
 
 #[test]
 fn test_integer_compressed_can_be_serialized() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     let (client_key, _) = generate_keys(config);
 
     let clear = U256::from(u64::MAX);
@@ -157,9 +151,7 @@ fn test_integer_compressed_can_be_serialized() {
 
 #[test]
 fn test_integer_compressed() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     let (client_key, _) = generate_keys(config);
 
     let clear = 12_837u16;
@@ -171,9 +163,7 @@ fn test_integer_compressed() {
 
 #[test]
 fn test_integer_compressed_small() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers_small()
-        .build();
+    let config = ConfigBuilder::default_with_small_encryption().build();
     let (client_key, _) = generate_keys(config);
 
     let clear = 12_837u16;
@@ -185,13 +175,9 @@ fn test_integer_compressed_small() {
 
 #[test]
 fn test_uint32() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
 
     let (cks, sks) = generate_keys(config);
-
-    use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
     let clear_a = rng.gen::<u32>();
@@ -215,8 +201,6 @@ fn test_uint32() {
 
 fn fhe_uint32_shift(config: Config) {
     let (cks, sks) = generate_keys(config);
-
-    use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
     let clear_a = rng.gen::<u32>();
@@ -272,13 +256,9 @@ fn fhe_uint32_shift(config: Config) {
 
 #[test]
 fn test_uint32_bitwise() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
 
     let (cks, sks) = generate_keys(config);
-
-    use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
     let clear_a = rng.gen::<u32>();
@@ -352,16 +332,14 @@ fn test_uint32_bitwise() {
 
 #[test]
 fn test_bit_shift() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     fhe_uint32_shift(config);
 }
 
 #[test]
 fn test_multi_bit_shift() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_custom_integers(
+    let config = ConfigBuilder::default()
+        .use_custom_parameters(
             crate::shortint::parameters::PARAM_MULTI_BIT_MESSAGE_2_CARRY_2_GROUP_3_KS_PBS,
             None,
         )
@@ -371,8 +349,6 @@ fn test_multi_bit_shift() {
 
 fn fhe_uint32_rotate(config: Config) {
     let (cks, sks) = generate_keys(config);
-
-    use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
     let clear_a = rng.gen::<u32>();
@@ -428,16 +404,14 @@ fn fhe_uint32_rotate(config: Config) {
 
 #[test]
 fn test_uint32_rotate() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     fhe_uint32_rotate(config);
 }
 
 #[test]
 fn test_multi_bit_rotate() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_custom_integers(
+    let config = ConfigBuilder::default()
+        .use_custom_parameters(
             crate::shortint::parameters::PARAM_MULTI_BIT_MESSAGE_2_CARRY_2_GROUP_3_KS_PBS,
             None,
         )
@@ -447,8 +421,6 @@ fn test_multi_bit_rotate() {
 
 fn fhe_uint32_div_rem(config: Config) {
     let (cks, sks) = generate_keys(config);
-
-    use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
     let clear_a = rng.gen::<u32>();
@@ -516,16 +488,14 @@ fn fhe_uint32_div_rem(config: Config) {
 
 #[test]
 fn test_uint32_div_rem() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     fhe_uint32_div_rem(config);
 }
 
 #[test]
 fn test_multi_div_rem() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_custom_integers(
+    let config = ConfigBuilder::default()
+        .use_custom_parameters(
             crate::shortint::parameters::PARAM_MULTI_BIT_MESSAGE_2_CARRY_2_GROUP_3_KS_PBS,
             None,
         )
@@ -535,13 +505,9 @@ fn test_multi_div_rem() {
 
 #[test]
 fn test_uint64() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
 
     let (cks, sks) = generate_keys(config);
-
-    use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
     let clear_a = rng.gen::<u64>();
@@ -560,13 +526,9 @@ fn test_uint64() {
 
 #[test]
 fn test_small_uint128() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers_small()
-        .build();
+    let config = ConfigBuilder::default_with_small_encryption().build();
 
     let (cks, sks) = generate_keys(config);
-
-    use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
     let clear_a = rng.gen::<u128>();
@@ -585,9 +547,7 @@ fn test_small_uint128() {
 
 #[test]
 fn test_integer_compressed_public_key() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     let (client_key, _) = generate_keys(config);
 
     let public_key = CompressedPublicKey::new(&client_key);
@@ -599,9 +559,7 @@ fn test_integer_compressed_public_key() {
 
 #[test]
 fn test_decompressed_public_key_encrypt() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     let (client_key, _) = generate_keys(config);
 
     let compressed_public_key = CompressedPublicKey::new(&client_key);
@@ -614,8 +572,8 @@ fn test_decompressed_public_key_encrypt() {
 
 #[test]
 fn test_compact_public_key_big() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_custom_integers(
+    let config = ConfigBuilder::default()
+        .use_custom_parameters(
             crate::shortint::parameters::parameters_compact_pk::PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS,
             None,
         )
@@ -631,8 +589,8 @@ fn test_compact_public_key_big() {
 
 #[test]
 fn test_compact_public_key_list_big() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_custom_integers(
+    let config = ConfigBuilder::default()
+        .use_custom_parameters(
             crate::shortint::parameters::parameters_compact_pk::PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_KS_PBS,
             None,
         )
@@ -642,8 +600,8 @@ fn test_compact_public_key_list_big() {
 
 #[test]
 fn test_compact_public_key_list_small() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_custom_integers(
+    let config = ConfigBuilder::default()
+        .use_custom_parameters(
             crate::shortint::parameters::parameters_compact_pk
                 ::PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS,
             None,
@@ -690,8 +648,8 @@ fn test_compact_public_key_list(config: Config) {
 
 #[test]
 fn test_compact_public_key_small() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_custom_integers(
+    let config = ConfigBuilder::default()
+        .use_custom_parameters(
             crate::shortint::parameters::parameters_compact_pk
                 ::PARAM_MESSAGE_2_CARRY_2_COMPACT_PK_PBS_KS,
             None,
@@ -708,9 +666,7 @@ fn test_compact_public_key_small() {
 
 #[test]
 fn test_trivial_fhe_uint8() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     let (client_key, sks) = generate_keys(config);
 
     set_server_key(sks);
@@ -723,9 +679,7 @@ fn test_trivial_fhe_uint8() {
 
 #[test]
 fn test_trivial_fhe_uint256_small() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers_small()
-        .build();
+    let config = ConfigBuilder::default_with_small_encryption().build();
     let (client_key, sks) = generate_keys(config);
 
     set_server_key(sks);
@@ -738,9 +692,7 @@ fn test_trivial_fhe_uint256_small() {
 
 #[test]
 fn test_integer_casting() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
     let (client_key, server_key) = generate_keys(config);
 
     set_server_key(server_key);
@@ -802,6 +754,16 @@ fn test_integer_casting() {
         assert_eq!(da, (clear as i8) as u32);
     }
 
+    {
+        let clear = rng.gen_range(i16::MIN..0);
+        let a = FheInt16::encrypt(clear, &client_key);
+
+        // Upcasting
+        let a: FheUint32 = a.cast_into();
+        let da: u32 = a.decrypt(&client_key);
+        assert_eq!(da, clear as u32);
+    }
+
     // Upcasting to bigger signed integer then downcasting back to unsigned
     {
         let clear = rng.gen_range((i16::MAX) as u16 + 1..u16::MAX);
@@ -821,9 +783,7 @@ fn test_integer_casting() {
 
 #[test]
 fn test_if_then_else() {
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
 
     let (client_key, server_key) = generate_keys(config);
 

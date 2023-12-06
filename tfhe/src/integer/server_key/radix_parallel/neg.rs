@@ -32,9 +32,10 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_neg_possible(ctxt) {
+        if self.is_neg_possible(ctxt).is_err() {
             self.full_propagate_parallelized(ctxt);
         }
+        self.is_neg_possible(ctxt).unwrap();
         self.unchecked_neg(ctxt)
     }
 
@@ -79,17 +80,17 @@ impl ServerKey {
     {
         let mut tmp_ctxt;
 
-        let ct = if !ctxt.block_carries_are_empty() {
+        let ct = if ctxt.block_carries_are_empty() {
+            ctxt
+        } else {
             tmp_ctxt = ctxt.clone();
             self.full_propagate_parallelized(&mut tmp_ctxt);
             &tmp_ctxt
-        } else {
-            ctxt
         };
 
         if self.is_eligible_for_parallel_single_carry_propagation(ct) {
             let mut ct = self.unchecked_neg(ct);
-            self.propagate_single_carry_parallelized_low_latency(&mut ct);
+            let _carry = self.propagate_single_carry_parallelized_low_latency(&mut ct);
             ct
         } else {
             let mut ct = self.unchecked_neg(ct);

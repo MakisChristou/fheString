@@ -65,7 +65,7 @@ impl Twisties {
             (*im, *re) = (i as f64 * unit).sin_cos();
         }
 
-        Twisties { re, im }
+        Self { re, im }
     }
 }
 
@@ -118,7 +118,7 @@ fn id_mut<From: 'static, To: 'static>(slice: &mut [From]) -> &mut [To] {
 
     let len = slice.len();
     let ptr = slice.as_mut_ptr();
-    unsafe { core::slice::from_raw_parts_mut(ptr as *mut To, len) }
+    unsafe { core::slice::from_raw_parts_mut(ptr.cast::<To>(), len) }
 }
 
 /// Return the input slice, cast to the same type.
@@ -138,7 +138,7 @@ fn id<From: 'static, To: 'static>(slice: &[From]) -> &[To] {
 
     let len = slice.len();
     let ptr = slice.as_ptr();
-    unsafe { core::slice::from_raw_parts(ptr as *const To, len) }
+    unsafe { core::slice::from_raw_parts(ptr.cast::<To>(), len) }
 }
 
 impl Fft {
@@ -257,7 +257,7 @@ fn convert_forward_integer<Scalar: UnsignedTorus>(
     }
 
     #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
-    convert_forward_integer_scalar::<Scalar>(out, in_re, in_im, twisties)
+    convert_forward_integer_scalar::<Scalar>(out, in_re, in_im, twisties);
 }
 
 #[cfg_attr(__profiling, inline(never))]
@@ -460,7 +460,7 @@ impl<'a> FftView<'a> {
         fourier: FourierPolynomialView<'_>,
         stack: PodStack<'_>,
     ) {
-        self.backward_with_conv(standard, fourier, convert_backward_torus, stack)
+        self.backward_with_conv(standard, fourier, convert_backward_torus, stack);
     }
 
     /// Perform an inverse negacyclic real FFT of `fourier` and adds the result to `standard`,
@@ -479,7 +479,7 @@ impl<'a> FftView<'a> {
         fourier: FourierPolynomialView<'_>,
         stack: PodStack<'_>,
     ) {
-        self.backward_with_conv(standard, fourier, convert_add_backward_torus, stack)
+        self.backward_with_conv(standard, fourier, convert_add_backward_torus, stack);
     }
 
     /// Variant of [`Self::add_backward_as_torus`] writing the output of the backward fourier
@@ -490,7 +490,7 @@ impl<'a> FftView<'a> {
         fourier: FourierPolynomialMutView<'_>,
         stack: PodStack<'_>,
     ) {
-        self.backward_with_conv_in_place(standard, fourier, convert_add_backward_torus, stack)
+        self.backward_with_conv_in_place(standard, fourier, convert_add_backward_torus, stack);
     }
 
     fn forward_with_conv<
@@ -657,13 +657,13 @@ impl<'de, C: IntoContainerOwned<Element = c64>> serde::Deserialize<'de>
                 use crate::core_crypto::commons::traits::Split;
 
                 let str = "sequence of two fields and Fourier polynomials";
-                let polynomial_size = match seq.next_element::<PolynomialSize>()? {
-                    Some(polynomial_size) => polynomial_size,
-                    None => return Err(serde::de::Error::invalid_length(0, &str)),
+
+                let Some(polynomial_size) = seq.next_element::<PolynomialSize>()? else {
+                    return Err(serde::de::Error::invalid_length(0, &str));
                 };
-                let chunk_count = match seq.next_element::<usize>()? {
-                    Some(chunk_count) => chunk_count,
-                    None => return Err(serde::de::Error::invalid_length(1, &str)),
+
+                let Some(chunk_count) = seq.next_element::<usize>()? else {
+                    return Err(serde::de::Error::invalid_length(1, &str));
                 };
 
                 struct FillFourier<'a> {

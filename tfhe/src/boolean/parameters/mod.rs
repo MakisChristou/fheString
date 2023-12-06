@@ -74,8 +74,8 @@ impl BooleanParameters {
         ks_base_log: DecompositionBaseLog,
         ks_level: DecompositionLevelCount,
         encryption_key_choice: EncryptionKeyChoice,
-    ) -> BooleanParameters {
-        BooleanParameters {
+    ) -> Self {
+        Self {
             lwe_dimension,
             glwe_dimension,
             polynomial_size,
@@ -83,15 +83,15 @@ impl BooleanParameters {
             glwe_modular_std_dev,
             pbs_base_log,
             pbs_level,
-            ks_level,
             ks_base_log,
+            ks_level,
             encryption_key_choice,
         }
     }
 }
 
 /// A set of cryptographic parameters for homomorphic Boolean key switching.
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BooleanKeySwitchingParameters {
     pub ks_base_log: DecompositionBaseLog,
     pub ks_level: DecompositionLevelCount,
@@ -106,13 +106,10 @@ impl BooleanKeySwitchingParameters {
     /// Unless you are a cryptographer who really knows the impact of each of those parameters,
     /// you __must__ stick with the provided parameters (if any), which both offer correct
     /// results with 128 bits of security.
-    pub fn new(
-        ks_base_log: DecompositionBaseLog,
-        ks_level: DecompositionLevelCount,
-    ) -> BooleanKeySwitchingParameters {
-        BooleanKeySwitchingParameters {
-            ks_level,
+    pub fn new(ks_base_log: DecompositionBaseLog, ks_level: DecompositionLevelCount) -> Self {
+        Self {
             ks_base_log,
+            ks_level,
         }
     }
 }

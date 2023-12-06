@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 use super::base::GenericInteger;
-use crate::high_level_api::integers::parameters::{EvaluationIntegerKey, IntegerParameter};
+use crate::high_level_api::integers::parameters::{EvaluationIntegerKey, IntegerId};
 use crate::high_level_api::integers::types::compact::{
     GenericCompactInteger, GenericCompactIntegerList,
 };
 use crate::high_level_api::integers::types::compressed::CompressedGenericInteger;
-use crate::high_level_api::internal_traits::{ParameterType, TypeIdentifier};
+use crate::high_level_api::internal_traits::TypeIdentifier;
 #[cfg(feature = "internal-keycache")]
 use crate::integer::keycache::{KEY_CACHE, KEY_CACHE_WOPBS};
 use crate::integer::wopbs::WopbsKey;
@@ -24,15 +24,7 @@ macro_rules! define_static_integer_parameters {
             #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
             pub struct [<FheUint $num_bits Id>];
 
-            #[doc = concat!("Parameters for the [FheUint", stringify!($num_bits), "] data type.")]
-            #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-            pub struct [<FheUint $num_bits Parameters>];
-
-            impl ParameterType for [<FheUint $num_bits Parameters>] {
-                type Id = [<FheUint $num_bits Id>];
-            }
-
-            impl IntegerParameter for [<FheUint $num_bits Parameters>] {
+            impl IntegerId for [<FheUint $num_bits Id>] {
                 type InnerCiphertext = crate::integer::RadixCiphertext;
                 type InnerCompressedCiphertext = crate::integer::ciphertext::CompressedRadixCiphertext;
 
@@ -59,15 +51,7 @@ macro_rules! define_static_integer_parameters {
             #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
             pub struct [<FheInt $num_bits Id>];
 
-            #[doc = concat!("Parameters for the [FheUint", stringify!($num_bits), "] data type.")]
-            #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-            pub struct [<FheInt $num_bits Parameters>];
-
-            impl ParameterType for [<FheInt $num_bits Parameters>] {
-                type Id = [<FheInt $num_bits Id>];
-            }
-
-            impl IntegerParameter for [<FheInt $num_bits Parameters>] {
+            impl IntegerId for [<FheInt $num_bits Id>] {
                 type InnerCiphertext = crate::integer::SignedRadixCiphertext;
                 type InnerCompressedCiphertext = crate::integer::ciphertext::CompressedSignedRadixCiphertext;
 
@@ -102,38 +86,25 @@ macro_rules! static_int_type {
             #[doc = concat!("An unsigned integer type with", stringify!($num_bits), "bits")]
             $(#[$outer])*
             #[cfg_attr(all(doc, not(doctest)), cfg(feature = "integer"))]
-            pub type $name = GenericInteger<[<$name Parameters>]>;
+            pub type $name = GenericInteger<[<$name Id>]>;
 
             #[cfg_attr(all(doc, not(doctest)), cfg(feature = "integer"))]
-            pub type [<Compressed $name>] = CompressedGenericInteger<[<$name Parameters>]>;
+            pub type [<Compressed $name>] = CompressedGenericInteger<[<$name Id>]>;
 
             #[cfg_attr(all(doc, not(doctest)), cfg(feature = "integer"))]
-            pub type [<Compact $name>] = GenericCompactInteger<[<$name Parameters>]>;
+            pub type [<Compact $name>] = GenericCompactInteger<[<$name Id>]>;
 
             #[cfg_attr(all(doc, not(doctest)), cfg(feature = "integer"))]
-            pub type [<Compact $name List>] = GenericCompactIntegerList<[<$name Parameters>]>;
-
-            impl $crate::high_level_api::keys::RefKeyFromKeyChain for [<$name Id>] {
-                type Key = crate::integer::ClientKey;
-
-                fn ref_key(self, keys: &crate::high_level_api::ClientKey)
-                    -> Result<&Self::Key, $crate::high_level_api::errors::UninitializedClientKey> {
-                    keys
-                        .integer_key
-                        .key
-                        .as_ref()
-                        .ok_or($crate::high_level_api::errors::UninitializedClientKey(self.type_variant()))
-                }
-            }
+            pub type [<Compact $name List>] = GenericCompactIntegerList<[<$name Id>]>;
 
             impl $crate::high_level_api::global_state::WithGlobalKey for [<$name Id>] {
                 type Key = crate::high_level_api::integers::IntegerServerKey;
 
-                fn with_global<R, F>(self, func: F) -> Result<R, $crate::high_level_api::errors::UninitializedServerKey>
+                fn with_unwrapped_global<R, F>(self, func: F) -> R
                 where
                     F: FnOnce(&Self::Key) -> R {
                     $crate::high_level_api::global_state::with_internal_keys(|keys| {
-                            Ok(func(&keys.integer_key))
+                            func(&keys.integer_key)
                         })
                     }
             }
@@ -207,12 +178,15 @@ where
         #[cfg(feature = "internal-keycache")]
         {
             KEY_CACHE
-                .get_from_params(client_key.as_ref().parameters())
+                .get_from_params(
+                    client_key.as_ref().parameters(),
+                    crate::integer::IntegerKeyKind::Radix,
+                )
                 .1
         }
         #[cfg(not(feature = "internal-keycache"))]
         {
-            crate::integer::ServerKey::new(client_key)
+            Self::new_radix_server_key(client_key)
         }
     }
 

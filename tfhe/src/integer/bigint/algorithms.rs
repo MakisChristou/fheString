@@ -102,7 +102,9 @@ where
         return compare_unsigned(&lhs[..lhs.len() - 1], &rhs[..rhs.len() - 1]);
     }
 
-    if lhs_sign_bit != rhs_sign_bit {
+    if lhs_sign_bit == rhs_sign_bit {
+        cmp
+    } else {
         // The block that has its sign bit set is going
         // to be ordered as 'greater' by the cmp fn.
         // However, we are dealing with signed number,
@@ -111,10 +113,8 @@ where
         match cmp {
             std::cmp::Ordering::Less => std::cmp::Ordering::Greater,
             std::cmp::Ordering::Greater => std::cmp::Ordering::Less,
-            _ => unreachable!(),
+            std::cmp::Ordering::Equal => unreachable!(),
         }
-    } else {
-        cmp
     }
 }
 
@@ -183,7 +183,7 @@ pub(crate) fn schoolbook_mul_assign(lhs: &mut [u64], rhs: &[u64]) {
         }
         blocks.push(carry as u64);
 
-        terms.push(blocks)
+        terms.push(blocks);
     }
 
     let mut result = terms.pop().unwrap();
@@ -295,6 +295,7 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum ShiftType {
     Logical,
     Arithmetic,

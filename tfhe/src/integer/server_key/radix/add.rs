@@ -1,7 +1,7 @@
 use crate::integer::ciphertext::IntegerRadixCiphertext;
 use crate::integer::server_key::CheckError;
-use crate::integer::server_key::CheckError::CarryFull;
 use crate::integer::ServerKey;
+use crate::shortint::ciphertext::{Degree, MaxDegree, NoiseLevel};
 
 impl ServerKey {
     /// Computes homomorphically an addition between two ciphertexts encrypting integer values.
@@ -101,35 +101,42 @@ impl ServerKey {
     /// let ct2 = cks.encrypt(msg2);
     ///
     /// // Check if we can perform an addition
-    /// let res = sks.is_add_possible(&ct1, &ct2);
-    ///
-    /// assert_eq!(true, res);
+    /// sks.is_add_possible(&ct1, &ct2).unwrap();
     /// ```
-    pub fn is_add_possible<T>(&self, ct_left: &T, ct_right: &T) -> bool
+    pub fn is_add_possible<T>(&self, ct_left: &T, ct_right: &T) -> Result<(), CheckError>
     where
         T: IntegerRadixCiphertext,
     {
         // Assumes message_modulus and carry_modulus matches between pairs of block
-        let mut preceding_block_carry = 0;
+        let mut preceding_block_carry = Degree::new(0);
+        let mut extracted_carry_noise_level = NoiseLevel::ZERO;
         for (left_block, right_block) in ct_left.blocks().iter().zip(ct_right.blocks().iter()) {
-            let degree_after_add = left_block.degree.0 + right_block.degree.0;
+            let degree_after_add = left_block.degree + right_block.degree;
 
             // Also need to take into account preceding_carry
-            if (degree_after_add + preceding_block_carry)
-                >= (left_block.message_modulus.0 * left_block.carry_modulus.0)
-            {
-                // We would exceed the block 'capacity'
-                return false;
-            }
-            preceding_block_carry = degree_after_add / left_block.message_modulus.0;
+
+            let max_degree = MaxDegree::from_msg_carry_modulus(
+                left_block.message_modulus,
+                left_block.carry_modulus,
+            );
+
+            max_degree.validate(degree_after_add + preceding_block_carry)?;
+
+            self.key.max_noise_level.validate(
+                left_block.noise_level() + right_block.noise_level() + extracted_carry_noise_level,
+            )?;
+
+            preceding_block_carry =
+                Degree::new(degree_after_add.get() / left_block.message_modulus.0);
+            extracted_carry_noise_level = NoiseLevel::NOMINAL;
         }
-        true
+        Ok(())
     }
 
     /// Computes homomorphically an addition between two ciphertexts encrypting integer values.
     ///
     /// If the operation can be performed, the result is returned in a new ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -162,20 +169,14 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if self.is_add_possible(ct_left, ct_right) {
-            let mut result = ct_left.clone();
-            self.unchecked_add_assign(&mut result, ct_right);
-
-            Ok(result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_add_possible(ct_left, ct_right)?;
+        Ok(self.unchecked_add(ct_left, ct_right))
     }
 
     /// Computes homomorphically an addition between two ciphertexts encrypting integer values.
     ///
     /// If the operation can be performed, the result is stored in the `ct_left` ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned, and `ct_left` is not modified.
+    /// Otherwise a [CheckError] is returned, and `ct_left` is not modified.
     ///
     /// # Example
     ///
@@ -194,9 +195,7 @@ impl ServerKey {
     /// let ct2 = cks.encrypt(msg2);
     ///
     /// // Compute homomorphically an addition:
-    /// let res = sks.checked_add_assign(&mut ct1, &ct2);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_add_assign(&mut ct1, &ct2).unwrap();
     ///
     /// let clear: u64 = cks.decrypt(&ct1);
     /// assert_eq!(msg1 + msg2, clear);
@@ -205,12 +204,9 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if self.is_add_possible(ct_left, ct_right) {
-            self.unchecked_add_assign(ct_left, ct_right);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_add_possible(ct_left, ct_right)?;
+        self.unchecked_add_assign(ct_left, ct_right);
+        Ok(())
     }
 
     /// Computes homomorphically an addition between two ciphertexts encrypting integer values.
@@ -242,10 +238,12 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_add_possible(ct_left, ct_right) {
+        if self.is_add_possible(ct_left, ct_right).is_err() {
             self.full_propagate(ct_left);
             self.full_propagate(ct_right);
         }
+
+        self.is_add_possible(ct_left, ct_right).unwrap();
         self.unchecked_add(ct_left, ct_right)
     }
 
@@ -254,10 +252,12 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
     {
         //If the ciphertext cannot be added together without exceeding the capacity of a ciphertext
-        if !self.is_add_possible(ct_left, ct_right) {
+        if self.is_add_possible(ct_left, ct_right).is_err() {
             self.full_propagate(ct_left);
             self.full_propagate(ct_right);
         }
+        self.is_add_possible(ct_left, ct_right).unwrap();
+
         self.unchecked_add_assign(ct_left, ct_right);
     }
 }

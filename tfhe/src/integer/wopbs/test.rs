@@ -1,8 +1,9 @@
 #![allow(unused)]
 
-use crate::integer::gen_keys;
 use crate::integer::parameters::*;
 use crate::integer::wopbs::{encode_radix, WopbsKey};
+use crate::integer::{gen_keys, IntegerKeyKind};
+use crate::shortint::ciphertext::Degree;
 use crate::shortint::parameters::parameters_wopbs::*;
 use crate::shortint::parameters::parameters_wopbs_message_carry::*;
 use crate::shortint::parameters::{ClassicPBSParameters, *};
@@ -12,7 +13,7 @@ use std::cmp::max;
 use crate::integer::keycache::{KEY_CACHE, KEY_CACHE_WOPBS};
 use paste::paste;
 
-const NB_TEST: usize = 10;
+const NB_TESTS: usize = 10;
 
 macro_rules! create_parametrized_test{
     ($name:ident { $( ($sks_param:ident, $wopbs_param:ident) ),* }) => {
@@ -58,7 +59,7 @@ pub fn wopbs_native_crt() {
 
     let params = crate::shortint::parameters::parameters_wopbs::PARAM_4_BITS_5_BLOCKS;
 
-    let (cks, sks) = gen_keys(params);
+    let (cks, sks) = gen_keys(params, IntegerKeyKind::Radix);
     let wopbs_key = WopbsKey::new_wopbs_key_only_for_wopbs(&cks, &sks);
 
     let mut msg_space = 1;
@@ -66,9 +67,7 @@ pub fn wopbs_native_crt() {
         msg_space *= modulus;
     }
 
-    let nb_test = 10;
-
-    for _ in 0..nb_test {
+    for _ in 0..NB_TESTS {
         let clear1 = rng.gen::<u64>() % msg_space; // Encrypt the integers
         let mut ct1 = cks.encrypt_native_crt(clear1, basis.clone());
 
@@ -108,7 +107,7 @@ pub fn wopbs_native_crt_bivariate() {
 
     let params = (pbs_params, wopbs_params);
 
-    let (cks, sks) = gen_keys(params.0);
+    let (cks, sks) = KEY_CACHE.get_from_params(params.0, IntegerKeyKind::Radix);
     let wopbs_key = KEY_CACHE_WOPBS.get_from_params(params);
 
     let mut msg_space = 1;
@@ -116,9 +115,8 @@ pub fn wopbs_native_crt_bivariate() {
         msg_space *= modulus;
     }
 
-    let nb_test = 10;
     let mut tmp = 0;
-    for _ in 0..nb_test {
+    for _ in 0..NB_TESTS {
         let clear1 = rng.gen::<u64>() % msg_space; // Encrypt the integers
         let clear2 = rng.gen::<u64>() % msg_space; // Encrypt the integers
         let mut ct1 = cks.encrypt_native_crt(clear1, basis.clone());
@@ -143,7 +141,7 @@ pub fn wopbs_crt(params: (ClassicPBSParameters, WopbsParameters)) {
 
     let nb_block = basis.len();
 
-    let (cks, sks) = gen_keys(params.0);
+    let (cks, sks) = KEY_CACHE.get_from_params(params.0, IntegerKeyKind::Radix);
     let wopbs_key = KEY_CACHE_WOPBS.get_from_params(params);
 
     let mut msg_space = 1;
@@ -151,16 +149,15 @@ pub fn wopbs_crt(params: (ClassicPBSParameters, WopbsParameters)) {
         msg_space *= modulus;
     }
 
-    let nb_test = 10;
     let mut tmp = 0;
-    for _ in 0..nb_test {
+    for _ in 0..NB_TESTS {
         let clear1 = rng.gen::<u64>() % msg_space;
         let mut ct1 = cks.encrypt_crt(clear1, basis.clone());
         //artificially modify the degree
         for ct in ct1.blocks.iter_mut() {
             let degree = params.0.message_modulus.0
                 * ((rng.gen::<usize>() % (params.0.carry_modulus.0 - 1)) + 1);
-            ct.degree.0 = degree;
+            ct.degree = Degree::new(degree);
         }
         let res = cks.decrypt_crt(&ct1);
 
@@ -175,7 +172,7 @@ pub fn wopbs_crt(params: (ClassicPBSParameters, WopbsParameters)) {
         }
     }
     if tmp != 0 {
-        println!("failure rate {tmp:?}/{nb_test:?}");
+        println!("failure rate {tmp:?}/{NB_TESTS:?}");
         panic!()
     }
 }
@@ -186,7 +183,7 @@ pub fn wopbs_radix(params: (ClassicPBSParameters, WopbsParameters)) {
 
     let nb_block = 2;
 
-    let (cks, sks) = gen_keys(params.0);
+    let (cks, sks) = KEY_CACHE.get_from_params(params.0, IntegerKeyKind::Radix);
     let wopbs_key = KEY_CACHE_WOPBS.get_from_params(params);
 
     let mut msg_space: u64 = params.0.message_modulus.0 as u64;
@@ -194,9 +191,8 @@ pub fn wopbs_radix(params: (ClassicPBSParameters, WopbsParameters)) {
         msg_space *= params.0.message_modulus.0 as u64;
     }
 
-    let nb_test = 10;
     let mut tmp = 0;
-    for _ in 0..nb_test {
+    for _ in 0..NB_TESTS {
         let clear1 = rng.gen::<u64>() % msg_space;
         let mut ct1 = cks.encrypt_radix(clear1, nb_block);
 
@@ -212,7 +208,7 @@ pub fn wopbs_radix(params: (ClassicPBSParameters, WopbsParameters)) {
         }
     }
     if tmp != 0 {
-        println!("failure rate {tmp:?}/{nb_test:?}");
+        println!("failure rate {tmp:?}/{NB_TESTS:?}");
         panic!()
     }
 }
@@ -223,7 +219,7 @@ pub fn wopbs_bivariate_radix(params: (ClassicPBSParameters, WopbsParameters)) {
 
     let nb_block = 2;
 
-    let (cks, sks) = gen_keys(params.0);
+    let (cks, sks) = KEY_CACHE.get_from_params(params.0, IntegerKeyKind::Radix);
     let wopbs_key = KEY_CACHE_WOPBS.get_from_params(params);
 
     let mut msg_space: u64 = params.0.message_modulus.0 as u64;
@@ -231,9 +227,7 @@ pub fn wopbs_bivariate_radix(params: (ClassicPBSParameters, WopbsParameters)) {
         msg_space *= params.0.message_modulus.0 as u64;
     }
 
-    let nb_test = 10;
-
-    for _ in 0..nb_test {
+    for _ in 0..NB_TESTS {
         let mut clear1 = rng.gen::<u64>() % msg_space;
         let mut clear2 = rng.gen::<u64>() % msg_space;
 
@@ -266,7 +260,7 @@ pub fn wopbs_bivariate_crt(params: (ClassicPBSParameters, WopbsParameters)) {
     let basis = make_basis(params.1.message_modulus.0);
     let modulus = basis.iter().product::<u64>();
 
-    let (cks, sks) = gen_keys(params.0);
+    let (cks, sks) = KEY_CACHE.get_from_params(params.0, IntegerKeyKind::Radix);
     let wopbs_key = KEY_CACHE_WOPBS.get_from_params(params);
 
     let mut msg_space: u64 = 1;
@@ -274,9 +268,7 @@ pub fn wopbs_bivariate_crt(params: (ClassicPBSParameters, WopbsParameters)) {
         msg_space *= modulus;
     }
 
-    let nb_test = 10;
-
-    for _ in 0..nb_test {
+    for _ in 0..NB_TESTS {
         let clear1 = rng.gen::<u64>() % msg_space;
         let clear2 = rng.gen::<u64>() % msg_space;
         let mut ct1 = cks.encrypt_crt(clear1, basis.clone());
@@ -285,10 +277,10 @@ pub fn wopbs_bivariate_crt(params: (ClassicPBSParameters, WopbsParameters)) {
         for (ct_1, ct_2) in ct1.blocks.iter_mut().zip(ct2.blocks.iter_mut()) {
             let degree = params.0.message_modulus.0
                 * ((rng.gen::<usize>() % (params.0.carry_modulus.0 - 1)) + 1);
-            ct_1.degree.0 = degree;
+            ct_1.degree = Degree::new(degree);
             let degree = params.0.message_modulus.0
                 * ((rng.gen::<usize>() % (params.0.carry_modulus.0 - 1)) + 1);
-            ct_2.degree.0 = degree;
+            ct_2.degree = Degree::new(degree);
         }
 
         let ct1 = wopbs_key.keyswitch_to_wopbs_params(&sks, &ct1);

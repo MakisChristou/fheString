@@ -1,8 +1,7 @@
-use super::ServerKey;
-use crate::shortint::engine::ShortintEngine;
+use crate::core_crypto::algorithms::*;
+use crate::shortint::ciphertext::Degree;
 use crate::shortint::server_key::CheckError;
-use crate::shortint::server_key::CheckError::CarryFull;
-use crate::shortint::Ciphertext;
+use crate::shortint::{Ciphertext, ServerKey};
 
 impl ServerKey {
     /// Compute homomorphically a subtraction between two ciphertexts.
@@ -119,9 +118,10 @@ impl ServerKey {
     /// assert_eq!(cks.decrypt(&ct_res), 2 - 1);
     /// ```
     pub fn unchecked_sub(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.unchecked_sub(self, ct_left, ct_right).unwrap()
-        })
+        let mut result = ct_left.clone();
+        self.unchecked_sub_assign(&mut result, ct_right);
+
+        result
     }
 
     /// Homomorphically subtracts ct_right to ct_left.
@@ -152,11 +152,7 @@ impl ServerKey {
     /// assert_eq!(cks.decrypt(&ct_1) % modulus, 1);
     /// ```
     pub fn unchecked_sub_assign(&self, ct_left: &mut Ciphertext, ct_right: &Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_sub_assign(self, ct_left, ct_right)
-                .unwrap()
-        })
+        self.unchecked_sub_assign_with_correcting_term(ct_left, ct_right);
     }
 
     /// Verify if ct_right can be subtracted to ct_left.
@@ -177,25 +173,32 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(msg);
     ///
     /// // Check if we can perform an subtraction
-    /// let can_be_subtracted = sks.is_sub_possible(&ct_1, &ct_2);
-    ///
-    /// assert_eq!(true, can_be_subtracted);
+    /// sks.is_sub_possible(&ct_1, &ct_2).unwrap();
     /// ```
-    pub fn is_sub_possible(&self, ct_left: &Ciphertext, ct_right: &Ciphertext) -> bool {
+    pub fn is_sub_possible(
+        &self,
+        ct_left: &Ciphertext,
+        ct_right: &Ciphertext,
+    ) -> Result<(), CheckError> {
         // z = ceil( degree / 2^p ) x 2^p
         let msg_mod = self.message_modulus.0;
-        let mut z = (ct_right.degree.0 + msg_mod - 1) / msg_mod;
+        let mut z = (ct_right.degree.get() + msg_mod - 1) / msg_mod;
         z = z.wrapping_mul(msg_mod);
 
-        let final_operation_count = ct_left.degree.0 + z;
+        let final_operation_count = ct_left.degree.get() + z;
 
-        final_operation_count <= self.max_degree.0
+        self.max_degree
+            .validate(Degree::new(final_operation_count))?;
+
+        self.max_noise_level
+            .validate(ct_left.noise_level() + ct_right.noise_level())?;
+        Ok(())
     }
 
     /// Compute homomorphically a subtraction between two ciphertexts encrypting integer values.
     ///
     /// If the operation can be performed, the result is returned a _new_ ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned.
+    /// Otherwise a [CheckError] is returned.
     ///
     /// # Example
     ///
@@ -211,11 +214,10 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(1);
     ///
     /// // Compute homomorphically a subtraction:
-    /// let ct_res = sks.checked_sub(&ct_1, &ct_2);
+    /// let ct_res = sks.checked_sub(&ct_1, &ct_2).unwrap();
     ///
-    /// assert!(ct_res.is_ok());
     /// let modulus = cks.parameters.message_modulus().0 as u64;
-    /// let clear_res = cks.decrypt(&ct_res.unwrap());
+    /// let clear_res = cks.decrypt(&ct_res);
     /// assert_eq!(clear_res % modulus, 2);
     /// ```
     pub fn checked_sub(
@@ -224,18 +226,15 @@ impl ServerKey {
         ct_right: &Ciphertext,
     ) -> Result<Ciphertext, CheckError> {
         // If the ciphertexts cannot be subtracted without exceeding the degree max
-        if self.is_sub_possible(ct_left, ct_right) {
-            let ct_result = self.unchecked_sub(ct_left, ct_right);
-            Ok(ct_result)
-        } else {
-            Err(CarryFull)
-        }
+        self.is_sub_possible(ct_left, ct_right)?;
+        let ct_result = self.unchecked_sub(ct_left, ct_right);
+        Ok(ct_result)
     }
 
     /// Compute homomorphically a subtraction between two ciphertexts.
     ///
     /// If the operation can be performed, the result is stored in the `ct_left` ciphertext.
-    /// Otherwise [CheckError::CarryFull] is returned, and `ct_left` is not modified.
+    /// Otherwise a [CheckError] is returned, and `ct_left` is not modified.
     ///
     /// # Example
     ///
@@ -251,9 +250,7 @@ impl ServerKey {
     /// let ct_2 = cks.encrypt(1);
     ///
     /// // Compute homomorphically a subtraction:
-    /// let res = sks.checked_sub_assign(&mut ct_1, &ct_2);
-    ///
-    /// assert!(res.is_ok());
+    /// sks.checked_sub_assign(&mut ct_1, &ct_2).unwrap();
     /// let modulus = cks.parameters.message_modulus().0 as u64;
     /// let clear_res = cks.decrypt(&ct_1);
     /// assert_eq!(clear_res % modulus, 2);
@@ -264,12 +261,9 @@ impl ServerKey {
         ct_right: &Ciphertext,
     ) -> Result<(), CheckError> {
         // If the ciphertexts cannot be subtracted without exceeding the degree max
-        if self.is_sub_possible(ct_left, ct_right) {
-            self.unchecked_sub_assign(ct_left, ct_right);
-            Ok(())
-        } else {
-            Err(CarryFull)
-        }
+        self.is_sub_possible(ct_left, ct_right)?;
+        self.unchecked_sub_assign(ct_left, ct_right);
+        Ok(())
     }
 
     /// Compute homomorphically a subtraction between two ciphertexts.
@@ -298,9 +292,15 @@ impl ServerKey {
     /// assert_eq!(clear_res % modulus, 2);
     /// ```
     pub fn smart_sub(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) -> Ciphertext {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_sub(self, ct_left, ct_right).unwrap()
-        })
+        // If the ciphertext cannot be subtracted together without exceeding the degree max
+        if self.is_sub_possible(ct_left, ct_right).is_err() {
+            self.message_extract_assign(ct_right);
+            self.message_extract_assign(ct_left);
+        }
+
+        self.is_sub_possible(ct_left, ct_right).unwrap();
+
+        self.unchecked_sub(ct_left, ct_right)
     }
 
     /// Compute homomorphically a subtraction between two ciphertexts.
@@ -327,9 +327,15 @@ impl ServerKey {
     /// assert_eq!(cks.decrypt(&ct_1) % modulus, 2);
     /// ```
     pub fn smart_sub_assign(&self, ct_left: &mut Ciphertext, ct_right: &mut Ciphertext) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine.smart_sub_assign(self, ct_left, ct_right).unwrap()
-        })
+        // If the ciphertext cannot be subtracted together without exceeding the degree max
+        if self.is_sub_possible(ct_left, ct_right).is_err() {
+            self.message_extract_assign(ct_right);
+            self.message_extract_assign(ct_left);
+        }
+
+        self.is_sub_possible(ct_left, ct_right).unwrap();
+
+        self.unchecked_sub_assign(ct_left, ct_right);
     }
 
     /// Compute homomorphically a subtraction between two ciphertexts without checks, and returns
@@ -346,11 +352,10 @@ impl ServerKey {
         ct_left: &Ciphertext,
         ct_right: &Ciphertext,
     ) -> (Ciphertext, u64) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_sub_with_correcting_term(self, ct_left, ct_right)
-                .unwrap()
-        })
+        let mut result = ct_left.clone();
+        let z = self.unchecked_sub_assign_with_correcting_term(&mut result, ct_right);
+
+        (result, z)
     }
 
     /// Compute homomorphically a subtraction between two ciphertexts without checks, and returns
@@ -359,16 +364,19 @@ impl ServerKey {
     /// # Warning
     ///
     /// This is an advanced functionality, needed for internal requirements.
-    pub fn unchecked_sub_with_correcting_term_assign(
+    pub fn unchecked_sub_assign_with_correcting_term(
         &self,
         ct_left: &mut Ciphertext,
         ct_right: &Ciphertext,
     ) -> u64 {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .unchecked_sub_assign_with_correcting_term(self, ct_left, ct_right)
-                .unwrap()
-        })
+        let (neg_right, z) = self.unchecked_neg_with_correcting_term(ct_right);
+
+        lwe_ciphertext_add_assign(&mut ct_left.ct, &neg_right.ct);
+
+        ct_left.set_noise_level(ct_left.noise_level() + ct_right.noise_level());
+        ct_left.degree = Degree::new(ct_left.degree.get() + z as usize);
+
+        z
     }
 
     /// Compute homomorphically a subtraction between two ciphertexts without checks, and returns
@@ -382,10 +390,14 @@ impl ServerKey {
         ct_left: &mut Ciphertext,
         ct_right: &mut Ciphertext,
     ) -> (Ciphertext, u64) {
-        ShortintEngine::with_thread_local_mut(|engine| {
-            engine
-                .smart_sub_with_correcting_term(self, ct_left, ct_right)
-                .unwrap()
-        })
+        //If the ciphertext cannot be added together without exceeding the capacity of a ciphertext
+        if self.is_sub_possible(ct_left, ct_right).is_err() {
+            self.message_extract_assign(ct_left);
+            self.message_extract_assign(ct_right);
+        }
+
+        self.is_sub_possible(ct_left, ct_right).unwrap();
+
+        self.unchecked_sub_with_correcting_term(ct_left, ct_right)
     }
 }

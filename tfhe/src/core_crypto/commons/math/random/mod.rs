@@ -44,7 +44,9 @@ pub trait RandomGenerable<D: Distribution>
 where
     Self: Sized,
 {
-    type CustomModulus;
+    // This is required as e.g. Gaussian can generate pairs of Torus elements and we can't use a
+    // pair of elements as custom modulus
+    type CustomModulus: Copy;
 
     fn generate_one<G: ByteRandomGenerator>(
         generator: &mut RandomGenerator<G>,
@@ -67,9 +69,20 @@ where
         distribution: D,
         slice: &mut [Self],
     ) {
-        slice.iter_mut().for_each(|s| {
+        for s in slice.iter_mut() {
             *s = Self::generate_one(generator, distribution);
-        });
+        }
+    }
+
+    fn fill_slice_custom_mod<G: ByteRandomGenerator>(
+        generator: &mut RandomGenerator<G>,
+        distribution: D,
+        slice: &mut [Self],
+        custom_modulus: Self::CustomModulus,
+    ) {
+        for s in slice.iter_mut() {
+            *s = Self::generate_one_custom_modulus(generator, distribution, custom_modulus);
+        }
     }
 }
 

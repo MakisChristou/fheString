@@ -8,7 +8,7 @@ use crate::core_crypto::algorithms::{
 use crate::core_crypto::commons::parameters::*;
 use crate::core_crypto::commons::traits::*;
 use crate::core_crypto::entities::*;
-use crate::core_crypto::prelude::misc::check_content_respects_mod;
+use crate::core_crypto::prelude::misc::check_encrypted_content_respects_mod;
 
 /// A [`compact list of LWE ciphertexts`](`LweCompactCiphertextList`) obtained through encryption
 /// with a [`compact LWE public key`](`super::LweCompactPublicKey`).
@@ -44,10 +44,10 @@ pub fn lwe_compact_ciphertext_list_mask_count(
 ) -> LweMaskCount {
     LweMaskCount(
         lwe_ciphertext_count.0 / lwe_dimension.0
-            + if lwe_ciphertext_count.0 % lwe_dimension.0 != 0 {
-                1
-            } else {
+            + if lwe_ciphertext_count.0 % lwe_dimension.0 == 0 {
                 0
+            } else {
+                1
             },
     )
 }
@@ -254,20 +254,21 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> LweCompactCipherte
 // These accessors are used to create invalid objects and test the conformance functions
 // But these functions should not be used in other contexts, hence the `#[cfg(test)]`
 #[cfg(test)]
+#[allow(dead_code)]
 impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> LweCompactCiphertextList<C> {
-    pub fn get_mut_lwe_size(&mut self) -> &mut LweSize {
+    pub(crate) fn get_mut_lwe_size(&mut self) -> &mut LweSize {
         &mut self.lwe_size
     }
 
-    pub fn get_mut_lwe_ciphertext_count(&mut self) -> &mut LweCiphertextCount {
+    pub(crate) fn get_mut_lwe_ciphertext_count(&mut self) -> &mut LweCiphertextCount {
         &mut self.lwe_ciphertext_count
     }
 
-    pub fn get_mut_ciphertext_modulus(&mut self) -> &mut CiphertextModulus<Scalar> {
+    pub(crate) fn get_mut_ciphertext_modulus(&mut self) -> &mut CiphertextModulus<Scalar> {
         &mut self.ciphertext_modulus
     }
 
-    pub fn get_mut_container(&mut self) -> &mut C {
+    pub(crate) fn get_mut_container(&mut self) -> &mut C {
         &mut self.data
     }
 }
@@ -346,7 +347,7 @@ impl<T: UnsignedInteger> ParameterSetConformant for LweCompactCiphertextListOwne
                     self.lwe_size.to_lwe_dimension(),
                     self.lwe_ciphertext_count,
                 )
-            && check_content_respects_mod(self, param.ct_modulus)
+            && check_encrypted_content_respects_mod(self, param.ct_modulus)
             && self.lwe_size == param.lwe_dim.to_lwe_size()
             && self.ciphertext_modulus == param.ct_modulus
     }

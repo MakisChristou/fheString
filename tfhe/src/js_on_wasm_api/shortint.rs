@@ -1,8 +1,8 @@
 use crate::core_crypto::commons::generators::DeterministicSeeder;
-pub use crate::core_crypto::commons::math::random::Seed;
+use crate::core_crypto::commons::math::random::Seed;
 use crate::core_crypto::prelude::ActivatedRandomGenerator;
-pub use crate::shortint::parameters::parameters_compact_pk::*;
-pub use crate::shortint::parameters::*;
+use crate::shortint::parameters::parameters_compact_pk::*;
+use crate::shortint::parameters::*;
 use wasm_bindgen::prelude::*;
 
 use std::panic::set_hook;
@@ -40,12 +40,8 @@ pub enum ShortintEncryptionKeyChoice {
 impl From<ShortintEncryptionKeyChoice> for crate::shortint::parameters::EncryptionKeyChoice {
     fn from(value: ShortintEncryptionKeyChoice) -> Self {
         match value {
-            ShortintEncryptionKeyChoice::Big => {
-                crate::shortint::parameters::EncryptionKeyChoice::Big
-            }
-            ShortintEncryptionKeyChoice::Small => {
-                crate::shortint::parameters::EncryptionKeyChoice::Small
-            }
+            ShortintEncryptionKeyChoice::Big => Self::Big,
+            ShortintEncryptionKeyChoice::Small => Self::Small,
         }
     }
 }
@@ -344,26 +340,24 @@ impl Shortint {
         seed_high_bytes: u64,
         seed_low_bytes: u64,
         parameters: &ShortintParameters,
-    ) -> Result<ShortintClientKey, JsError> {
+    ) -> ShortintClientKey {
         set_hook(Box::new(console_error_panic_hook::hook));
         let seed_high_bytes: u128 = seed_high_bytes.into();
         let seed_low_bytes: u128 = seed_low_bytes.into();
         let seed: u128 = (seed_high_bytes << 64) | seed_low_bytes;
 
         let mut seeder = DeterministicSeeder::<ActivatedRandomGenerator>::new(Seed(seed));
-        crate::shortint::engine::ShortintEngine::new_from_seeder(&mut seeder)
-            .new_client_key(parameters.0.try_into().unwrap())
-            .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
-            .map(ShortintClientKey)
+        ShortintClientKey(
+            crate::shortint::engine::ShortintEngine::new_from_seeder(&mut seeder)
+                .new_client_key(parameters.0.into()),
+        )
     }
 
     #[wasm_bindgen]
     pub fn new_client_key(parameters: &ShortintParameters) -> ShortintClientKey {
         set_hook(Box::new(console_error_panic_hook::hook));
 
-        ShortintClientKey(crate::shortint::client_key::ClientKey::new(
-            parameters.0.to_owned(),
-        ))
+        ShortintClientKey(crate::shortint::client_key::ClientKey::new(parameters.0))
     }
 
     #[wasm_bindgen]

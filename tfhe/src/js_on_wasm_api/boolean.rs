@@ -1,4 +1,4 @@
-pub use crate::core_crypto::commons::math::random::Seed;
+use crate::core_crypto::commons::math::random::Seed;
 use wasm_bindgen::prelude::*;
 
 use crate::core_crypto::commons::generators::DeterministicSeeder;
@@ -40,10 +40,10 @@ impl TryFrom<u32> for BooleanParameterSet {
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(BooleanParameterSet::Default),
-            1 => Ok(BooleanParameterSet::TfheLib),
-            2 => Ok(BooleanParameterSet::DefaultKsPbs),
-            3 => Ok(BooleanParameterSet::TfheLibKsPbs),
+            0 => Ok(Self::Default),
+            1 => Ok(Self::TfheLib),
+            2 => Ok(Self::DefaultKsPbs),
+            3 => Ok(Self::TfheLibKsPbs),
             _ => Err(format!(
                 "Invalid value '{value}' for BooleansParametersSet, use \
                 BooleanParameterSet constants"
@@ -63,12 +63,8 @@ impl From<BooleanEncryptionKeyChoice>
 {
     fn from(value: BooleanEncryptionKeyChoice) -> Self {
         match value {
-            BooleanEncryptionKeyChoice::Big => {
-                crate::shortint::parameters::EncryptionKeyChoice::Big
-            }
-            BooleanEncryptionKeyChoice::Small => {
-                crate::shortint::parameters::EncryptionKeyChoice::Small
-            }
+            BooleanEncryptionKeyChoice::Big => Self::Big,
+            BooleanEncryptionKeyChoice::Small => Self::Small,
         }
     }
 }
@@ -139,7 +135,7 @@ impl Boolean {
 
         let mut seeder = DeterministicSeeder::<ActivatedRandomGenerator>::new(Seed(seed));
         let key = crate::boolean::engine::BooleanEngine::new_from_seeder(&mut seeder)
-            .create_client_key(parameters.0.to_owned());
+            .create_client_key(parameters.0);
         BooleanClientKey(key)
     }
 
@@ -199,7 +195,7 @@ impl Boolean {
     }
 
     #[wasm_bindgen]
-    pub fn trivial_encrypt(&mut self, message: bool) -> BooleanCiphertext {
+    pub fn trivial_encrypt(message: bool) -> BooleanCiphertext {
         set_hook(Box::new(console_error_panic_hook::hook));
         BooleanCiphertext(crate::boolean::ciphertext::Ciphertext::Trivial(message))
     }

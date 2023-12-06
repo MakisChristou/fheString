@@ -7,28 +7,34 @@ impl ServerKey {
     /// # Example
     ///
     /// ```rust
-    /// use tfhe::integer::gen_keys;
+    /// use tfhe::integer::gen_keys_crt;
     /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
     /// // Generate the client key and the server key:
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_3_CARRY_3_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 29;
     /// let clear_2 = 23;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
-    /// let ctxt_2 = cks.encrypt_crt(clear_2, basis);
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
+    /// let ctxt_2 = cks.encrypt(clear_2);
     ///
     /// // Compute homomorphically a multiplication
     /// sks.unchecked_crt_mul_assign(&mut ctxt_1, &ctxt_2);
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn unchecked_crt_mul_assign(&self, ct_left: &mut CrtCiphertext, ct_right: &CrtCiphertext) {
         for (ct_left, ct_right) in ct_left.blocks.iter_mut().zip(ct_right.blocks.iter()) {
-            self.key.unchecked_mul_lsb_assign(ct_left, ct_right);
+            if ct_left.message_modulus.0 <= ct_left.carry_modulus.0 {
+                self.key.unchecked_mul_lsb_assign(ct_left, ct_right);
+            } else {
+                self.key
+                    .unchecked_mul_lsb_small_carry_assign(ct_left, ct_right);
+            }
         }
     }
 
@@ -51,24 +57,25 @@ impl ServerKey {
     /// # Example
     ///
     /// ```rust
-    /// use tfhe::integer::gen_keys;
+    /// use tfhe::integer::gen_keys_crt;
     /// use tfhe::shortint::parameters::PARAM_MESSAGE_3_CARRY_3_KS_PBS;
     ///
-    /// let (cks, sks) = gen_keys(PARAM_MESSAGE_3_CARRY_3_KS_PBS);
+    /// let basis = vec![2, 3, 5];
+    /// let modulus: u64 = basis.iter().product();
+    /// let (cks, sks) = gen_keys_crt(PARAM_MESSAGE_3_CARRY_3_KS_PBS, basis);
     ///
     /// let clear_1 = 29;
     /// let clear_2 = 29;
-    /// let basis = vec![2, 3, 5];
     /// // Encrypt two messages
-    /// let mut ctxt_1 = cks.encrypt_crt(clear_1, basis.clone());
-    /// let mut ctxt_2 = cks.encrypt_crt(clear_2, basis);
+    /// let mut ctxt_1 = cks.encrypt(clear_1);
+    /// let mut ctxt_2 = cks.encrypt(clear_2);
     ///
     /// // Compute homomorphically a multiplication
     /// sks.smart_crt_mul_assign(&mut ctxt_1, &mut ctxt_2);
     ///
     /// // Decrypt
-    /// let res = cks.decrypt_crt(&ctxt_1);
-    /// assert_eq!((clear_1 * clear_2) % 30, res);
+    /// let res = cks.decrypt(&ctxt_1);
+    /// assert_eq!((clear_1 * clear_2) % modulus, res);
     /// ```
     pub fn smart_crt_mul_assign(&self, ct_left: &mut CrtCiphertext, ct_right: &mut CrtCiphertext) {
         for (block_left, block_right) in ct_left.blocks.iter_mut().zip(ct_right.blocks.iter_mut()) {

@@ -11,7 +11,7 @@ To serialize our data, a [data format](https://serde.rs/#data-formats) should be
 
 [dependencies]
 # ...
-tfhe = { version = "0.4.0", features = ["integer","x86_64-unix"]}
+tfhe = { version = "0.5.0", features = ["integer","x86_64-unix"]}
 bincode = "1.3.3"
 ```
 
@@ -26,9 +26,7 @@ use tfhe::{ConfigBuilder, ServerKey, generate_keys, set_server_key, FheUint8};
 use tfhe::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>>{
-    let config = ConfigBuilder::all_disabled()
-        .enable_default_integers()
-        .build();
+    let config = ConfigBuilder::default().build();
 
     let ( client_key, server_key) = generate_keys(config);
 

@@ -33,9 +33,10 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
         Scalar: TwosComplementNegation + DecomposableInto<u8>,
     {
-        if !self.is_scalar_sub_possible(ct, scalar) {
+        if self.is_scalar_sub_possible(ct, scalar).is_err() {
             self.full_propagate_parallelized(ct);
         }
+        self.is_scalar_sub_possible(ct, scalar).unwrap();
         self.unchecked_scalar_sub(ct, scalar)
     }
 
@@ -44,9 +45,10 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
         Scalar: TwosComplementNegation + DecomposableInto<u8>,
     {
-        if !self.is_scalar_sub_possible(ct, scalar) {
+        if self.is_scalar_sub_possible(ct, scalar).is_err() {
             self.full_propagate_parallelized(ct);
         }
+        self.is_scalar_sub_possible(ct, scalar).unwrap();
         self.unchecked_scalar_sub_assign(ct, scalar);
     }
 
@@ -105,7 +107,7 @@ impl ServerKey {
         self.unchecked_scalar_sub_assign(ct, scalar);
 
         if self.is_eligible_for_parallel_single_carry_propagation(ct) {
-            self.propagate_single_carry_parallelized_low_latency(ct);
+            let _carry = self.propagate_single_carry_parallelized_low_latency(ct);
         } else {
             self.full_propagate_parallelized(ct);
         }

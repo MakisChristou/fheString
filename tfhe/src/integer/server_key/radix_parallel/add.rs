@@ -1,12 +1,15 @@
 use crate::integer::ciphertext::IntegerRadixCiphertext;
-use crate::integer::{RadixCiphertext, ServerKey};
+use crate::integer::{BooleanBlock, RadixCiphertext, ServerKey, SignedRadixCiphertext};
 use crate::shortint::Ciphertext;
 
+use crate::core_crypto::commons::numeric::UnsignedInteger;
+use crate::core_crypto::prelude::misc::divide_ceil;
+use crate::integer::server_key::radix_parallel::sub::SignedOperation;
 use rayon::prelude::*;
 
 #[repr(u64)]
 #[derive(PartialEq, Eq)]
-enum OutputCarry {
+pub(crate) enum OutputCarry {
     /// The block does not generate nor propagate a carry
     None = 0,
     /// The block generates a carry
@@ -35,6 +38,40 @@ fn prefix_sum_carry_propagation(msb: u64, lsb: u64) -> u64 {
     } else {
         msb
     }
+}
+
+fn should_hillis_steele_propagation_be_faster(num_blocks: usize, num_threads: usize) -> bool {
+    // Measures have shown that using a parallelized algorithm degrades
+    // the latency of a PBS, so we take that into account.
+    // (This factor is a bit pessimistic).
+    const PARALLEL_LATENCY_PENALTY: usize = 2;
+    // However that penalty only kicks in when certain level of
+    // parallelism is used
+    let penalty_threshold = num_threads / 2;
+
+    // The unit of latency is a PBS
+    let compute_latency_of_one_layer = |num_blocks: usize, num_threads: usize| -> usize {
+        let latency = divide_ceil(num_blocks, num_threads);
+        if num_blocks >= penalty_threshold {
+            latency * PARALLEL_LATENCY_PENALTY
+        } else {
+            latency
+        }
+    };
+
+    // Estimate the latency of the parallelized algorithm
+    let mut parallel_expected_latency = 2 * compute_latency_of_one_layer(num_blocks, num_threads);
+    let max_depth = num_blocks.ceil_ilog2();
+    let mut space = 1;
+    for _ in 0..max_depth {
+        let num_block_at_iter = num_blocks - space;
+        let iter_latency = compute_latency_of_one_layer(num_block_at_iter, num_threads);
+        parallel_expected_latency += iter_latency;
+        space *= 2;
+    }
+
+    // the other algorithm has num_blocks latency
+    parallel_expected_latency < num_blocks
 }
 
 impl ServerKey {
@@ -92,12 +129,14 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_add_possible(ct_left, ct_right) {
+        if self.is_add_possible(ct_left, ct_right).is_err() {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+
+        self.is_add_possible(ct_left, ct_right).unwrap();
         self.unchecked_add(ct_left, ct_right)
     }
 
@@ -105,12 +144,14 @@ impl ServerKey {
     where
         T: IntegerRadixCiphertext,
     {
-        if !self.is_add_possible(ct_left, ct_right) {
+        if self.is_add_possible(ct_left, ct_right).is_err() {
             rayon::join(
                 || self.full_propagate_parallelized(ct_left),
                 || self.full_propagate_parallelized(ct_right),
             );
         }
+
+        self.is_add_possible(ct_left, ct_right).unwrap();
         self.unchecked_add_assign(ct_left, ct_right);
     }
 
@@ -192,10 +233,160 @@ impl ServerKey {
         };
 
         if self.is_eligible_for_parallel_single_carry_propagation(lhs) {
-            self.unchecked_add_assign_parallelized_low_latency(lhs, rhs);
+            let _carry = self.unchecked_add_assign_parallelized_low_latency(lhs, rhs);
         } else {
             self.unchecked_add_assign(lhs, rhs);
             self.full_propagate_parallelized(lhs);
+        }
+    }
+    /// Computes the addition of two unsigned ciphertexts and returns the overflow flag
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use tfhe::integer::gen_keys_radix;
+    /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    ///
+    /// // Generate the client key and the server key:
+    /// let num_blocks = 4;
+    /// let (cks, sks) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
+    ///
+    /// let msg1 = u8::MAX;
+    /// let msg2 = 1;
+    ///
+    /// let ct1 = cks.encrypt(msg1);
+    /// let ct2 = cks.encrypt(msg2);
+    ///
+    /// let (ct_res, overflowed) = sks.unsigned_overflowing_add_parallelized(&ct1, &ct2);
+    ///
+    /// // Decrypt:
+    /// let dec_result: u8 = cks.decrypt(&ct_res);
+    /// let dec_overflowed = cks.decrypt_bool(&overflowed);
+    /// let (expected_result, expected_overflow) = msg1.overflowing_add(msg2);
+    /// assert_eq!(dec_result, expected_result);
+    /// assert_eq!(dec_overflowed, expected_overflow);
+    /// ```
+    pub fn unsigned_overflowing_add_parallelized(
+        &self,
+        ct_left: &RadixCiphertext,
+        ct_right: &RadixCiphertext,
+    ) -> (RadixCiphertext, BooleanBlock) {
+        let mut ct_res = ct_left.clone();
+        let overflowed = self.unsigned_overflowing_add_assign_parallelized(&mut ct_res, ct_right);
+        (ct_res, overflowed)
+    }
+
+    pub fn unsigned_overflowing_add_assign_parallelized(
+        &self,
+        ct_left: &mut RadixCiphertext,
+        ct_right: &RadixCiphertext,
+    ) -> BooleanBlock {
+        let mut tmp_rhs: RadixCiphertext;
+        if ct_left.blocks.is_empty() || ct_right.blocks.is_empty() {
+            return self.create_trivial_boolean_block(false);
+        }
+
+        let (lhs, rhs) = match (
+            ct_left.block_carries_are_empty(),
+            ct_right.block_carries_are_empty(),
+        ) {
+            (true, true) => (ct_left, ct_right),
+            (true, false) => {
+                tmp_rhs = ct_right.clone();
+                self.full_propagate_parallelized(&mut tmp_rhs);
+                (ct_left, &tmp_rhs)
+            }
+            (false, true) => {
+                self.full_propagate_parallelized(ct_left);
+                (ct_left, ct_right)
+            }
+            (false, false) => {
+                tmp_rhs = ct_right.clone();
+                rayon::join(
+                    || self.full_propagate_parallelized(ct_left),
+                    || self.full_propagate_parallelized(&mut tmp_rhs),
+                );
+                (ct_left, &tmp_rhs)
+            }
+        };
+
+        if self.is_eligible_for_parallel_single_carry_propagation(lhs) {
+            let carry = self.unchecked_add_assign_parallelized_low_latency(lhs, rhs);
+            BooleanBlock::new_unchecked(carry)
+        } else {
+            self.unchecked_add_assign(lhs, rhs);
+            let len = lhs.blocks.len();
+            for i in 0..len - 1 {
+                let _ = self.propagate_parallelized(lhs, i);
+            }
+            let carry = self.propagate_parallelized(lhs, len - 1);
+            BooleanBlock::new_unchecked(carry)
+        }
+    }
+
+    pub fn signed_overflowing_add_parallelized(
+        &self,
+        ct_left: &SignedRadixCiphertext,
+        ct_right: &SignedRadixCiphertext,
+    ) -> (SignedRadixCiphertext, BooleanBlock) {
+        let mut tmp_lhs: SignedRadixCiphertext;
+        let mut tmp_rhs: SignedRadixCiphertext;
+
+        let (lhs, rhs) = match (
+            ct_left.block_carries_are_empty(),
+            ct_right.block_carries_are_empty(),
+        ) {
+            (true, true) => (ct_left, ct_right),
+            (true, false) => {
+                tmp_rhs = ct_right.clone();
+                self.full_propagate_parallelized(&mut tmp_rhs);
+                (ct_left, &tmp_rhs)
+            }
+            (false, true) => {
+                tmp_lhs = ct_left.clone();
+                self.full_propagate_parallelized(&mut tmp_lhs);
+                (&tmp_lhs, ct_right)
+            }
+            (false, false) => {
+                tmp_lhs = ct_left.clone();
+                tmp_rhs = ct_right.clone();
+                rayon::join(
+                    || self.full_propagate_parallelized(&mut tmp_lhs),
+                    || self.full_propagate_parallelized(&mut tmp_rhs),
+                );
+                (&tmp_lhs, &tmp_rhs)
+            }
+        };
+
+        self.unchecked_signed_overflowing_add_parallelized(lhs, rhs)
+    }
+
+    pub fn unchecked_signed_overflowing_add_parallelized(
+        &self,
+        ct_left: &SignedRadixCiphertext,
+        ct_right: &SignedRadixCiphertext,
+    ) -> (SignedRadixCiphertext, BooleanBlock) {
+        assert_eq!(
+            ct_left.blocks.len(),
+            ct_right.blocks.len(),
+            "lhs and rhs must have the name number of blocks ({} vs {})",
+            ct_left.blocks.len(),
+            ct_right.blocks.len()
+        );
+        assert!(!ct_left.blocks.is_empty(), "inputs cannot be empty");
+
+        if self.is_eligible_for_parallel_single_carry_propagation(ct_left) {
+            self.unchecked_signed_overflowing_add_or_sub_parallelized_impl(
+                ct_left,
+                ct_right,
+                SignedOperation::Addition,
+            )
+        } else {
+            self.unchecked_signed_overflowing_add_or_sub(
+                ct_left,
+                ct_right,
+                SignedOperation::Addition,
+            )
         }
     }
 
@@ -254,21 +445,7 @@ impl ServerKey {
             return false;
         }
 
-        // The fully parallelized way introduces more work
-        // and so is slower for low number of blocks
-        const MIN_NUM_BLOCKS: usize = 6;
-        let has_enough_blocks = ct.blocks().len() >= MIN_NUM_BLOCKS;
-        if !has_enough_blocks {
-            return false;
-        }
-
-        // Use rayon to get that number as the implementation uses rayon for parallelism
-        let has_enough_threads = rayon::current_num_threads() >= ct.blocks().len();
-        if !has_enough_threads {
-            return false;
-        }
-
-        true
+        should_hillis_steele_propagation_be_faster(ct.blocks().len(), rayon::current_num_threads())
     }
 
     /// This add_assign two numbers
@@ -283,6 +460,9 @@ impl ServerKey {
     ///
     /// At most num_block - 1 threads are used
     ///
+    /// Returns the output carry that can be used to check for unsigned addition
+    /// overflow.
+    ///
     /// # Requirements
     ///
     /// - The parameters have 4 bits in total
@@ -291,7 +471,11 @@ impl ServerKey {
     /// # Output
     ///
     /// - lhs will have its carries empty
-    pub(crate) fn unchecked_add_assign_parallelized_low_latency<T>(&self, lhs: &mut T, rhs: &T)
+    pub(crate) fn unchecked_add_assign_parallelized_low_latency<T>(
+        &self,
+        lhs: &mut T,
+        rhs: &T,
+    ) -> Ciphertext
     where
         T: IntegerRadixCiphertext,
     {
@@ -300,7 +484,7 @@ impl ServerKey {
             .iter()
             .zip(rhs.blocks().iter())
             .all(|(bl, br)| {
-                let degree_after_add = bl.degree.0 + br.degree.0;
+                let degree_after_add = bl.degree.get() + br.degree.get();
                 degree_after_add < (self.key.message_modulus.0 * 2)
             });
         assert!(degree_after_add_does_not_go_beyond_first_carry);
@@ -316,12 +500,15 @@ impl ServerKey {
     /// - first unchecked_add
     /// - at this point at most on bit of carry is taken
     /// - use this function to propagate them in parallel
-    pub(crate) fn propagate_single_carry_parallelized_low_latency<T>(&self, ct: &mut T)
+    pub(crate) fn propagate_single_carry_parallelized_low_latency<T>(
+        &self,
+        ct: &mut T,
+    ) -> Ciphertext
     where
         T: IntegerRadixCiphertext,
     {
         let generates_or_propagates = self.generate_init_carry_array(ct);
-        let (input_carries, _) =
+        let (input_carries, output_carry) =
             self.compute_carry_propagation_parallelized_low_latency(generates_or_propagates);
 
         ct.blocks_mut()
@@ -331,6 +518,7 @@ impl ServerKey {
                 self.key.unchecked_add_assign(block, input_carry);
                 self.key.message_extract_assign(block);
             });
+        output_carry
     }
 
     /// Backbone algorithm of parallel carry (only one bit) propagation
@@ -377,11 +565,11 @@ impl ServerKey {
         debug_assert!(self.key.message_modulus.0 * self.key.carry_modulus.0 >= (1 << 4));
 
         let num_blocks = generates_or_propagates.len();
-        let num_steps = generates_or_propagates.len().ilog2() as usize;
+        let num_steps = generates_or_propagates.len().ceil_ilog2() as usize;
 
         let mut space = 1;
         let mut step_output = generates_or_propagates.clone();
-        for _ in 0..=num_steps {
+        for _ in 0..num_steps {
             step_output[space..num_blocks]
                 .par_iter_mut()
                 .enumerate()
@@ -429,7 +617,7 @@ impl ServerKey {
             .iter()
             .zip(rhs.blocks().iter())
             .all(|(bl, br)| {
-                let degree_after_add = bl.degree.0 + br.degree.0;
+                let degree_after_add = bl.degree.get() + br.degree.get();
                 degree_after_add < (self.key.message_modulus.0 * 2)
             });
         assert!(degree_after_add_does_not_go_beyond_first_carry);
@@ -567,174 +755,14 @@ impl ServerKey {
         generates_or_propagates
     }
 
-    /// op must be associative and commutative
-    pub fn smart_binary_op_seq_parallelized<'this, 'item, T>(
-        &'this self,
-        ct_seq: impl IntoIterator<Item = &'item mut T>,
-        op: impl for<'a> Fn(&'a ServerKey, &'a mut T, &'a mut T) -> T + Sync,
-    ) -> Option<T>
+    /// See [Self::unchecked_sum_ciphertexts_vec_parallelized]
+    pub fn unchecked_sum_ciphertexts_parallelized<'a, T, C>(&self, ciphertexts: C) -> Option<T>
     where
-        T: IntegerRadixCiphertext + 'item + From<Vec<crate::shortint::Ciphertext>>,
+        C: IntoIterator<Item = &'a T>,
+        T: IntegerRadixCiphertext + 'a,
     {
-        enum CiphertextCow<'a, C: IntegerRadixCiphertext> {
-            Borrowed(&'a mut C),
-            Owned(C),
-        }
-        impl<C: IntegerRadixCiphertext> CiphertextCow<'_, C> {
-            fn as_mut(&mut self) -> &mut C {
-                match self {
-                    CiphertextCow::Borrowed(b) => b,
-                    CiphertextCow::Owned(o) => o,
-                }
-            }
-        }
-
-        let ct_seq = ct_seq
-            .into_iter()
-            .map(CiphertextCow::Borrowed)
-            .collect::<Vec<_>>();
-        let op = &op;
-
-        // overhead of dynamic dispatch is negligible compared to multithreading, PBS, etc.
-        // we defer all calls to a single implementation to avoid code bloat and long compile
-        // times
-        #[allow(clippy::type_complexity)]
-        fn reduce_impl<C>(
-            sks: &ServerKey,
-            mut ct_seq: Vec<CiphertextCow<C>>,
-            op: &(dyn for<'a> Fn(&'a ServerKey, &'a mut C, &'a mut C) -> C + Sync),
-        ) -> Option<C>
-        where
-            C: IntegerRadixCiphertext + From<Vec<crate::shortint::Ciphertext>>,
-        {
-            use rayon::prelude::*;
-
-            if ct_seq.is_empty() {
-                None
-            } else {
-                // we repeatedly divide the number of terms by two by iteratively reducing
-                // consecutive terms in the array
-                let num_blocks = ct_seq[0].as_mut().blocks().len();
-                while ct_seq.len() > 1 {
-                    let mut results =
-                        vec![sks.create_trivial_radix(0u64, num_blocks); ct_seq.len() / 2];
-
-                    // if the number of elements is odd, we skip the first element
-                    let untouched_prefix = ct_seq.len() % 2;
-                    let ct_seq_slice = &mut ct_seq[untouched_prefix..];
-
-                    results
-                        .par_iter_mut()
-                        .zip(ct_seq_slice.par_chunks_exact_mut(2))
-                        .for_each(|(ct_res, chunk)| {
-                            let (first, second) = chunk.split_at_mut(1);
-                            let first = first[0].as_mut();
-                            let second = second[0].as_mut();
-                            *ct_res = op(sks, first, second);
-                        });
-
-                    ct_seq.truncate(untouched_prefix);
-                    ct_seq.extend(results.into_iter().map(CiphertextCow::Owned));
-                }
-
-                let sum = ct_seq.pop().unwrap();
-
-                Some(match sum {
-                    CiphertextCow::Borrowed(b) => b.clone(),
-                    CiphertextCow::Owned(o) => o,
-                })
-            }
-        }
-
-        reduce_impl(self, ct_seq, op)
-    }
-
-    /// op must be associative and commutative
-    pub fn default_binary_op_seq_parallelized<'this, 'item, T>(
-        &'this self,
-        ct_seq: impl IntoIterator<Item = &'item T>,
-        op: impl for<'a> Fn(&'a ServerKey, &'a T, &'a T) -> T + Sync,
-    ) -> Option<T>
-    where
-        T: IntegerRadixCiphertext + 'item + From<Vec<crate::shortint::Ciphertext>>,
-    {
-        enum CiphertextCow<'a, C: IntegerRadixCiphertext> {
-            Borrowed(&'a C),
-            Owned(C),
-        }
-        impl<C: IntegerRadixCiphertext> CiphertextCow<'_, C> {
-            fn as_ref(&self) -> &C {
-                match self {
-                    CiphertextCow::Borrowed(b) => b,
-                    CiphertextCow::Owned(o) => o,
-                }
-            }
-        }
-
-        let ct_seq = ct_seq
-            .into_iter()
-            .map(CiphertextCow::Borrowed)
-            .collect::<Vec<_>>();
-        let op = &op;
-
-        // overhead of dynamic dispatch is negligible compared to multithreading, PBS, etc.
-        // we defer all calls to a single implementation to avoid code bloat and long compile
-        // times
-        #[allow(clippy::type_complexity)]
-        fn reduce_impl<C>(
-            sks: &ServerKey,
-            mut ct_seq: Vec<CiphertextCow<C>>,
-            op: &(dyn for<'a> Fn(&'a ServerKey, &'a C, &'a C) -> C + Sync),
-        ) -> Option<C>
-        where
-            C: IntegerRadixCiphertext + From<Vec<crate::shortint::Ciphertext>>,
-        {
-            use rayon::prelude::*;
-
-            if ct_seq.is_empty() {
-                None
-            } else {
-                // we repeatedly divide the number of terms by two by iteratively reducing
-                // consecutive terms in the array
-                let num_blocks = ct_seq[0].as_ref().blocks().len();
-                while ct_seq.len() > 1 {
-                    let mut results =
-                        vec![sks.create_trivial_radix(0u64, num_blocks); ct_seq.len() / 2];
-                    // if the number of elements is odd, we skip the first element
-                    let untouched_prefix = ct_seq.len() % 2;
-                    let ct_seq_slice = &mut ct_seq[untouched_prefix..];
-
-                    results
-                        .par_iter_mut()
-                        .zip(ct_seq_slice.par_chunks_exact(2))
-                        .for_each(|(ct_res, chunk)| {
-                            let first = chunk[0].as_ref();
-                            let second = chunk[1].as_ref();
-                            *ct_res = op(sks, first, second);
-                        });
-
-                    ct_seq.truncate(untouched_prefix);
-                    ct_seq.extend(results.into_iter().map(CiphertextCow::Owned));
-                }
-
-                let sum = ct_seq.pop().unwrap();
-
-                Some(match sum {
-                    CiphertextCow::Borrowed(b) => b.clone(),
-                    CiphertextCow::Owned(o) => o,
-                })
-            }
-        }
-
-        reduce_impl(self, ct_seq, op)
-    }
-
-    /// See [Self::unchecked_sum_ciphertexts_vec_parallelized] for constraints
-    pub fn unchecked_sum_ciphertexts_slice_parallelized(
-        &self,
-        ciphertexts: &[RadixCiphertext],
-    ) -> Option<RadixCiphertext> {
-        self.unchecked_sum_ciphertexts_vec_parallelized(ciphertexts.to_vec())
+        let ciphertexts = ciphertexts.into_iter().map(Clone::clone).collect();
+        self.unchecked_sum_ciphertexts_vec_parallelized(ciphertexts)
     }
 
     /// Computes the sum of the ciphertexts in parallel.
@@ -755,11 +783,7 @@ impl ServerKey {
         }
 
         if ciphertexts.len() == 1 {
-            return Some(ciphertexts[0].clone());
-        }
-
-        if ciphertexts.len() == 2 {
-            return Some(self.add_parallelized(&ciphertexts[0], &ciphertexts[1]));
+            return Some(ciphertexts.pop().unwrap());
         }
 
         let num_blocks = ciphertexts[0].blocks().len();
@@ -769,11 +793,20 @@ impl ServerKey {
                 .all(|ct| ct.blocks().len() == num_blocks),
             "Not all ciphertexts have the same number of blocks"
         );
+
+        if ciphertexts.len() == 2 {
+            return Some(self.add_parallelized(&ciphertexts[0], &ciphertexts[1]));
+        }
+
         assert!(
-            ciphertexts.iter().all(|ct| ct.block_carries_are_empty()),
+            ciphertexts
+                .iter()
+                .all(IntegerRadixCiphertext::block_carries_are_empty),
             "All ciphertexts must have empty carries"
         );
 
+        // Pre-conditions and easy path are met, start the real work
+        // let mut ciphertexts = ciphertexts.to_vec();
         let message_modulus = self.key.message_modulus.0;
         let carry_modulus = self.key.carry_modulus.0;
         let total_modulus = message_modulus * carry_modulus;
@@ -791,12 +824,12 @@ impl ServerKey {
                 .map(|chunk| {
                     let (s, rest) = chunk.split_first_mut().unwrap();
                     let mut first_block_where_addition_happened = num_blocks - 1;
-                    let mut last_block_where_addition_happened = num_blocks - 1;
+                    let mut last_block_where_addition_happened = 0;
                     for a in rest.iter() {
                         let first_block_to_add = a
                             .blocks()
                             .iter()
-                            .position(|block| block.degree.0 != 0)
+                            .position(|block| block.degree.get() != 0)
                             .unwrap_or(num_blocks);
                         first_block_where_addition_happened =
                             first_block_where_addition_happened.min(first_block_to_add);
@@ -804,9 +837,8 @@ impl ServerKey {
                             .blocks()
                             .iter()
                             .rev()
-                            .position(|block| block.degree.0 != 0)
-                            .map(|pos| num_blocks - pos - 1)
-                            .unwrap_or(num_blocks - 1);
+                            .position(|block| block.degree.get() != 0)
+                            .map_or(num_blocks - 1, |pos| num_blocks - pos - 1);
                         last_block_where_addition_happened =
                             last_block_where_addition_happened.max(last_block_to_add);
                         for (ct_left_i, ct_right_i) in s.blocks_mut()
@@ -818,36 +850,39 @@ impl ServerKey {
                         }
                     }
 
-                    // last carry is not interesting
-                    let mut carry_blocks = s.blocks()
-                        [first_block_where_addition_happened..last_block_where_addition_happened]
-                        .to_vec();
-
-                    let message_blocks = s.blocks_mut();
-
+                    let mut carry_ct = s.clone();
                     rayon::join(
                         || {
-                            message_blocks[first_block_where_addition_happened
-                                ..last_block_where_addition_happened + 1]
+                            s.blocks_mut()[first_block_where_addition_happened
+                                ..=last_block_where_addition_happened]
                                 .par_iter_mut()
                                 .for_each(|block| {
                                     self.key.message_extract_assign(block);
                                 });
                         },
                         || {
-                            carry_blocks.par_iter_mut().for_each(|block| {
-                                self.key.carry_extract_assign(block);
-                            });
+                            let start = first_block_where_addition_happened;
+                            let end = if last_block_where_addition_happened == num_blocks - 1 {
+                                // This carry would be thrown away, so don't compute it
+                                last_block_where_addition_happened - 1
+                            } else {
+                                last_block_where_addition_happened
+                            };
+                            carry_ct.blocks_mut()[start..=end]
+                                .par_iter_mut()
+                                .for_each(|block| {
+                                    self.key.carry_extract_assign(block);
+                                });
+                            for block in &mut carry_ct.blocks_mut()[..start] {
+                                self.key.create_trivial_assign(block, 0);
+                            }
+                            for block in &mut carry_ct.blocks_mut()[end + 1..] {
+                                self.key.create_trivial_assign(block, 0);
+                            }
+                            carry_ct.blocks_mut().rotate_right(1);
                         },
                     );
 
-                    let mut carry_ct = RadixCiphertext::from(carry_blocks);
-                    let num_blocks_to_add = s.blocks().len() - carry_ct.blocks.len();
-                    self.extend_radix_with_trivial_zero_blocks_lsb_assign(
-                        &mut carry_ct,
-                        num_blocks_to_add,
-                    );
-                    let carry_ct = T::from(carry_ct.blocks);
                     (s.clone(), carry_ct)
                 })
                 .collect_into_vec(&mut tmp_out);
@@ -903,5 +938,105 @@ impl ServerKey {
         assert!(result.block_carries_are_empty());
 
         Some(result)
+    }
+
+    /// Computes the sum of the ciphertexts in parallel.
+    ///
+    /// - Returns None if ciphertexts is empty
+    ///
+    /// See [Self::unchecked_sum_ciphertexts_parallelized] for constraints
+    pub fn sum_ciphertexts_parallelized<'a, T, C>(&self, ciphertexts: C) -> Option<T>
+    where
+        C: IntoIterator<Item = &'a T>,
+        T: IntegerRadixCiphertext + 'a,
+    {
+        let mut ciphertexts = ciphertexts
+            .into_iter()
+            .map(Clone::clone)
+            .collect::<Vec<T>>();
+        ciphertexts
+            .par_iter_mut()
+            .filter(|ct| ct.block_carries_are_empty())
+            .for_each(|ct| {
+                if !ct.block_carries_are_empty() {
+                    self.full_propagate_parallelized(&mut *ct);
+                }
+            });
+
+        self.unchecked_sum_ciphertexts_vec_parallelized(ciphertexts)
+    }
+
+    /// Computes the sum of the ciphertexts in parallel.
+    ///
+    /// - Returns None if ciphertexts is empty
+    ///
+    /// See [Self::unchecked_sum_ciphertexts_parallelized] for constraints
+    pub fn smart_sum_ciphertexts_parallelized<T, C>(&self, mut ciphertexts: C) -> Option<T>
+    where
+        C: AsMut<[T]> + AsRef<[T]>,
+        T: IntegerRadixCiphertext,
+    {
+        ciphertexts.as_mut().par_iter_mut().for_each(|ct| {
+            if !ct.block_carries_are_empty() {
+                self.full_propagate_parallelized(ct);
+            }
+        });
+
+        self.unchecked_sum_ciphertexts_parallelized(ciphertexts.as_ref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_hillis_steele_propagation_be_faster;
+
+    #[test]
+    fn test_hillis_steele_choice_128_threads() {
+        // m6i.metal like number of threads
+        const NUM_THREADS: usize = 128;
+        // 16, 32, 64, 128, 256 512 bits
+        for num_blocks in [8, 16, 32, 64, 128, 256] {
+            assert!(
+                should_hillis_steele_propagation_be_faster(num_blocks, NUM_THREADS),
+                "Expected hillis and steele to be chosen for {num_blocks} blocks and {NUM_THREADS} threads"
+            );
+        }
+        // 8 bits
+        assert!(!should_hillis_steele_propagation_be_faster(4, NUM_THREADS),);
+    }
+
+    #[test]
+    fn test_hillis_steele_choice_12_threads() {
+        const NUM_THREADS: usize = 12;
+        // 8, 16, 32, 64, 128, 256, 512 bits
+        for num_blocks in [4, 8, 16, 32, 64, 128, 256] {
+            assert!(
+                !should_hillis_steele_propagation_be_faster(num_blocks, NUM_THREADS),
+                "Expected hillis and steele to *not* be chosen for {num_blocks} blocks and {NUM_THREADS} threads"
+            );
+        }
+    }
+
+    #[test]
+    fn test_hillis_steele_choice_8_threads() {
+        const NUM_THREADS: usize = 8;
+        // 8, 16, 32, 64, 128, 256, 512 bits
+        for num_blocks in [4, 8, 16, 32, 64, 128, 256] {
+            assert!(
+                !should_hillis_steele_propagation_be_faster(num_blocks, NUM_THREADS),
+                "Expected hillis and steele to *not* be chosen for {num_blocks} blocks and {NUM_THREADS} threads"
+            );
+        }
+    }
+    #[test]
+    fn test_hillis_steele_choice_4_threads() {
+        const NUM_THREADS: usize = 4;
+        // 8, 16, 32, 64, 128, 256, 512 bits
+        for num_blocks in [4, 8, 16, 32, 64, 128, 256] {
+            assert!(
+                !should_hillis_steele_propagation_be_faster(num_blocks, NUM_THREADS),
+                "Expected hillis and steele to *not* be chosen for {num_blocks} blocks and {NUM_THREADS} threads"
+            );
+        }
     }
 }

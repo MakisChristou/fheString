@@ -1,7 +1,11 @@
 use super::*;
+#[cfg(not(feature = "__coverage"))]
+const NB_TESTS: usize = 10;
+#[cfg(feature = "__coverage")]
+const NB_TESTS: usize = 1;
 
 fn glwe_encrypt_sample_extract_decrypt_custom_mod<Scalar: UnsignedTorus + Send + Sync>(
-    params: TestParams<Scalar>,
+    params: ClassicTestParams<Scalar>,
 ) {
     let glwe_dimension = params.glwe_dimension;
     let polynomial_size = params.polynomial_size;
@@ -12,7 +16,6 @@ fn glwe_encrypt_sample_extract_decrypt_custom_mod<Scalar: UnsignedTorus + Send +
 
     let mut rsc = TestResources::new();
 
-    const NB_TESTS: usize = 10;
     let msg_modulus = Scalar::ONE.shl(message_modulus_log.0);
     let mut msg = msg_modulus;
     let delta: Scalar = encoding_with_padding / msg_modulus;
@@ -46,7 +49,10 @@ fn glwe_encrypt_sample_extract_decrypt_custom_mod<Scalar: UnsignedTorus + Send +
                 &mut rsc.encryption_random_generator,
             );
 
-            assert!(check_content_respects_mod(&glwe, ciphertext_modulus));
+            assert!(check_encrypted_content_respects_mod(
+                &glwe,
+                ciphertext_modulus
+            ));
 
             let mut ser_output_lwe_ciphertext_list = LweCiphertextList::new(
                 Scalar::ZERO,
@@ -65,7 +71,7 @@ fn glwe_encrypt_sample_extract_decrypt_custom_mod<Scalar: UnsignedTorus + Send +
                 );
             }
 
-            assert!(check_content_respects_mod(
+            assert!(check_encrypted_content_respects_mod(
                 &ser_output_lwe_ciphertext_list,
                 ciphertext_modulus
             ));
@@ -104,6 +110,11 @@ fn glwe_encrypt_sample_extract_decrypt_custom_mod<Scalar: UnsignedTorus + Send +
 
             assert!(decoded.iter().all(|&x| x == msg));
         }
+
+        // In coverage, we break after one while loop iteration, changing message values does not
+        // yield higher coverage
+        #[cfg(feature = "__coverage")]
+        break;
     }
 }
 

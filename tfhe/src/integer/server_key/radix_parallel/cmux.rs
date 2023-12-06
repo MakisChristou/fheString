@@ -1,3 +1,4 @@
+use crate::integer::ciphertext::boolean_value::BooleanBlock;
 use crate::integer::ciphertext::IntegerRadixCiphertext;
 use crate::integer::ServerKey;
 use rayon::prelude::*;
@@ -5,14 +6,14 @@ use rayon::prelude::*;
 impl ServerKey {
     pub fn unchecked_if_then_else_parallelized<T>(
         &self,
-        condition: &T,
+        condition: &BooleanBlock,
         true_ct: &T,
         false_ct: &T,
     ) -> T
     where
         T: IntegerRadixCiphertext,
     {
-        let condition_block = &condition.blocks()[0];
+        let condition_block = &condition.0;
         let do_clean_message = true;
         self.unchecked_programmable_if_then_else_parallelized(
             condition_block,
@@ -21,6 +22,13 @@ impl ServerKey {
             |x| x == 1,
             do_clean_message,
         )
+    }
+
+    pub fn unchecked_cmux<T>(&self, condition: &BooleanBlock, true_ct: &T, false_ct: &T) -> T
+    where
+        T: IntegerRadixCiphertext,
+    {
+        self.unchecked_if_then_else_parallelized(condition, true_ct, false_ct)
     }
 
     /// FHE "if then else" selection.
@@ -61,12 +69,17 @@ impl ServerKey {
     /// assert_ne!(ct_a, ct_res);
     /// assert_ne!(ct_b, ct_res);
     /// ```
-    pub fn if_then_else_parallelized<T>(&self, condition: &T, true_ct: &T, false_ct: &T) -> T
+    pub fn if_then_else_parallelized<T>(
+        &self,
+        condition: &BooleanBlock,
+        true_ct: &T,
+        false_ct: &T,
+    ) -> T
     where
         T: IntegerRadixCiphertext,
     {
-        let mut ct_clones = [None, None, None];
-        let mut ct_refs = [condition, true_ct, false_ct];
+        let mut ct_clones = [None, None];
+        let mut ct_refs = [true_ct, false_ct];
 
         ct_refs
             .par_iter_mut()
@@ -79,8 +92,18 @@ impl ServerKey {
                 }
             });
 
-        let [condition, true_ct, false_ct] = ct_refs;
+        let [true_ct, false_ct] = ct_refs;
         self.unchecked_if_then_else_parallelized(condition, true_ct, false_ct)
+    }
+
+    /// Encrypted CMUX.
+    ///
+    /// It is another name for [Self::if_then_else_parallelized]
+    pub fn cmux_parallelized<T>(&self, condition: &BooleanBlock, true_ct: &T, false_ct: &T) -> T
+    where
+        T: IntegerRadixCiphertext,
+    {
+        self.if_then_else_parallelized(condition, true_ct, false_ct)
     }
 
     /// FHE "if then else" selection.
@@ -123,14 +146,17 @@ impl ServerKey {
     /// ```
     pub fn smart_if_then_else_parallelized<T>(
         &self,
-        condition: &mut T,
+        condition: &mut BooleanBlock,
         true_ct: &mut T,
         false_ct: &mut T,
     ) -> T
     where
         T: IntegerRadixCiphertext,
     {
-        let mut ct_refs = [condition, true_ct, false_ct];
+        if !condition.0.carry_is_empty() {
+            self.key.message_extract_assign(&mut condition.0);
+        }
+        let mut ct_refs = [true_ct, false_ct];
 
         ct_refs.par_iter_mut().for_each(|ct_ref| {
             if !ct_ref.block_carries_are_empty() {
@@ -138,8 +164,23 @@ impl ServerKey {
             }
         });
 
-        let [condition, true_ct, false_ct] = ct_refs;
+        let [true_ct, false_ct] = ct_refs;
         self.unchecked_if_then_else_parallelized(condition, true_ct, false_ct)
+    }
+
+    /// Encrypted CMUX.
+    ///
+    /// It is another name for [Self::smart_if_then_else_parallelized]
+    pub fn smart_cmux_parallelized<T>(
+        &self,
+        condition: &mut BooleanBlock,
+        true_ct: &mut T,
+        false_ct: &mut T,
+    ) -> T
+    where
+        T: IntegerRadixCiphertext,
+    {
+        self.smart_if_then_else_parallelized(condition, true_ct, false_ct)
     }
 
     /// if do clean message is false, the resulting ciphertext won't be cleaned (message_extract)
@@ -191,7 +232,7 @@ impl ServerKey {
                 .zip(false_ct.blocks().par_iter())
                 .for_each(|(lhs_block, rhs_block)| {
                     self.key.unchecked_add_assign(lhs_block, rhs_block);
-                    self.key.message_extract_assign(lhs_block)
+                    self.key.message_extract_assign(lhs_block);
                 });
         } else {
             true_ct
@@ -218,9 +259,9 @@ impl ServerKey {
     ) where
         T: IntegerRadixCiphertext,
     {
-        assert!(condition_block.degree.0 <= 1);
+        assert!(condition_block.degree.get() <= 1);
 
-        self.zero_out_if_condition_equals(ct, condition_block, 0)
+        self.zero_out_if_condition_equals(ct, condition_block, 0);
     }
 
     pub(crate) fn zero_out_if_condition_equals<T>(
@@ -231,7 +272,7 @@ impl ServerKey {
     ) where
         T: IntegerRadixCiphertext,
     {
-        assert!(condition_block.degree.0 < condition_block.message_modulus.0);
+        assert!(condition_block.degree.get() < condition_block.message_modulus.0);
         assert!(value < condition_block.message_modulus.0 as u64);
 
         self.zero_out_if(ct, condition_block, |x| x == value);
@@ -246,9 +287,9 @@ impl ServerKey {
         T: IntegerRadixCiphertext,
         F: Fn(u64) -> bool,
     {
-        assert!(condition_block.degree.0 < condition_block.message_modulus.0);
+        assert!(condition_block.degree.get() < condition_block.message_modulus.0);
 
-        if condition_block.degree.0 == 0 {
+        if condition_block.degree.get() == 0 {
             // The block 'encrypts'  0, and only 0
             if predicate(0u64) {
                 self.create_trivial_zero_assign_radix(ct);
@@ -264,7 +305,7 @@ impl ServerKey {
 
         ct.blocks_mut()
             .par_iter_mut()
-            .filter(|block| block.degree.0 != 0)
+            .filter(|block| block.degree.get() != 0)
             .for_each(|block| {
                 self.key.unchecked_apply_lookup_table_bivariate_assign(
                     block,
