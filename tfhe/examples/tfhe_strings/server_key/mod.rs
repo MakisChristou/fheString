@@ -157,7 +157,6 @@ impl MyServerKey {
         if string.is_empty() && needle.is_empty() {
             return FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         }
-
         let mut result = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         let end = string.len().checked_sub(needle.len());
@@ -166,9 +165,9 @@ impl MyServerKey {
             Some(end_of_pattern) => {
                 // If pattern and string have the same size and are equal
                 // this is needed to actually iterate the loop
-                let end_of_pattern = utils::adjust_end_of_pattern(end_of_pattern);
+                // let end_of_pattern = utils::adjust_end_of_pattern(end_of_pattern);
 
-                for i in 0..end_of_pattern {
+                for i in 0..=end_of_pattern {
                     let mut current_result = one.clone();
                     for (j, needle_char) in needle.iter().enumerate() {
                         let eql = string[i + j].eq(&self.key, needle_char);
@@ -1030,16 +1029,8 @@ impl MyServerKey {
 
         match end {
             Some(end_of_pattern) => {
-                // If pattern and string have the same size and are equal
-                // this is needed to actually iterate the loop
-                let end_of_pattern = if end_of_pattern == 0 {
-                    1
-                } else {
-                    end_of_pattern
-                };
-
                 // Search for pattern
-                for i in (0..end_of_pattern).rev() {
+                for i in (0..=end_of_pattern).rev() {
                     let mut pattern_found_flag = one.clone();
 
                     // This is okay since the pattern here is <= string.bytes.len()
