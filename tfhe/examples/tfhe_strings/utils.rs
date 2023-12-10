@@ -113,10 +113,7 @@ pub fn adjust_end_of_pattern(end_of_pattern: usize) -> usize {
 
 fn compare_and_print<T: PartialEq + std::fmt::Debug>(expected: T, actual: T) {
     if expected == actual {
-        print!(
-            "Test Passed: OK, Expected: {:?}, Actual: {:?}, ",
-            expected, actual
-        );
+        print!("Test Passed: OK, Result: {:?}, ", actual);
     } else {
         print!("Test Failed: Expected: {:?}, Got: {:?}, ", expected, actual);
     }
