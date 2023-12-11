@@ -233,7 +233,7 @@ impl MyServerKey {
     /// );
     /// let needle = my_client_key.encrypt_no_padding(needle_plain);
     ///
-    /// let res = my_server_key.ends_with(&heistack, &needle, STRING_PADDING, &public_parameters);
+    /// let res = my_server_key.ends_with(&heistack, &needle, &public_parameters);
     /// let dec: u8 = my_client_key.decrypt_char(&res);
     ///
     /// assert_eq!(dec, 1u8);
@@ -241,39 +241,42 @@ impl MyServerKey {
     pub fn ends_with(
         &self,
         string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
-        padding: usize,
+        needle: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
-        let string_length = string.len();
-        let pattern_length = pattern.len();
-
-        let start = string_length
-            .checked_sub(padding)
-            .and_then(|x| x.checked_sub(pattern_length));
-
-        let end = start
-            .and_then(|s| s.checked_add(pattern_length))
-            .and_then(|x| x.checked_sub(1));
-
-        // Handle Edge case
-        // When pattern is an empty string we consider it to always match
-        if pattern.is_empty() {
+        if string.is_empty() && needle.is_empty() {
             return FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
         }
+        let mut result = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        let end = string.len().checked_sub(needle.len());
 
-        match (start, end) {
-            (Some(start_val), Some(end_val)) => {
-                // Safe to use start_val and end_val here
-                let mut result = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
+        match end {
+            Some(end_of_pattern) => {
+                for i in 0..=end_of_pattern {
+                    let mut current_result = one.clone();
+                    let mut are_all_comparison_chars_non_zero = one.clone();
 
-                for (j, i) in (start_val..(end_val + 1)).enumerate() {
-                    let eql = string[i].eq(&self.key, &pattern[j]);
-                    result = result.bitand(&self.key, &eql);
+                    for (j, needle_char) in needle.iter().enumerate() {
+                        let eql = string[i + j].eq(&self.key, needle_char);
+                        current_result = current_result.bitand(&self.key, &eql);
+
+                        // If we encounter padding we should ignore the result
+                        let is_char_not_zero = string[i + j].ne(&self.key, &zero);
+                        are_all_comparison_chars_non_zero =
+                            are_all_comparison_chars_non_zero.bitand(&self.key, &is_char_not_zero);
+                    }
+                    // Use the last result that has not encrountered padding
+                    result = are_all_comparison_chars_non_zero.if_then_else(
+                        &self.key,
+                        &current_result,
+                        &result,
+                    );
                 }
                 result
             }
-            _ => FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key),
+            None => FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key),
         }
     }
 
@@ -292,8 +295,7 @@ impl MyServerKey {
     ///     &my_server_key.key,
     /// );
     ///
-    /// let res =
-    ///     my_server_key.ends_with_clear(&heistack, &needle_plain, STRING_PADDING, &public_parameters);
+    /// let res = my_server_key.ends_with_clear(&heistack, &needle_plain, &public_parameters);
     /// let dec: u8 = my_client_key.decrypt_char(&res);
     ///
     /// assert_eq!(dec, 1u8);
@@ -302,7 +304,6 @@ impl MyServerKey {
         &self,
         string: &FheString,
         clear_pattern: &str,
-        padding: usize,
         public_parameters: &PublicParameters,
     ) -> FheAsciiChar {
         let pattern = clear_pattern
@@ -310,7 +311,7 @@ impl MyServerKey {
             .iter()
             .map(|b| FheAsciiChar::encrypt_trivial(*b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
-        self.ends_with(string, &pattern, padding, public_parameters)
+        self.ends_with(string, &pattern, public_parameters)
     }
 
     /// Checks if a given `FheString` starts with a specified pattern.
@@ -492,7 +493,7 @@ impl MyServerKey {
     }
 
     /// Repeats a given `FheString` a specified number of times for a max number
-    /// of MAX_REPETITIONS.
+    /// of MAX_REPETITIONS. Max valid repetitions value is 255u8.
     ///
     /// Same as `repeat` but with plaintext repetitions.
     ///
@@ -536,7 +537,7 @@ impl MyServerKey {
     }
 
     /// Repeats a given `FheString` a specified number of times for a max number
-    /// of MAX_REPETITIONS.
+    /// of MAX_REPETITIONS. Max valid repetitions value is 255u8.
     ///
     /// # Arguments
     /// * `string`: &FheString - The string to be repeated.

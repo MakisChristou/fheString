@@ -174,20 +174,14 @@ pub fn run_fhe_str_method(
             compare_and_print(expected as u8, actual);
         }
         StringMethod::EndsWith => {
-            let res =
-                my_server_key.ends_with(&my_string, &pattern, STRING_PADDING, public_parameters);
+            let res = my_server_key.ends_with(&my_string, &pattern, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.ends_with(pattern_plain);
 
             compare_and_print(expected as u8, actual);
         }
         StringMethod::EndsWithClear => {
-            let res = my_server_key.ends_with_clear(
-                &my_string,
-                pattern_plain,
-                STRING_PADDING,
-                public_parameters,
-            );
+            let res = my_server_key.ends_with_clear(&my_string, pattern_plain, public_parameters);
             let actual: u8 = my_client_key.decrypt_char(&res);
             let expected = my_string_plain.ends_with(pattern_plain);
 

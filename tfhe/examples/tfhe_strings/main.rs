@@ -182,7 +182,7 @@ mod test {
         );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-        let res = my_server_key.ends_with(&heistack, &needle, STRING_PADDING, &public_parameters);
+        let res = my_server_key.ends_with(&heistack, &needle, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         let expected = heistack_plain.ends_with(needle_plain);
@@ -251,7 +251,7 @@ mod test {
         );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-        let res = my_server_key.ends_with(&heistack, &needle, STRING_PADDING, &public_parameters);
+        let res = my_server_key.ends_with(&heistack, &needle, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         let expected = heistack_plain.ends_with(needle_plain);
