@@ -7,7 +7,7 @@ use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
 use std::time::Instant;
 
-const STRING_PADDING: usize = 0;
+const STRING_PADDING: usize = 3;
 const MAX_REPETITIONS: usize = 8;
 const MAX_FIND_LENGTH: usize = 255;
 const MAX_BLOCKS: usize = 4;
@@ -717,14 +717,9 @@ mod test {
             &public_parameters,
             &my_server_key.key,
         );
-        let pattern = my_client_key.encrypt(
-            pattern_plain,
-            STRING_PADDING,
-            &public_parameters,
-            &my_server_key.key,
-        );
-        let fhe_strip =
-            my_server_key.strip_suffix(&my_string, &pattern.get_bytes(), &public_parameters);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
 
         let (actual, _) = FheStrip::decrypt(fhe_strip, &my_client_key);
 
@@ -746,10 +741,9 @@ mod test {
             &public_parameters,
             &my_server_key.key,
         );
-        let pattern =
-            my_client_key.encrypt(pattern_plain, 0, &public_parameters, &my_server_key.key);
-        let fhe_strip =
-            my_server_key.strip_suffix(&my_string, &pattern.get_bytes(), &public_parameters);
+        let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+
+        let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
 
         let (_, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
 

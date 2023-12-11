@@ -1308,10 +1308,6 @@ impl MyServerKey {
     /// * `pattern`: &Vec<FheAsciiChar> - The padded pattern to strip.
     /// * `public_parameters`: &PublicParameters - Public parameters for FHE operations.
     ///
-    /// # Notes
-    /// This algorithms has a limitation where it requires the user to know the string
-    /// padding
-    ///
     /// # Returns
     /// `FheStrip` - A struct containing the new `FheString` with the pattern stripped from the
     /// ending if found, and a boolean flag indicating whether the pattern was found or not.
@@ -1327,14 +1323,9 @@ impl MyServerKey {
     ///     &public_parameters,
     ///     &my_server_key.key,
     /// );
-    /// let pattern = my_client_key.encrypt(
-    ///     pattern_plain,
-    ///     STRING_PADDING,
-    ///     &public_parameters,
-    ///     &my_server_key.key,
-    /// );
-    /// let fhe_strip =
-    ///     my_server_key.strip_suffix(&my_string, &pattern.get_bytes(), &public_parameters);
+    /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
+    ///
+    /// let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
     ///
     /// let (actual, flag) = FheStrip::decrypt(fhe_strip, &my_client_key);
     ///
@@ -1343,37 +1334,64 @@ impl MyServerKey {
     /// ```
     pub fn strip_suffix(
         &self,
-        string: &FheString,
-        pattern: &Vec<FheAsciiChar>,
+        mut string: FheString,
+        needle: &Vec<FheAsciiChar>,
         public_parameters: &PublicParameters,
     ) -> FheStrip {
-        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
         let one = FheAsciiChar::encrypt_trivial(1u8, public_parameters, &self.key);
-        let mut result = string.clone();
-        let mut pattern_found_flag = one.clone();
+        let zero = FheAsciiChar::encrypt_trivial(0u8, public_parameters, &self.key);
+        let end = string.len().checked_sub(needle.len());
+        let two_five_five = FheAsciiChar::encrypt_trivial(255u8, public_parameters, &self.key);
 
-        let end_of_pattern = result.len();
-        let start = result.len().checked_sub(pattern.len());
-        let mut k = pattern.len() - 1;
+        let mut pattern_position =
+            FheAsciiChar::encrypt_trivial(255u8, public_parameters, &self.key);
 
-        match start {
-            Some(start_of_pattern) => {
-                for j in (start_of_pattern..end_of_pattern).rev() {
-                    pattern_found_flag =
-                        pattern_found_flag.bitand(&self.key, &pattern[k].eq(&self.key, &result[j]));
-                    k -= 1;
+        match end {
+            Some(end_of_pattern) => {
+                for i in 0..=end_of_pattern {
+                    let mut pattern_found = one.clone();
+                    let mut are_all_comparison_chars_non_zero = one.clone();
+                    let enc_i =
+                        FheAsciiChar::encrypt_trivial(i as u8, public_parameters, &self.key);
+
+                    for (j, needle_char) in needle.iter().enumerate() {
+                        let eql = string[i + j].eq(&self.key, needle_char);
+                        pattern_found = pattern_found.bitand(&self.key, &eql);
+
+                        // If we encounter padding we should ignore the result
+                        let is_char_not_zero = string[i + j].ne(&self.key, &zero);
+                        are_all_comparison_chars_non_zero =
+                            are_all_comparison_chars_non_zero.bitand(&self.key, &is_char_not_zero);
+                    }
+
+                    let current_result =
+                        pattern_found.if_then_else(&self.key, &enc_i, &two_five_five);
+
+                    // Use the last result that has not encrountered padding
+                    pattern_position = are_all_comparison_chars_non_zero.if_then_else(
+                        &self.key,
+                        &current_result,
+                        &pattern_position,
+                    );
                 }
 
-                for j in (start_of_pattern..end_of_pattern).rev() {
-                    result[j] = pattern_found_flag.if_then_else(&self.key, &zero, &result[j]);
+                let should_strip_suffix = pattern_position.ne(&self.key, &two_five_five);
+
+                for i in 0..=end_of_pattern {
+                    let enc_i =
+                        FheAsciiChar::encrypt_trivial(i as u8, public_parameters, &self.key);
+
+                    let should_mask_pattern = enc_i.eq(&self.key, &pattern_position);
+
+                    for (j, _) in needle.iter().enumerate() {
+                        string[i + j] =
+                            should_mask_pattern.if_then_else(&self.key, &zero, &string[i + j]);
+                    }
                 }
 
-                FheStrip::new(result, pattern_found_flag)
+                FheStrip::new(string, should_strip_suffix)
             }
-            None => {
-                // Return unmodified string
-                FheStrip::new(string.clone(), zero)
-            }
+            None => FheStrip::new(string, zero),
         }
     }
 
@@ -1429,11 +1447,8 @@ impl MyServerKey {
     ///     &my_server_key.key,
     /// );
     ///
-    /// let null_bytes = "\0".repeat(STRING_PADDING);
-    /// let padded_pattern_plain = format!("{}{}", pattern_plain, null_bytes);
-    ///
     /// let fhe_strip =
-    ///     my_server_key.strip_suffix_clear(&my_string, &padded_pattern_plain, &public_parameters);
+    ///     my_server_key.strip_suffix_clear(&my_string, &pattern_plain, &public_parameters);
     /// let (actual, flag) = FheStrip::decrypt(fhe_strip, &my_client_key);
     ///
     /// assert_eq!(actual, "HELLO test test ");
@@ -1449,7 +1464,7 @@ impl MyServerKey {
             .bytes()
             .map(|b| FheAsciiChar::encrypt_trivial(b, public_parameters, &self.key))
             .collect::<Vec<FheAsciiChar>>();
-        self.strip_suffix(string, &pattern, public_parameters)
+        self.strip_suffix(string.clone(), &pattern, public_parameters)
     }
 
     fn comparison(

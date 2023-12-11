@@ -567,18 +567,7 @@ pub fn run_fhe_str_method(
             }
         }
         StringMethod::StripSuffix => {
-            // Limitation: Client needs to know the string padding
-            let pattern_string = my_client_key.encrypt(
-                pattern_plain,
-                STRING_PADDING,
-                public_parameters,
-                &my_server_key.key,
-            );
-            let fhe_strip = my_server_key.strip_suffix(
-                &my_string,
-                &pattern_string.get_bytes(),
-                public_parameters,
-            );
+            let fhe_strip = my_server_key.strip_suffix(my_string, &pattern, public_parameters);
             let (actual, actual_pattern_found) = FheStrip::decrypt(fhe_strip, my_client_key);
             let expected = my_string_plain.strip_suffix(pattern_plain);
             let expected_pattern_found = expected.is_some();
@@ -596,17 +585,8 @@ pub fn run_fhe_str_method(
             }
         }
         StringMethod::StripSuffixClear => {
-            // Limitation: Client needs to know the string padding
-            #[allow(clippy::repeat_once)]
-            let null_bytes = "\0".repeat(STRING_PADDING);
-
-            let padded_pattern_plain = format!("{}{}", pattern_plain, null_bytes);
-
-            let fhe_strip = my_server_key.strip_suffix_clear(
-                &my_string,
-                &padded_pattern_plain,
-                public_parameters,
-            );
+            let fhe_strip =
+                my_server_key.strip_suffix_clear(&my_string, pattern_plain, public_parameters);
             let (actual, actual_pattern_found) = FheStrip::decrypt(fhe_strip, my_client_key);
             let expected = my_string_plain.strip_suffix(pattern_plain);
             let expected_pattern_found = expected.is_some();
