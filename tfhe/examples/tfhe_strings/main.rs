@@ -7,8 +7,8 @@ use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
 use std::time::Instant;
 
-const STRING_PADDING: usize = 3;
-const MAX_REPETITIONS: usize = 8;
+const STRING_PADDING: usize = 1;
+const MAX_REPETITIONS: usize = 16;
 const MAX_FIND_LENGTH: usize = 255;
 const MAX_BLOCKS: usize = 4;
 
@@ -35,8 +35,6 @@ fn main() {
     let public_parameters = my_client_key.get_public_parameters();
 
     let methods_to_test = [
-        StringMethod::ToUpper,
-        StringMethod::ToLower,
         StringMethod::Contains,
         StringMethod::ContainsClear,
         StringMethod::EndsWith,
