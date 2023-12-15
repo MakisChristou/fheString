@@ -53,6 +53,13 @@ endif
 REGEX_STRING?=''
 REGEX_PATTERN?=''
 
+# Variables used only for tfhe_strings example
+STRING="hello, world"
+PATTERN=","
+N=3
+FROM="world"
+TO="hello"
+
 # Exclude these files from coverage reports
 define COVERAGE_EXCLUDED_FILES
 --exclude-files apps/trivium/src/trivium/* \
@@ -718,7 +725,8 @@ sha256_bool: install_rs_check_toolchain
 tfhe_strings: install_rs_check_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_CHECK_TOOLCHAIN) run --profile $(CARGO_PROFILE) \
 	--example tfhe_strings \
-	--features=$(TARGET_ARCH_FEATURE),boolean
+	--features=$(TARGET_ARCH_FEATURE),boolean \
+	-- --string $(STRING) --pattern $(PATTERN) --n $(N) --from $(FROM) --to $(TO)
 
 .PHONY: pcc # pcc stands for pre commit checks
 pcc: no_tfhe_typo no_dbg_log check_fmt lint_doc clippy_all check_compile_tests
