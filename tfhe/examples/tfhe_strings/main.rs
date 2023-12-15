@@ -113,7 +113,6 @@ mod test {
     use crate::server_key::MyServerKey;
     use crate::utils::{trim_str_vector, trim_vector};
     use crate::{FheAsciiChar, MyClientKey, PublicParameters, MAX_FIND_LENGTH, STRING_PADDING};
-    use tfhe::integer::gen_keys_radix;
     use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
     fn setup_test() -> (MyClientKey, MyServerKey, PublicParameters) {
@@ -550,7 +549,7 @@ mod test {
         );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-        let res = my_server_key.rfind(&heistack, &needle, &public_parameters);
+        let res = my_server_key.rfind(heistack, &needle, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         let expected = heistack_plain.rfind(needle_plain).unwrap();
@@ -573,7 +572,7 @@ mod test {
         );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-        let res = my_server_key.rfind(&heistack, &needle, &public_parameters);
+        let res = my_server_key.rfind(heistack, &needle, &public_parameters);
         let dec: u8 = my_client_key.decrypt_char(&res);
 
         // The original algoritm returns None but since we don't have this luxury we will use a
@@ -599,7 +598,7 @@ mod test {
         );
         let needle = my_client_key.encrypt_no_padding(needle_plain);
 
-        let _ = my_server_key.rfind(&heistack, &needle, &public_parameters);
+        let _ = my_server_key.rfind(heistack, &needle, &public_parameters);
     }
 
     #[test]
@@ -717,7 +716,7 @@ mod test {
         );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
+        let fhe_strip = my_server_key.strip_suffix(my_string, &pattern, &public_parameters);
 
         let (actual, _) = FheStrip::decrypt(fhe_strip, &my_client_key);
 
@@ -741,7 +740,7 @@ mod test {
         );
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
-        let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
+        let fhe_strip = my_server_key.strip_suffix(my_string, &pattern, &public_parameters);
 
         let (_, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
 

@@ -719,7 +719,7 @@ impl MyServerKey {
     ///     &my_server_key.key,
     /// );
     /// let needle = my_client_key.encrypt_no_padding(needle_plain);
-    /// let res = my_server_key.rfind(&heistack, &needle, &public_parameters);
+    /// let res = my_server_key.rfind(heistack, &needle, &public_parameters);
     /// let dec: u8 = my_client_key.decrypt_char(&res);
     ///
     /// assert_eq!(dec, 10u8);
@@ -1325,7 +1325,7 @@ impl MyServerKey {
     /// );
     /// let pattern = my_client_key.encrypt_no_padding(pattern_plain);
     ///
-    /// let fhe_strip = my_server_key.strip_suffix(&my_string, &pattern, &public_parameters);
+    /// let fhe_strip = my_server_key.strip_suffix(my_string, &pattern, &public_parameters);
     ///
     /// let (actual, flag) = FheStrip::decrypt(fhe_strip, &my_client_key);
     ///

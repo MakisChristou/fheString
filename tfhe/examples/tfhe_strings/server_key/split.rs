@@ -1550,7 +1550,6 @@ impl MyServerKey {
     ///     )
     /// );
     /// ```
-
     pub fn splitn_clear(
         &self,
         string: &FheString,

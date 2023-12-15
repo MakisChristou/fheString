@@ -469,9 +469,6 @@ test_tfhe_strings: install_rs_build_toolchain
 		--example tfhe_strings \
 		--features=$(TARGET_ARCH_FEATURE),boolean
 
-.PHONY: test_examples # Run tests for examples
-test_examples: test_tfhe_strings test_regex_engine
-
 .PHONY: test_trivium # Run tests for trivium
 test_trivium: install_rs_build_toolchain
 	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile $(CARGO_PROFILE) \
