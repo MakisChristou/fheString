@@ -7,9 +7,19 @@ use crate::ciphertext::fhestring::FheString;
 use crate::ciphertext::public_parameters::PublicParameters;
 use std::time::Instant;
 
+// All algorithms work with unpadded or padded strings
+// Choose your string padding accordingly
 const STRING_PADDING: usize = 1;
+
+// This constant represents the upper bound of n given to the repeat algorithm
+// Use a value that is higher than the intended repetitions but note that
+// it increases time complexity of the algorithm in O(n^2)
 const MAX_REPETITIONS: usize = 16;
+
+// Max supported value is the maximum u8 value.
 const MAX_FIND_LENGTH: usize = 255;
+
+// Tfhe constants to have an 8bit value in our radix ciphertext
 const MAX_BLOCKS: usize = 4;
 
 mod args;
@@ -39,7 +49,6 @@ fn main() {
         StringMethod::ContainsClear,
         StringMethod::EndsWith,
         StringMethod::EndsWithClear,
-        StringMethod::StripPrefix,
         StringMethod::EqIgnoreCase,
         StringMethod::Find,
         StringMethod::FindClear,
@@ -770,7 +779,7 @@ mod test {
         let fhe_strip =
             my_server_key.strip_prefix(&my_string, &pattern.get_bytes(), &public_parameters);
 
-        let (actual, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
+        let (_, pattern_found) = FheStrip::decrypt(fhe_strip, &my_client_key);
 
         // This is None but in our case the string is not modified
         let expected = my_string_plain.strip_prefix(pattern_plain);
@@ -1134,7 +1143,7 @@ mod test {
         let pattern = my_client_key.encrypt_no_padding(pattern_plain);
 
         let fhe_split = my_server_key.rsplit_terminator(&my_string, &pattern, &public_parameters);
-        let mut plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
+        let plain_split = FheSplit::decrypt(fhe_split, &my_client_key);
 
         let expected: Vec<&str> = my_string_plain.rsplit_terminator(pattern_plain).collect();
 
