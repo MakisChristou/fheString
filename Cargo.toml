@@ -1,19 +1,15 @@
-[workspace]
-resolver = "2"
-members = ["tfhe", "tasks", "apps/trivium", "concrete-csprng"]
+[package]
+name = "fhestring"
+version = "0.1.0"
+edition = "2021"
 
-[profile.bench]
-lto = "fat"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[profile.release]
-lto = "fat"
+[dependencies]
+clap = { version = "4.5.1", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
+tfhe = { version = "*", features = ["boolean", "shortint", "integer"] }
 
-[profile.release_lto_off]
-inherits = "release"
-lto = "off"
-
-# Compiles much faster for tests and allows reasonable performance for iterating
-[profile.devo]
-inherits = "dev"
-opt-level = 3
-lto = "off"
+[[bin]]
+name = "fhestring"
+path = "src/main.rs"
